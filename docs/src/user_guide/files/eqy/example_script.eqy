@@ -1,0 +1,18 @@
+# This is an example script which could be written manually to be used in a notebook if the script generation is not desired.
+
+[gold]
+# Initialize the original design
+read_verilog files/simpleAdder.v
+prep -top simpleAdder
+memory_map
+
+[gate]
+# Initialize the output design
+read_verilog output/adder_output.v
+prep -top simpleAdder
+memory_map
+
+[strategy sat]
+# Try to match both designs against each other and prove logical equality
+use sat
+depth 10

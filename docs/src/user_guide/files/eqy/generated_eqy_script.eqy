@@ -1,0 +1,13 @@
+[gold]
+read_verilog files/simpleAdder.v
+prep -top simpleAdder
+memory_map
+
+[gate]
+read_verilog output/adder_output.v
+prep -top simpleAdder
+memory_map
+
+[strategy sat]
+use sat
+depth 10
