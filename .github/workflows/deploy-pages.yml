@@ -1,0 +1,37 @@
+name: Build and deploy pages
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    name: Build and deploy pages
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get -y update
+      - run: sudo apt-get -y install curl git build-essential yosys yosys-dev
+      - run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - run: echo PATH=${GITHUB_WORKSPACE}/.local/bin:$PATH >> $GITHUB_ENV
+      - run: uv run mkdocs build
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4

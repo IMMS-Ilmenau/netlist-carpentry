@@ -1,0 +1,16 @@
+name: Run Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get -y update
+      - run: sudo apt-get -y install curl git build-essential yosys yosys-dev
+      - run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - run: echo PATH=${GITHUB_WORKSPACE}/.local/bin:$PATH >> $GITHUB_ENV
+      - run: uv run tox
