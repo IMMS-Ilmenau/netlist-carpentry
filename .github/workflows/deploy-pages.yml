@@ -27,7 +27,7 @@ jobs:
       - run: sudo apt-get -y install curl git build-essential yosys yosys-dev
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: echo PATH=${GITHUB_WORKSPACE}/.local/bin:$PATH >> $GITHUB_ENV
-      - run: uv run mkdocs build
+      - run: uv run mkdocs build --site-dir site
       - name: Upload to GitHub Pages
         uses: actions/upload-pages-artifact@v4
         with:
