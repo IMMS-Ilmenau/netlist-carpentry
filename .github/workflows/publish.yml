@@ -17,6 +17,8 @@ jobs:
   Publish:
     name: Publish on Pypi
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
 
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
