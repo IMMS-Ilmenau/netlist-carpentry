@@ -1,0 +1,29 @@
+# Refer to https://docs.astral.sh/uv/guides/integration/github/#publishing-to-pypi for setup
+
+name: Publish
+
+on:
+  workflow_run:
+    workflows:
+      - "Run Tests"
+    branches:
+      - main
+    types:
+      - completed
+    tags:
+      - v*
+
+jobs:
+  Publish:
+    name: Publish on Pypi
+    runs-on: ubuntu-latest
+
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Build Project
+        run: uv build
+      - name: Publish on Pypi
+        run: uv publish
