@@ -3,31 +3,38 @@ import os
 from typing import Dict
 
 import pytest
-from pydantic import ValidationError
 from utils import save_results
 
 from netlist_carpentry import WIRE_SEGMENT_X
+from netlist_carpentry.core.enums.direction import Direction
+from netlist_carpentry.core.enums.element_type import EType
+from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.exceptions import EvaluationError
 from netlist_carpentry.core.netlist_elements.element_path import PortPath, WireSegmentPath
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.port import Port
 from netlist_carpentry.core.netlist_elements.wire_segment import WIRE_SEGMENT_1
-from netlist_carpentry.core.port_direction import PortDirection
-from netlist_carpentry.core.signal import Signal
 from netlist_carpentry.utils._gate_lib_base import LibUtils
 from netlist_carpentry.utils.gate_lib import (
+    ADFF,
+    ADFFE,
     DFF,
+    DFFE,
     Demultiplexer,
     DLatch,
     Multiplexer,
+    ScanADFF,
+    ScanADFFE,
+    ScanDFF,
+    ScanDFFE,
     _BinaryGate,
     _BinaryNto1Gate,
     _PrimitiveGate,
     _ReduceGate,
     _UnaryGate,
 )
+from netlist_carpentry.utils.log import LOG
 
 
 @pytest.fixture
@@ -42,7 +49,7 @@ def unary_gate() -> Instance:
 
 @pytest.fixture
 def reduce_gate() -> Instance:
-    return _ReduceGate(raw_path='a.b.reduce_gate_inst', instance_type='reduce_gate', width=4, module=None)
+    return _ReduceGate(raw_path='a.b.reduce_gate_inst', instance_type='reduce_gate', parameters={'A_WIDTH': 4}, module=None)
 
 
 @pytest.fixture
@@ -50,7 +57,8 @@ def binary_gate() -> Instance:
     return _BinaryGate(raw_path='a.b.binary_gate_inst', instance_type='binary_gate', module=None)
 
 
-def set_curr_module() -> None:
+@pytest.fixture()
+def simple_module() -> Module:
     from utils import empty_module
 
     m = empty_module()
@@ -67,48 +75,32 @@ def set_curr_module() -> None:
     m.create_wire('clk')
     m.create_wire('rst')
     m.create_wire('en')
+    return m
 
-    LibUtils.change_current_module(m)
 
-
-def test_gate_lib_map() -> None:
+def test_gate_lib_map(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import _build_gate_lib_map, _gate_lib_map
 
     _build_gate_lib_map()
-    assert len(_gate_lib_map) == 34  # Currently 34 gates in library
+    assert len(_gate_lib_map) == 41  # Currently 41 gates in library
 
 
-def test_current_module() -> None:
-    from utils import empty_module
-
-    LibUtils._gatelib_current_module = None
-    assert LibUtils.curr_module() is None
-    m = empty_module()
-    LibUtils.change_current_module(m)
-    assert LibUtils.curr_module() is m
-
-
-def test_ws2v() -> None:
+def test_ws2v(simple_module: Module) -> None:
     from utils import empty_module
 
     m = empty_module()
     m.create_wire('w1')
     m.create_wire('w4', 4)
     inst = m.create_instance(Module(raw_path='some_submodule'), 'test_inst')
-    LibUtils.change_current_module(m)
-    p = Port(raw_path='test_module1.port1', direction=PortDirection.IN, module_or_instance=inst)
+    p = Port(raw_path='test_module1.port1', direction=Direction.IN, module_or_instance=inst)
     p.create_port_segment(0).change_connection(WireSegmentPath(raw='test_module1.w1.0'))
     ps_str1 = LibUtils.p2ws2v(p)
     assert ps_str1 == 'w1'
 
-    p = Port(raw_path='test_module1.port1', direction=PortDirection.IN, module_or_instance=inst)
+    p = Port(raw_path='test_module1.port1', direction=Direction.IN, module_or_instance=inst)
     p.create_port_segment(0).change_connection(WireSegmentPath(raw='test_module1.w4.0'))
     ps_str2 = LibUtils.p2ws2v(p)
     assert ps_str2 == 'w4[0]'
-
-    LibUtils.change_current_module(Module(raw_path='some_invalid_module'))
-    with pytest.raises(AttributeError):
-        LibUtils.p2ws2v(Port(raw_path='a.b.c', module_or_instance=inst, direction=PortDirection.IN))
 
 
 def test_primitive_gate(primitive_gate: _PrimitiveGate) -> None:
@@ -117,6 +109,8 @@ def test_primitive_gate(primitive_gate: _PrimitiveGate) -> None:
     assert primitive_gate.instance_type == 'primitive_gate'
     with pytest.raises(NotImplementedError):
         primitive_gate.output_port
+    assert not primitive_gate.is_blackbox
+    assert not primitive_gate.is_module_instance
     assert primitive_gate.is_primitive
     assert primitive_gate.is_combinatorial
     assert not primitive_gate.is_sequential
@@ -133,6 +127,7 @@ def test_unary_gate(unary_gate: _UnaryGate) -> None:
     assert len(unary_gate.ports) == 2
     assert unary_gate.output_port == unary_gate.ports['Y']
     assert unary_gate.input_port == unary_gate.ports['A']
+    assert unary_gate.a_signed is False
     assert unary_gate.ports['A'].path == PortPath(raw=f'{unary_gate.path.raw}.A')
     assert unary_gate.ports['Y'].path == PortPath(raw=f'{unary_gate.path.raw}.Y')
     assert unary_gate.is_primitive
@@ -140,10 +135,18 @@ def test_unary_gate(unary_gate: _UnaryGate) -> None:
     assert unary_gate.verilog == ''
     assert unary_gate.signal_in(0) is Signal.FLOATING
     assert unary_gate.signal_out(0) is Signal.UNDEFINED
+    unary_gate.sync_parameters()
+    assert unary_gate.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 1, 'Y_WIDTH': 1}
+
+    unary_gate.parameters['A_SIGNED'] = True
+    warns = LOG.warns_quantity
+    assert unary_gate.a_signed is False
+    assert unary_gate.parameters['A_SIGNED'] is False
+    assert LOG.warns_quantity == warns + 1
 
 
-def test_unary_gate_8bit() -> None:
-    g = _UnaryGate(raw_path='a.b.unary_gate_inst', instance_type='unary_gate', width=8, module=None)
+def test_unary_gate_8bit(simple_module: Module) -> None:
+    g = _UnaryGate(raw_path='a.b.unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
     assert len(g.connections) == 2
     assert len(g.connections['A']) == 8
     assert len(g.connections['Y']) == 8
@@ -154,6 +157,29 @@ def test_unary_gate_8bit() -> None:
     assert g.input_port.width == 8
     assert list(range(8)) == list(g.output_port.segments.keys())
     assert list(range(8)) == list(g.input_port.segments.keys())
+    assert g.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 8, 'Y_WIDTH': 8}
+
+
+def test_unary_gate_split(simple_module: Module) -> None:
+    g = _UnaryGate(raw_path='a.b.unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
+    simple_module.add_instance(g)
+    a = simple_module.create_port('A', Direction.IN, width=8)
+    y = simple_module.create_port('Y', Direction.OUT, width=8)
+    simple_module.connect(a, g.ports['A'])
+    simple_module.connect(g.ports['Y'], y)
+    connections = g.connections
+    assert g.splittable
+    assert g.name in simple_module.instances
+    splitted = g.split()
+    assert g.name not in simple_module.instances
+    assert len(splitted) == 8
+    for idx, inst in splitted.items():
+        assert inst.name in simple_module.instances
+        assert inst.width == 1
+        assert inst.ports['A'].width == 1
+        assert inst.ports['Y'].width == 1
+        assert inst.ports['A'][0].ws_path == connections['A'][idx]
+        assert inst.ports['Y'][0].ws_path == connections['Y'][idx]
 
 
 def test_unary_gate_eval(unary_gate: _UnaryGate) -> None:
@@ -191,10 +217,10 @@ def _test_signal_conf1_n(gate: _UnaryGate, sin: Signal, sout_prev: Signal, sout_
             _test_signal_conf1(gate, sin, sout_prev, sout_new, i)
 
 
-def test_buffer() -> None:
+def test_buffer(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Buffer
 
-    g = Buffer(raw_path='a.buf_inst', width=4, module=None)
+    g = Buffer(raw_path='a.buf_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'buf_inst'
     assert g.instance_type == '§buf'
     assert g.verilog_template == 'assign {out} = {in1};'
@@ -208,7 +234,6 @@ def test_buffer() -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    set_curr_module()
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]};"
 
     _test_signal_conf1_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -217,10 +242,10 @@ def test_buffer() -> None:
     _test_signal_conf1_n(g, Signal.FLOATING, Signal.HIGH, Signal.UNDEFINED)
 
 
-def test_not_gate() -> None:
+def test_not_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import NotGate
 
-    g = NotGate(raw_path='a.not_inst', width=4, module=None)
+    g = NotGate(raw_path='a.not_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.verilog_template == 'assign {out} = ~{in1};'
     assert g.name == 'not_inst'
     assert g.instance_type == '§not'
@@ -234,7 +259,6 @@ def test_not_gate() -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    set_curr_module()
     assert g.verilog == "assign {wire[3], wire[1:0]} = ~{wireA2, 1'b1, wireA1[0]};"
 
     _test_signal_conf1_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -243,10 +267,10 @@ def test_not_gate() -> None:
     _test_signal_conf1_n(g, Signal.FLOATING, Signal.LOW, Signal.UNDEFINED)
 
 
-def test_neg_gate() -> None:
+def test_neg_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import NegGate
 
-    g = NegGate(raw_path='a.neg_inst', width=4, module=None)
+    g = NegGate(raw_path='a.neg_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.verilog_template == 'assign {out} = -{in1};'
     assert g.name == 'neg_inst'
     assert g.instance_type == '§neg'
@@ -260,7 +284,6 @@ def test_neg_gate() -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    set_curr_module()
     assert g.verilog == "assign {wire[3], wire[1:0]} = -{wireA2, 1'b1, wireA1[0]};"
 
     g.ports['A'][0].set_signal(Signal.HIGH)
@@ -318,12 +341,15 @@ def test_reducer(reduce_gate: _ReduceGate) -> None:
     assert reduce_gate.verilog_template == 'assign {out} = {operator}{in1};'
     assert all(reduce_gate.signal_in(i) is Signal.FLOATING for i in reduce_gate.ports['A'].segments)
     assert reduce_gate.signal_out() is Signal.UNDEFINED
+    reduce_gate.ports['A'].parameters['signed'] = 1
+    assert reduce_gate.sync_parameters() == {'A_WIDTH': 4, 'A_SIGNED': True, 'Y_WIDTH': 1}
+    assert not reduce_gate.splittable
 
 
-def test_reduce_and() -> None:
+def test_reduce_and(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceAnd
 
-    r = ReduceAnd(raw_path='a.reduce_and_inst', width=4, module=None)
+    r = ReduceAnd(raw_path='a.reduce_and_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     assert r.verilog_template == 'assign {out} = &{in1};'
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
@@ -331,7 +357,6 @@ def test_reduce_and() -> None:
     r.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
 
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert r.verilog == "assign wire[0] = &{wireA2, 1'b1, wireA1[0]};"
 
     _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -351,23 +376,22 @@ def test_reduce_and() -> None:
     assert r.signal_out() == Signal.LOW
 
 
-def test_reduce_and_bad_verilog() -> None:
+def test_reduce_and_bad_verilog(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceAnd
 
-    r = ReduceAnd(raw_path='a.reduce_and_inst', width=4, module=None)
+    r = ReduceAnd(raw_path='a.reduce_and_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: r.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
     r.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
 
-    set_curr_module()
     assert r.verilog == ''  # No output specified -> useless instance
 
 
-def test_reduce_or() -> None:
+def test_reduce_or(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceOr
 
-    r = ReduceOr(raw_path='a.reduce_or_inst', width=4, module=None)
+    r = ReduceOr(raw_path='a.reduce_or_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     assert r.verilog_template == 'assign {out} = |{in1};'
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
@@ -375,7 +399,6 @@ def test_reduce_or() -> None:
     r.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
 
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert r.verilog == "assign wire[0] = |{wireA2, 1'b1, wireA1[0]};"
 
     _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -400,10 +423,10 @@ def test_reduce_or() -> None:
     assert r.signal_out() == Signal.UNDEFINED
 
 
-def test_reduce_bool() -> None:
+def test_reduce_bool(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceBool
 
-    r = ReduceBool(raw_path='a.reduce_bool_inst', width=4, module=None)
+    r = ReduceBool(raw_path='a.reduce_bool_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     assert r.verilog_template == 'assign {out} = |{in1};'  # TODO EQY unable to prove equality for !(!wire), but can prove equality for |wire
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
@@ -411,7 +434,6 @@ def test_reduce_bool() -> None:
     r.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
 
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert (
         r.verilog == "assign wire[0] = |{wireA2, 1'b1, wireA1[0]};"
     )  # TODO EQY unable to prove equality for !(!wire), but can prove equality for |wire
@@ -438,10 +460,10 @@ def test_reduce_bool() -> None:
     assert r.signal_out() == Signal.UNDEFINED
 
 
-def test_reduce_xor() -> None:
+def test_reduce_xor(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceXor
 
-    r = ReduceXor(raw_path='a.reduce_xor_inst', width=4, module=None)
+    r = ReduceXor(raw_path='a.reduce_xor_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     assert r.verilog_template == 'assign {out} = ^{in1};'
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
@@ -449,7 +471,6 @@ def test_reduce_xor() -> None:
     r.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
 
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert r.verilog == "assign wire[0] = ^{wireA2, 1'b1, wireA1[0]};"
 
     _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -471,10 +492,10 @@ def test_reduce_xor() -> None:
     assert r.signal_out() == Signal.UNDEFINED
 
 
-def test_reduce_xnor() -> None:
+def test_reduce_xnor(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceXnor
 
-    r = ReduceXnor(raw_path='a.reduce_xnor_inst', width=4, module=None)
+    r = ReduceXnor(raw_path='a.reduce_xnor_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     assert r.verilog_template == 'assign {out} = ~^{in1};'
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
@@ -482,7 +503,6 @@ def test_reduce_xnor() -> None:
     r.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
 
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert r.verilog == "assign wire[0] = ~^{wireA2, 1'b1, wireA1[0]};"
 
     _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -504,10 +524,10 @@ def test_reduce_xnor() -> None:
     assert r.signal_out() == Signal.UNDEFINED
 
 
-def test_logic_not() -> None:
+def test_logic_not(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import LogicNot
 
-    ln = LogicNot(raw_path='a.logic_not_inst', width=4, module=None)
+    ln = LogicNot(raw_path='a.logic_not_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     assert ln.verilog_template == 'assign {out} = !{in1};'
     ln.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     ln.tie_port('A', index=1, sig_value='1')
@@ -515,7 +535,6 @@ def test_logic_not() -> None:
     ln.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
 
     ln.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert ln.verilog == "assign wire[0] = !{wireA2, 1'b1, wireA1[0]};"
 
     _test_signal_confr_n(ln, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -548,6 +567,8 @@ def test_binary_gate(binary_gate: _BinaryGate) -> None:
     assert len(binary_gate.ports) == 3
     assert binary_gate.output_port == binary_gate.ports['Y']
     assert binary_gate.input_ports == (binary_gate.ports['A'], binary_gate.ports['B'])
+    assert binary_gate.a_signed is False
+    assert binary_gate.b_signed is False
     assert binary_gate.ports['A'].path == PortPath(raw=f'{binary_gate.path.raw}.A')
     assert binary_gate.ports['B'].path == PortPath(raw=f'{binary_gate.path.raw}.B')
     assert binary_gate.ports['Y'].path == PortPath(raw=f'{binary_gate.path.raw}.Y')
@@ -556,10 +577,22 @@ def test_binary_gate(binary_gate: _BinaryGate) -> None:
     assert binary_gate.verilog == ''
     assert binary_gate.signals_in(0) == (Signal.FLOATING, Signal.FLOATING)
     assert binary_gate.signal_out(0) is Signal.UNDEFINED
+    binary_gate.ports['B'].parameters['signed'] = '1'
+    assert binary_gate.sync_parameters() == {'A_WIDTH': 1, 'A_SIGNED': False, 'B_SIGNED': True, 'B_WIDTH': 1, 'Y_WIDTH': 1}
+    assert binary_gate.splittable
+
+    binary_gate.parameters['A_SIGNED'] = True
+    binary_gate.parameters['B_SIGNED'] = False
+    warns = LOG.warns_quantity
+    assert binary_gate.a_signed is False
+    assert binary_gate.b_signed is True
+    assert binary_gate.parameters['A_SIGNED'] is False
+    assert binary_gate.parameters['B_SIGNED'] is True
+    assert LOG.warns_quantity == warns + 2
 
 
-def test_binary_gate_8bit() -> None:
-    g = _BinaryGate(raw_path='a.b.binary_gate_inst', instance_type='binary_gate', width=8, module=None)
+def test_binary_gate_8bit(simple_module: Module) -> None:
+    g = _BinaryGate(raw_path='a.b.binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
     assert len(g.connections) == 3
     assert len(g.connections['A']) == 8
     assert len(g.connections['B']) == 8
@@ -573,6 +606,32 @@ def test_binary_gate_8bit() -> None:
     assert list(range(8)) == list(g.output_port.segments.keys())
     assert list(range(8)) == list(g.input_ports[0].segments.keys())
     assert list(range(8)) == list(g.input_ports[1].segments.keys())
+
+
+def test_binary_gate_split(simple_module: Module) -> None:
+    g = _BinaryGate(raw_path='a.b.binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
+    simple_module.add_instance(g)
+    a = simple_module.create_port('A', Direction.IN, width=8)
+    b = simple_module.create_port('B', Direction.IN, width=8)
+    y = simple_module.create_port('Y', Direction.OUT, width=8)
+    simple_module.connect(a, g.ports['A'])
+    simple_module.connect(b, g.ports['B'])
+    simple_module.connect(g.ports['Y'], y)
+    connections = g.connections
+    assert g.splittable
+    assert g.name in simple_module.instances
+    splitted = g.split()
+    assert g.name not in simple_module.instances
+    assert len(splitted) == 8
+    for idx, inst in splitted.items():
+        assert inst.name in simple_module.instances
+        assert inst.width == 1
+        assert inst.ports['A'].width == 1
+        assert inst.ports['B'].width == 1
+        assert inst.ports['Y'].width == 1
+        assert inst.ports['A'][0].ws_path == connections['A'][idx]
+        assert inst.ports['B'][0].ws_path == connections['B'][idx]
+        assert inst.ports['Y'][0].ws_path == connections['Y'][idx]
 
 
 def test_binary_gate_eval(binary_gate: _BinaryGate) -> None:
@@ -610,10 +669,10 @@ def _test_signal_conf2_n(gate: _BinaryGate, sin1: Signal, sin2: Signal, sout_pre
         _test_signal_conf2(gate, sin1, sin2, sout_prev, sout_new, i)
 
 
-def test_and_gate() -> None:
+def test_and_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import AndGate
 
-    g = AndGate(raw_path='a.and_inst', width=4, module=None)
+    g = AndGate(raw_path='a.and_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'and_inst'
     assert g.instance_type == '§and'
     assert g.verilog_template == 'assign {out} = {in1} & {in2};'
@@ -631,7 +690,6 @@ def test_and_gate() -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    set_curr_module()
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} & {wireB[3], wireB[1:0]};"
 
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -646,10 +704,10 @@ def test_and_gate() -> None:
     _test_signal_conf2_n(g, Signal.HIGH, Signal.HIGH, Signal.LOW, Signal.HIGH)
 
 
-def test_and_gate_signed() -> None:
+def test_and_gate_signed(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import AndGate
 
-    g = AndGate(raw_path='a.and_inst', width=4, module=None)
+    g = AndGate(raw_path='a.and_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -664,16 +722,15 @@ def test_and_gate_signed() -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    g.parameters['A_SIGNED'] = True
-    g.parameters['B_SIGNED'] = True
-    set_curr_module()
+    g.ports['A'].set_signed(True)
+    g.ports['B'].set_signed(True)
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) & $signed({wireB[3], wireB[1:0]});"
 
 
-def test_or_gate() -> None:
+def test_or_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import OrGate
 
-    g = OrGate(raw_path='a.or_inst', width=4, module=None)
+    g = OrGate(raw_path='a.or_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'or_inst'
     assert g.instance_type == '§or'
     assert g.verilog_template == 'assign {out} = {in1} | {in2};'
@@ -691,7 +748,6 @@ def test_or_gate() -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    set_curr_module()
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} | {wireB[3], wireB[1:0]};"
 
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -706,10 +762,10 @@ def test_or_gate() -> None:
     _test_signal_conf2_n(g, Signal.HIGH, Signal.HIGH, Signal.HIGH, Signal.HIGH)
 
 
-def test_xor_gate() -> None:
+def test_xor_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import XorGate
 
-    g = XorGate(raw_path='a.xor_inst', width=4, module=None)
+    g = XorGate(raw_path='a.xor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'xor_inst'
     assert g.instance_type == '§xor'
     assert g.verilog_template == 'assign {out} = {in1} ^ {in2};'
@@ -727,7 +783,6 @@ def test_xor_gate() -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    set_curr_module()
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} ^ {wireB[3], wireB[1:0]};"
 
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -742,10 +797,10 @@ def test_xor_gate() -> None:
     _test_signal_conf2_n(g, Signal.HIGH, Signal.HIGH, Signal.HIGH, Signal.LOW)
 
 
-def test_xnor_gate() -> None:
+def test_xnor_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import XnorGate
 
-    g = XnorGate(raw_path='a.xnor_inst', width=4, module=None)
+    g = XnorGate(raw_path='a.xnor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'xnor_inst'
     assert g.instance_type == '§xnor'
     assert g.verilog_template == 'assign {out} = {in1} ^~ {in2};'
@@ -763,7 +818,6 @@ def test_xnor_gate() -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    set_curr_module()
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} ^~ {wireB[3], wireB[1:0]};"
 
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -778,10 +832,10 @@ def test_xnor_gate() -> None:
     _test_signal_conf2_n(g, Signal.HIGH, Signal.HIGH, Signal.LOW, Signal.HIGH)
 
 
-def test_nor_gate() -> None:
+def test_nor_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import NorGate
 
-    g = NorGate(raw_path='a.nor_inst', width=4, module=None)
+    g = NorGate(raw_path='a.nor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'nor_inst'
     assert g.instance_type == '§nor'
     assert g.verilog_template == 'assign {out} = ~({in1} | {in2});'
@@ -799,7 +853,6 @@ def test_nor_gate() -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    set_curr_module()
     assert g.verilog == "assign {wire[3], wire[1:0]} = ~({wireA2, 1'b1, wireA1[0]} | {wireB[3], wireB[1:0]});"
 
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -814,10 +867,10 @@ def test_nor_gate() -> None:
     _test_signal_conf2_n(g, Signal.HIGH, Signal.HIGH, Signal.LOW, Signal.LOW)
 
 
-def test_nand_gate() -> None:
+def test_nand_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import NandGate
 
-    g = NandGate(raw_path='a.nand_inst', width=4, module=None)
+    g = NandGate(raw_path='a.nand_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'nand_inst'
     assert g.instance_type == '§nand'
     assert g.verilog_template == 'assign {out} = ~({in1} & {in2});'
@@ -835,7 +888,6 @@ def test_nand_gate() -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    set_curr_module()
     assert g.verilog == "assign {wire[3], wire[1:0]} = ~({wireA2, 1'b1, wireA1[0]} & {wireB[3], wireB[1:0]});"
 
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -850,14 +902,16 @@ def test_nand_gate() -> None:
     _test_signal_conf2_n(g, Signal.HIGH, Signal.HIGH, Signal.HIGH, Signal.LOW)
 
 
-def test_shift_signed_gate() -> None:
+def test_shift_signed_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ShiftSigned
 
-    g = ShiftSigned(raw_path='a.shift_inst', width=4, module=None)
+    g = ShiftSigned(raw_path='a.shift_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'shift_inst'
     assert g.instance_type == '§shift'
+    assert not g.splittable
     assert g.verilog_template == 'assign {out} = {in1} >> {in2};'
-    g.parameters['B_SIGNED'] = '1'
+    g.ports['B'].set_signed(True)
+    assert g.b_signed is True
     assert g.verilog_template == 'assign {out} = {in1} << -{in2};'
     assert g.verilog == ''
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
@@ -874,13 +928,12 @@ def test_shift_signed_gate() -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    set_curr_module()
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} << -{wireB[3], wireB[1:0]};"
-    g.parameters['B_SIGNED'] = '0'
+    g.ports['B'].set_signed(False)
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} >> {wireB[3], wireB[1:0]};"
-    g.parameters['A_SIGNED'] = '1'
+    g.ports['A'].set_signed(True)
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
-    g.parameters['B_SIGNED'] = '1'
+    g.ports['B'].set_signed(True)
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << -{wireB[3], wireB[1:0]};"
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
@@ -929,11 +982,15 @@ def test_shift_signed_gate() -> None:
     g.evaluate()
     assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
 
+    g.ports['A'].parameters['signed'] = '0'
+    g.ports['B'].parameters['signed'] = '1'
+    assert g.sync_parameters() == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 4}
 
-def test_shl_gate() -> None:
+
+def test_shl_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ShiftLeft
 
-    g = ShiftLeft(raw_path='a.shl_inst', width=4, module=None)
+    g = ShiftLeft(raw_path='a.shl_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'shl_inst'
     assert g.instance_type == '§shl'
     assert g.verilog_template == 'assign {out} = {in1} << {in2};'
@@ -952,11 +1009,10 @@ def test_shl_gate() -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    set_curr_module()
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} << {wireB[3], wireB[1:0]};"
-    g.parameters['A_SIGNED'] = '1'
+    g.ports['A'].set_signed(True)
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << {wireB[3], wireB[1:0]};"
-    g.parameters['B_SIGNED'] = '1'  # B_SIGNED == 1 should not change Verilog output
+    g.ports['B'].set_signed(True)  # B_SIGNED == 1 should not change Verilog output
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << {wireB[3], wireB[1:0]};"
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
@@ -979,10 +1035,10 @@ def test_shl_gate() -> None:
     assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.LOW}
 
 
-def test_shr_gate() -> None:
+def test_shr_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ShiftRight
 
-    g = ShiftRight(raw_path='a.shr_inst', width=4, module=None)
+    g = ShiftRight(raw_path='a.shr_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'shr_inst'
     assert g.instance_type == '§shr'
     assert g.verilog_template == 'assign {out} = {in1} >> {in2};'
@@ -1001,11 +1057,10 @@ def test_shr_gate() -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    set_curr_module()
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} >> {wireB[3], wireB[1:0]};"
-    g.parameters['A_SIGNED'] = '1'
+    g.ports['A'].set_signed(True)
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
-    g.parameters['B_SIGNED'] = '1'  # B_SIGNED == 1 should not change Verilog output
+    g.ports['B'].set_signed(True)  # B_SIGNED == 1 should not change Verilog output
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
@@ -1028,10 +1083,10 @@ def test_shr_gate() -> None:
     assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.LOW}
 
 
-def test_comparison_gate() -> None:
-    g = _BinaryNto1Gate(raw_path='a.comp_inst', module=None)
-    set_curr_module()
+def test_comparison_gate(simple_module: Module) -> None:
+    g = _BinaryNto1Gate(raw_path='a.comp_inst', module=simple_module)
     assert g.verilog == ''
+    assert not g.splittable
 
 
 def _test_signal_conf2_arith(gate: _BinaryGate, sins1: Dict[int, Signal], sins2: Dict[int, Signal], sout: Signal) -> None:
@@ -1052,10 +1107,10 @@ def _test_signal_conf2_arith(gate: _BinaryGate, sins1: Dict[int, Signal], sins2:
     gate.tie_port('A', index=1, sig_value='1')
 
 
-def test_logic_and_gate() -> None:
+def test_logic_and_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import LogicAnd
 
-    g = LogicAnd(raw_path='a.logic_and_inst', width=2, module=None)
+    g = LogicAnd(raw_path='a.logic_and_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'logic_and_inst'
     assert g.instance_type == '§logic_and'
     assert g.verilog_template == 'assign {out} = {in1} && {in2};'
@@ -1066,7 +1121,6 @@ def test_logic_and_gate() -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} && wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
@@ -1077,10 +1131,10 @@ def test_logic_and_gate() -> None:
     _test_signal_conf2_arith(g, {1: Signal.HIGH, 0: Signal.LOW}, {1: Signal.LOW, 0: Signal.LOW}, Signal.LOW)
 
 
-def test_logic_or_gate() -> None:
+def test_logic_or_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import LogicOr
 
-    g = LogicOr(raw_path='a.logic_or_inst', width=2, module=None)
+    g = LogicOr(raw_path='a.logic_or_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'logic_or_inst'
     assert g.instance_type == '§logic_or'
     assert g.verilog_template == 'assign {out} = {in1} || {in2};'
@@ -1091,7 +1145,6 @@ def test_logic_or_gate() -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} || wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
@@ -1102,10 +1155,10 @@ def test_logic_or_gate() -> None:
     _test_signal_conf2_arith(g, {1: Signal.HIGH, 0: Signal.LOW}, {1: Signal.LOW, 0: Signal.LOW}, Signal.HIGH)
 
 
-def test_lt_gate() -> None:
+def test_lt_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import LessThan
 
-    g = LessThan(raw_path='a.lt_inst', width=2, module=None)
+    g = LessThan(raw_path='a.lt_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'lt_inst'
     assert g.instance_type == '§lt'
     assert g.verilog_template == 'assign {out} = {in1} < {in2};'
@@ -1116,7 +1169,6 @@ def test_lt_gate() -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} < wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
@@ -1127,10 +1179,10 @@ def test_lt_gate() -> None:
     _test_signal_conf2_arith(g, {1: Signal.HIGH, 0: Signal.LOW}, {1: Signal.LOW, 0: Signal.HIGH}, Signal.LOW)
 
 
-def test_le_gate() -> None:
+def test_le_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import LessEqual
 
-    g = LessEqual(raw_path='a.le_inst', width=2, module=None)
+    g = LessEqual(raw_path='a.le_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'le_inst'
     assert g.instance_type == '§le'
     assert g.verilog_template == 'assign {out} = {in1} <= {in2};'
@@ -1141,7 +1193,6 @@ def test_le_gate() -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} <= wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
@@ -1152,10 +1203,10 @@ def test_le_gate() -> None:
     _test_signal_conf2_arith(g, {1: Signal.HIGH, 0: Signal.LOW}, {1: Signal.LOW, 0: Signal.HIGH}, Signal.LOW)
 
 
-def test_eq_gate() -> None:
+def test_eq_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Equal
 
-    g = Equal(raw_path='a.eq_inst', width=2, module=None)
+    g = Equal(raw_path='a.eq_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'eq_inst'
     assert g.instance_type == '§eq'
     assert g.verilog_template == 'assign {out} = {in1} == {in2};'
@@ -1166,7 +1217,6 @@ def test_eq_gate() -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} == wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
@@ -1177,10 +1227,10 @@ def test_eq_gate() -> None:
     _test_signal_conf2_arith(g, {1: Signal.HIGH, 0: Signal.LOW}, {1: Signal.LOW, 0: Signal.HIGH}, Signal.LOW)
 
 
-def test_ne_gate() -> None:
+def test_ne_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import NotEqual
 
-    g = NotEqual(raw_path='a.ne_inst', width=2, module=None)
+    g = NotEqual(raw_path='a.ne_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'ne_inst'
     assert g.instance_type == '§ne'
     assert g.verilog_template == 'assign {out} = {in1} != {in2};'
@@ -1191,7 +1241,6 @@ def test_ne_gate() -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} != wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
@@ -1202,10 +1251,10 @@ def test_ne_gate() -> None:
     _test_signal_conf2_arith(g, {1: Signal.HIGH, 0: Signal.LOW}, {1: Signal.LOW, 0: Signal.HIGH}, Signal.HIGH)
 
 
-def test_gt_gate() -> None:
+def test_gt_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import GreaterThan
 
-    g = GreaterThan(raw_path='a.gt_inst', width=2, module=None)
+    g = GreaterThan(raw_path='a.gt_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'gt_inst'
     assert g.instance_type == '§gt'
     assert g.verilog_template == 'assign {out} = {in1} > {in2};'
@@ -1216,7 +1265,6 @@ def test_gt_gate() -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} > wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
@@ -1227,10 +1275,10 @@ def test_gt_gate() -> None:
     _test_signal_conf2_arith(g, {1: Signal.HIGH, 0: Signal.LOW}, {1: Signal.LOW, 0: Signal.HIGH}, Signal.HIGH)
 
 
-def test_ge_gate() -> None:
+def test_ge_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import GreaterEqual
 
-    g = GreaterEqual(raw_path='a.ge_inst', width=2, module=None)
+    g = GreaterEqual(raw_path='a.ge_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'ge_inst'
     assert g.instance_type == '§ge'
     assert g.verilog_template == 'assign {out} = {in1} >= {in2};'
@@ -1241,7 +1289,6 @@ def test_ge_gate() -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    set_curr_module()
     assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} >= wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
@@ -1254,10 +1301,10 @@ def test_ge_gate() -> None:
 
 def _init_mux_structure(m: Multiplexer) -> None:
     for i in range(8):
-        m.modify_connection(f'D_{i}', WireSegmentPath(raw=f'a.wmuxD_{i}.0'), index=0)
-        # 2nd is missing on purpose: m.modify_connection(f'D_{i}', WireSegmentPath(raw=f'a.wmuxD_{i}.1'), index=1)
-        m.modify_connection(f'D_{i}', WireSegmentPath(raw=f'a.wmuxD_{i}.2'), index=2)
-        m.modify_connection(f'D_{i}', WireSegmentPath(raw=f'a.wmuxD_{i}.3'), index=3)
+        m.modify_connection(f'D{i}', WireSegmentPath(raw=f'a.wmuxD_{i}.0'), index=0)
+        # 2nd is missing on purpose: m.modify_connection(f'D{i}', WireSegmentPath(raw=f'a.wmuxD_{i}.1'), index=1)
+        m.modify_connection(f'D{i}', WireSegmentPath(raw=f'a.wmuxD_{i}.2'), index=2)
+        m.modify_connection(f'D{i}', WireSegmentPath(raw=f'a.wmuxD_{i}.3'), index=3)
 
     m.modify_connection('Y', WireSegmentPath(raw='a.wmuxY_1.0'), index=0)
     # 2nd is missing on purpose: m.modify_connection('Y', WireSegmentPath(raw='a.wmuxY_1.1'), index=1)
@@ -1268,10 +1315,8 @@ def _init_mux_structure(m: Multiplexer) -> None:
         m.modify_connection('S', WireSegmentPath(raw=f'a.wmuxS.{i}'), index=i)
 
 
-def test_mux_structure() -> None:
-    with pytest.raises(ValidationError):
-        Multiplexer(raw_path='', bit_width=0)
-    m = Multiplexer(raw_path='a.mux_inst', bit_width=3, width=4, module=None)
+def test_mux_structure(simple_module: Module) -> None:
+    m = Multiplexer(raw_path='a.mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
 
     assert m.name == 'mux_inst'
     assert m.instance_type == '§mux'
@@ -1281,12 +1326,12 @@ def test_mux_structure() -> None:
     assert m.output_port == m.ports['Y']
     assert len(m.ports) == 8 + 1 + 1  # 8 data inputs, 1 control input (3-bit wide) and 1 output
     assert len(m.connections) == 8 + 1 + 1  # 8 inputs, 1 control input (3-bit wide) and 1 output
-    assert 'D_0' in m.ports
-    assert 'D_7' in m.ports
-    assert 'D_8' not in m.ports
+    assert 'D0' in m.ports
+    assert 'D7' in m.ports
+    assert 'D8' not in m.ports
     assert 'S' in m.ports
     assert 'Y' in m.ports
-    assert m.ports['D_0'].width == 4
+    assert m.ports['D0'].width == 4
     assert m.ports['S'].width == 3
     assert m.ports['Y'].width == 4
     assert not m.s_defined
@@ -1294,9 +1339,9 @@ def test_mux_structure() -> None:
     assert m.active_input is None
     assert m.verilog_template == 'always @(*) begin\n\tcase ({sel})\n{cases}\n\tendcase\nend'
     assert m.output_port.signal is Signal.UNDEFINED
+    assert m.splittable
 
     _init_mux_structure(m)
-    set_curr_module()
     case_str = ''
     for i in range(8):
         case_str += f"\t\t3'b{format(i, '03b')} : " + '{wmuxY_1[3:2], wmuxY_1[0]} <= {' + f'wmuxD_{i}[3:2], wmuxD_{i}[0]' + '};\n'
@@ -1305,8 +1350,52 @@ def test_mux_structure() -> None:
     assert m.verilog == target_str
 
 
-def test_mux_behavior() -> None:
-    m = Multiplexer(raw_path='a.mux_inst', bit_width=3, width=4, module=None)
+def test_mux_split(simple_module: Module) -> None:
+    m = Multiplexer(raw_path='a.mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
+    simple_module.add_instance(m)
+    d0 = simple_module.create_port('D0', Direction.IN, width=4)
+    d1 = simple_module.create_port('D1', Direction.IN, width=4)
+    d2 = simple_module.create_port('D2', Direction.IN, width=4)
+    d3 = simple_module.create_port('D3', Direction.IN, width=4)
+    d4 = simple_module.create_port('D4', Direction.IN, width=4)
+    d5 = simple_module.create_port('D5', Direction.IN, width=4)
+    d6 = simple_module.create_port('D6', Direction.IN, width=4)
+    d7 = simple_module.create_port('D7', Direction.IN, width=4)
+    s = simple_module.create_port('S', Direction.OUT, width=3)
+    y = simple_module.create_port('Y', Direction.OUT, width=4)
+    simple_module.connect(d0, m.ports['D0'])
+    simple_module.connect(d1, m.ports['D1'])
+    simple_module.connect(d2, m.ports['D2'])
+    simple_module.connect(d3, m.ports['D3'])
+    simple_module.connect(d4, m.ports['D4'])
+    simple_module.connect(d5, m.ports['D5'])
+    simple_module.connect(d6, m.ports['D6'])
+    simple_module.connect(d7, m.ports['D7'])
+    simple_module.connect(s, m.ports['S'])
+    simple_module.connect(m.ports['Y'], y)
+    connections = m.connections
+    assert m.splittable
+    assert m.name in simple_module.instances
+    splitted = m.split()
+    assert m.name not in simple_module.instances
+    assert len(splitted) == 4
+    for idx, inst in splitted.items():
+        assert inst.name in simple_module.instances
+        assert inst.width == 1
+        assert inst.ports['D0'].width == 1
+        assert inst.ports['D7'].width == 1
+        assert inst.ports['S'].width == 3
+        assert inst.ports['Y'].width == 1
+        assert inst.ports['D0'][0].ws_path == connections['D0'][idx]
+        assert inst.ports['D7'][0].ws_path == connections['D7'][idx]
+        assert inst.ports['S'][0].ws_path == connections['S'][0]
+        assert inst.ports['S'][1].ws_path == connections['S'][1]
+        assert inst.ports['S'][2].ws_path == connections['S'][2]
+        assert inst.ports['Y'][0].ws_path == connections['Y'][idx]
+
+
+def test_mux_behavior(simple_module: Module) -> None:
+    m = Multiplexer(raw_path='a.mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
     _init_mux_structure(m)
 
     # Select Ports
@@ -1316,40 +1405,40 @@ def test_mux_behavior() -> None:
 
     assert m.s_defined
     assert m.s_val == 3  # S_0 + S_1 = 1 + 2 => s_val = 3
-    assert m.active_input == m.ports['D_3']
+    assert m.active_input == m.ports['D3']
     m.evaluate()
     assert m.output_port.signal is Signal.UNDEFINED
 
     for i in range(8):
-        m.modify_connection(f'D_{i}', WireSegmentPath(raw=f'a.wmuxD_{i}.1'), index=1)
+        m.modify_connection(f'D{i}', WireSegmentPath(raw=f'a.wmuxD{i}.1'), index=1)
     m.modify_connection('Y', WireSegmentPath(raw='a.wmuxY_1.1'), index=1)
 
     # Data Ports
-    m.ports['D_0'].set_signal(Signal.HIGH)
-    m.ports['D_1'].set_signal(Signal.LOW, index=1)
-    m.ports['D_2'].set_signal(Signal.FLOATING, index=2)
+    m.ports['D0'].set_signal(Signal.HIGH)
+    m.ports['D1'].set_signal(Signal.LOW, index=1)
+    m.ports['D2'].set_signal(Signal.FLOATING, index=2)
 
     # Change S
     m.ports['S'].set_signal(Signal.LOW, 1)  # => s_val = 1
-    assert m.active_input == m.ports['D_1']
+    assert m.active_input == m.ports['D1']
     m.evaluate()
     assert m.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.LOW, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     m.ports['S'].set_signal(Signal.LOW, 0)  # => s_val = 0
-    assert m.active_input == m.ports['D_0']
+    assert m.active_input == m.ports['D0']
     m.evaluate()
     assert m.output_port.signal_array == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     m.ports['S'].set_signal(Signal.HIGH, 1)  # => s_val = 2
-    assert m.active_input == m.ports['D_2']
+    assert m.active_input == m.ports['D2']
     m.evaluate()
     assert m.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
 
 
 def _init_demux_structure(d: Demultiplexer) -> None:
     for i in range(8):
-        d.modify_connection(f'Y_{i}', WireSegmentPath(raw=f'a.wmuxY_{i}.0'), index=0)
-        # 2nd is missing on purpose: d.modify_connection(f'Y_{i}', WireSegmentPath(raw=f'a.wmuxY_{i}.1'), index=1)
-        d.modify_connection(f'Y_{i}', WireSegmentPath(raw=f'a.wmuxY_{i}.2'), index=2)
-        d.modify_connection(f'Y_{i}', WireSegmentPath(raw=f'a.wmuxY_{i}.3'), index=3)
+        d.modify_connection(f'Y{i}', WireSegmentPath(raw=f'a.wmuxY_{i}.0'), index=0)
+        # 2nd is missing on purpose: d.modify_connection(f'Y{i}', WireSegmentPath(raw=f'a.wmuxY_{i}.1'), index=1)
+        d.modify_connection(f'Y{i}', WireSegmentPath(raw=f'a.wmuxY_{i}.2'), index=2)
+        d.modify_connection(f'Y{i}', WireSegmentPath(raw=f'a.wmuxY_{i}.3'), index=3)
 
     d.modify_connection('D', WireSegmentPath(raw='a.wmuxD_1.0'), index=0)
     # 2nd is missing on purpose: d.modify_connection('D', WireSegmentPath(raw='a.wmuxD_1.1'), index=1)
@@ -1360,10 +1449,8 @@ def _init_demux_structure(d: Demultiplexer) -> None:
         d.modify_connection('S', WireSegmentPath(raw=f'a.wmuxS.{i}'), index=i)
 
 
-def test_demux_structure() -> None:
-    with pytest.raises(ValidationError):
-        Demultiplexer(raw_path='a.demux_inst', bit_width=0, width=4, module=None)
-    d = Demultiplexer(raw_path='a.demux_inst', bit_width=3, width=4, module=None)
+def test_demux_structure(simple_module: Module) -> None:
+    d = Demultiplexer(raw_path='a.demux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
 
     assert d.name == 'demux_inst'
     assert d.instance_type == '§demux'
@@ -1373,12 +1460,12 @@ def test_demux_structure() -> None:
     assert d.input_port == d.ports['D']
     assert len(d.ports) == 8 + 1 + 1  # 8 data outputs, 1 control input (3-bit wide) and 1 input
     assert len(d.connections) == 8 + 1 + 1  # 8 outputs, 1 control input (3-bit wide) and 1 input
-    assert 'Y_0' in d.ports
-    assert 'Y_7' in d.ports
-    assert 'Y_8' not in d.ports
+    assert 'Y0' in d.ports
+    assert 'Y7' in d.ports
+    assert 'Y8' not in d.ports
     assert 'S' in d.ports
     assert 'D' in d.ports
-    assert d.ports['Y_0'].width == 4
+    assert d.ports['Y0'].width == 4
     assert d.ports['S'].width == 3
     assert d.ports['D'].width == 4
     assert not d.s_defined
@@ -1386,11 +1473,11 @@ def test_demux_structure() -> None:
     assert d.active_output is None
     assert d.verilog_template == 'always @(*) begin\n\tcase ({sel})\n{cases}\n\tendcase\nend'
     assert d.input_port.signal is Signal.UNDEFINED
+    assert d.splittable
     with pytest.raises(NotImplementedError):
         d.output_port.signal
 
     _init_demux_structure(d)
-    set_curr_module()
     case_str = ''
     for i in range(8):
         case_str += f"\t\t3'b{format(i, '03b')} : " + '{' + f'wmuxY_{i}[3:2], wmuxY_{i}[0]' + '} <= {wmuxD_1[3:2], wmuxD_1[0]};\n'
@@ -1399,8 +1486,52 @@ def test_demux_structure() -> None:
     assert d.verilog == target_str
 
 
-def test_demux_behavior() -> None:
-    d = Demultiplexer(raw_path='a.demux_inst', bit_width=3, width=4, module=None)
+def test_demux_split(simple_module: Module) -> None:
+    dm = Demultiplexer(raw_path='a.mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
+    simple_module.add_instance(dm)
+    d = simple_module.create_port('D', Direction.OUT, width=4)
+    s = simple_module.create_port('S', Direction.OUT, width=3)
+    y0 = simple_module.create_port('Y0', Direction.OUT, width=4)
+    y1 = simple_module.create_port('Y1', Direction.OUT, width=4)
+    y2 = simple_module.create_port('Y2', Direction.OUT, width=4)
+    y3 = simple_module.create_port('Y3', Direction.OUT, width=4)
+    y4 = simple_module.create_port('Y4', Direction.OUT, width=4)
+    y5 = simple_module.create_port('Y5', Direction.OUT, width=4)
+    y6 = simple_module.create_port('Y6', Direction.OUT, width=4)
+    y7 = simple_module.create_port('Y7', Direction.OUT, width=4)
+    simple_module.connect(d, dm.ports['D'])
+    simple_module.connect(s, dm.ports['S'])
+    simple_module.connect(dm.ports['Y0'], y0)
+    simple_module.connect(dm.ports['Y1'], y1)
+    simple_module.connect(dm.ports['Y2'], y2)
+    simple_module.connect(dm.ports['Y3'], y3)
+    simple_module.connect(dm.ports['Y4'], y4)
+    simple_module.connect(dm.ports['Y5'], y5)
+    simple_module.connect(dm.ports['Y6'], y6)
+    simple_module.connect(dm.ports['Y7'], y7)
+    connections = dm.connections
+    assert dm.splittable
+    assert dm.name in simple_module.instances
+    splitted = dm.split()
+    assert dm.name not in simple_module.instances
+    assert len(splitted) == 4
+    for idx, inst in splitted.items():
+        assert inst.name in simple_module.instances
+        assert inst.width == 1
+        assert inst.ports['D'].width == 1
+        assert inst.ports['S'].width == 3
+        assert inst.ports['Y0'].width == 1
+        assert inst.ports['Y7'].width == 1
+        assert inst.ports['D'][0].ws_path == connections['D'][idx]
+        assert inst.ports['S'][0].ws_path == connections['S'][0]
+        assert inst.ports['S'][1].ws_path == connections['S'][1]
+        assert inst.ports['S'][2].ws_path == connections['S'][2]
+        assert inst.ports['Y0'][0].ws_path == connections['Y0'][idx]
+        assert inst.ports['Y7'][0].ws_path == connections['Y7'][idx]
+
+
+def test_demux_behavior(simple_module: Module) -> None:
+    d = Demultiplexer(raw_path='a.demux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
     _init_demux_structure(d)
 
     # Select Ports
@@ -1410,7 +1541,7 @@ def test_demux_behavior() -> None:
 
     assert d.s_defined
     assert d.s_val == 3  # S_0 + S_1 = 1 + 2 => s_val = 3
-    assert d.active_output == d.ports['Y_3']
+    assert d.active_output == d.ports['Y3']
     d.evaluate()
     with pytest.raises(NotImplementedError):
         d.output_port
@@ -1419,32 +1550,32 @@ def test_demux_behavior() -> None:
 
     # Change S
     d.ports['S'].set_signal(Signal.LOW, 1)  # => s_val = 1
-    assert d.active_output == d.ports['Y_1']
-    assert d.ports['Y_1'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.active_output == d.ports['Y1']
+    assert d.ports['Y1'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     d.evaluate()
-    assert d.ports['Y_0'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert d.ports['Y_1'].signal_array == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert d.ports['Y_2'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y0'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y1'].signal_array == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y2'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     d.ports['S'].set_signal(Signal.LOW, 0)  # => s_val = 0
-    assert d.active_output == d.ports['Y_0']
-    assert d.ports['Y_0'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.active_output == d.ports['Y0']
+    assert d.ports['Y0'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     d.evaluate()
-    assert d.ports['Y_0'].signal_array == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert d.ports['Y_1'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert d.ports['Y_2'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y0'].signal_array == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y1'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y2'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     d.ports['S'].set_signal(Signal.HIGH, 1)  # => s_val = 2
-    assert d.active_output == d.ports['Y_2']
-    assert d.ports['Y_2'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.active_output == d.ports['Y2']
+    assert d.ports['Y2'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     d.evaluate()
-    assert d.ports['Y_0'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert d.ports['Y_1'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert d.ports['Y_2'].signal_array == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y0'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y1'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y2'].signal_array == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
 
 
-def test_adder_structure() -> None:
+def test_adder_structure(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Adder
 
-    a = Adder(raw_path='a.adder_inst', width=4, module=None)
+    a = Adder(raw_path='a.adder_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
 
     assert 'A' in a.ports
     assert 'B' in a.ports
@@ -1471,7 +1602,6 @@ def test_adder_structure() -> None:
     a.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
     a.modify_connection('Y', WireSegmentPath(raw='a.carry.0'), index=4)
     assert a.ports['Y'].width == 5
-    set_curr_module()
     with pytest.raises(ValueError):
         a.verilog
     a.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
@@ -1481,12 +1611,16 @@ def test_adder_structure() -> None:
     with pytest.raises(EvaluationError):
         a._calc_output()
 
+    a.ports['A'].parameters['signed'] = '0'
+    a.ports['B'].parameters['signed'] = '1'
+    assert a.sync_parameters() == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 5}
+    assert not a.splittable
 
-def test_adder_behavior() -> None:
+
+def test_adder_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Adder
 
-    a = Adder(raw_path='a.adder_inst', width=4, module=None)
-    set_curr_module()
+    a = Adder(raw_path='a.adder_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
 
     a.tie_port('A', 0, '0')
     a.tie_port('A', 1, '0')
@@ -1510,7 +1644,7 @@ def test_adder_behavior() -> None:
     a.evaluate()  # 12 + 6 = 18
     assert a.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.LOW, 4: Signal.HIGH}
 
-    a.parameters['B_SIGNED'] = 1
+    a.ports['B'].set_signed(True)
     a.tie_port('B', 0, '0')
     a.tie_port('B', 1, '1')
     a.tie_port('B', 2, '0')
@@ -1522,10 +1656,10 @@ def test_adder_behavior() -> None:
         a.evaluate()
 
 
-def test_subtractor_structure() -> None:
+def test_subtractor_structure(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Subtractor
 
-    s = Subtractor(raw_path='a.subtractor_inst', width=4, module=None)
+    s = Subtractor(raw_path='a.subtractor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
 
     assert 'A' in s.ports
     assert 'B' in s.ports
@@ -1550,7 +1684,6 @@ def test_subtractor_structure() -> None:
     s.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: a.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     s.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    set_curr_module()
     with pytest.raises(ValueError):
         s.verilog
     s.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
@@ -1558,11 +1691,10 @@ def test_subtractor_structure() -> None:
     assert s.verilog == target_str
 
 
-def test_subtractor_behavior() -> None:
+def test_subtractor_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Subtractor
 
-    s = Subtractor(raw_path='a.subtractor_inst', width=4, module=None)
-    set_curr_module()
+    s = Subtractor(raw_path='a.subtractor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
 
     s.tie_port('A', 0, '0')
     s.tie_port('A', 1, '0')
@@ -1584,7 +1716,7 @@ def test_subtractor_behavior() -> None:
     s.modify_connection('Y', WireSegmentPath(raw='a.carry.0'), index=4)
     s.evaluate()
     assert s.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH, 4: Signal.HIGH}
-    s.parameters['B_SIGNED'] = 1
+    s.ports['B'].set_signed(True)
     s.tie_port('B', 0, '1')
     s.tie_port('B', 1, '0')
     s.tie_port('B', 2, '1')
@@ -1596,10 +1728,10 @@ def test_subtractor_behavior() -> None:
         s.evaluate()
 
 
-def test_multiplier_structure() -> None:
+def test_multiplier_structure(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Multiplier
 
-    m = Multiplier(raw_path='a.multiplier_inst', width=4, module=None)
+    m = Multiplier(raw_path='a.multiplier_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
 
     assert 'A' in m.ports
     assert 'B' in m.ports
@@ -1626,7 +1758,6 @@ def test_multiplier_structure() -> None:
     m.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
     m.modify_connection('Y', WireSegmentPath(raw='a.carry.0'), index=4)
     assert m.ports['Y'].width == 5
-    set_curr_module()
     with pytest.raises(ValueError):
         m.verilog
     m.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
@@ -1634,11 +1765,10 @@ def test_multiplier_structure() -> None:
     assert m.verilog == target_str
 
 
-def test_multiplier_behavior() -> None:
+def test_multiplier_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Multiplier
 
-    m = Multiplier(raw_path='a.multiplier_inst', width=4, module=None)
-    set_curr_module()
+    m = Multiplier(raw_path='a.multiplier_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
 
     m.tie_port('A', 0, '0')
     m.tie_port('A', 1, '0')
@@ -1660,7 +1790,7 @@ def test_multiplier_behavior() -> None:
     m.modify_connection('Y', WireSegmentPath(raw='a.carry.0'), index=4)
     m.evaluate()
     assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH, 4: Signal.HIGH}
-    m.parameters['B_SIGNED'] = 1
+    m.ports['B'].set_signed(True)
     m.tie_port('B', 0, '1')
     m.tie_port('B', 1, '0')
     m.tie_port('B', 2, '1')
@@ -1672,32 +1802,66 @@ def test_multiplier_behavior() -> None:
         m.evaluate()
 
 
-def test_clocked_gate() -> None:
-    from netlist_carpentry.utils.gate_lib import _ClockedGate
+def test_clocked_gate(simple_module: Module) -> None:
+    from netlist_carpentry.utils.gate_lib import _ClkMixin
 
-    g = _ClockedGate(instance_type='clocked_gate', raw_path='a.clocked_gate_inst', clk_polarity=Signal.LOW, rst_polarity=Signal.LOW, module=None)
+    g = _ClkMixin(
+        instance_type='clocked_gate',
+        raw_path='a.clocked_gate_inst',
+        parameters={'CLK_POLARITY': Signal.LOW, 'RST_POLARITY': Signal.LOW},
+        module=simple_module,
+    )
 
     assert g.name == 'clocked_gate_inst'
     assert g.instance_type == 'clocked_gate'
-    assert g.rst_val == {0: Signal.LOW}
     assert g.clk_polarity is Signal.LOW
-    assert g.rst_polarity is Signal.LOW
     assert 'CLK' in g.ports
-    assert 'RST' in g.ports
     assert g.ports['CLK'].is_input
-    assert g.ports['RST'].is_input
     assert g.ports['CLK'] is g.clk_port
-    assert g.ports['RST'] is g.rst_port
     assert g.clk_port.width == 1
-    assert g.rst_port.width == 1
-    assert g.clk_signal is Signal.FLOATING
-    assert not g.clk_redge
-    assert not g.clk_fedge
-    assert not g.rst_redge
-    assert not g.rst_fedge
+    assert g.clk_port.signal is Signal.FLOATING
     assert not g.is_combinatorial
     assert g.is_sequential
-    assert g.verilog_template == 'always @({clk} or {rst}) begin\n\t{behavior}\nend'
+    assert g.splittable
+
+
+def test_clocked_gate_split(simple_module: Module) -> None:
+    dff = ADFFE(
+        instance_type='clocked_gate',
+        raw_path='a.clocked_gate_inst',
+        parameters={'CLK_POLARITY': Signal.LOW, 'RST_POLARITY': Signal.LOW, 'WIDTH': 8},
+        module=simple_module,
+    )
+    simple_module.add_instance(dff)
+    d = simple_module.create_port('D', Direction.IN, width=8)
+    q = simple_module.create_port('Q', Direction.OUT, width=8)
+    clk = simple_module.create_port('clk', Direction.OUT)
+    rst = simple_module.create_port('rst', Direction.OUT)
+    en = simple_module.create_port('en', Direction.OUT)
+    simple_module.connect(d, dff.ports['D'])
+    simple_module.connect(clk, dff.ports['CLK'])
+    simple_module.connect(rst, dff.ports['RST'])
+    simple_module.connect(en, dff.ports['EN'])
+    simple_module.connect(dff.ports['Q'], q)
+    connections = dff.connections
+    assert dff.splittable
+    assert dff.name in simple_module.instances
+    splitted = dff.split()
+    assert dff.name not in simple_module.instances
+    assert len(splitted) == 8
+    for idx, inst in splitted.items():
+        assert inst.name in simple_module.instances
+        assert inst.width == 1
+        assert inst.ports['D'].width == 1
+        assert inst.ports['CLK'].width == 1
+        assert inst.ports['RST'].width == 1
+        assert inst.ports['EN'].width == 1
+        assert inst.ports['Q'].width == 1
+        assert inst.ports['D'][0].ws_path == connections['D'][idx]
+        assert inst.ports['CLK'][0].ws_path == connections['CLK'][0]
+        assert inst.ports['RST'][0].ws_path == connections['RST'][0]
+        assert inst.ports['EN'][0].ws_path == connections['EN'][0]
+        assert inst.ports['Q'][0].ws_path == connections['Q'][idx]
 
 
 def _init_dff_structure(ff: DFF, init_rst_en: bool = False, init_all_in: bool = False) -> None:
@@ -1722,16 +1886,184 @@ def _init_dff_structure(ff: DFF, init_rst_en: bool = False, init_all_in: bool = 
         ff.modify_connection('EN', WireSegmentPath(raw='a.en.0'))
 
 
-def test_dff_structure() -> None:
-    ff = DFF(raw_path='a.dff_inst', rst_polarity=Signal.LOW, width=4, module=None)
+def _clk(ff: DFF, cycles: int = 1) -> None:
+    for i in range(cycles):
+        ff.set_clk(Signal.HIGH)
+        assert ff.clk_port.signal is Signal.HIGH
+        ff.set_clk(Signal.LOW)
+        assert ff.clk_port.signal is Signal.LOW
+
+
+def test_dff_structure(simple_module: Module) -> None:
+    ff = DFF(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
 
     assert ff.name == 'dff_inst'
     assert ff.instance_type == '§dff'
     assert ff.clk_polarity is Signal.HIGH
+
+    assert len(ff.ports) == 3
+    assert 'D' in ff.ports
+    assert 'CLK' in ff.ports
+    assert 'Q' in ff.ports
+    assert ff.ports['D'].is_input
+    assert ff.ports['CLK'].is_input
+    assert ff.ports['Q'].is_output
+    assert ff.input_port == ff.ports['D']
+    assert ff.clk_port == ff.ports['CLK']
+    assert ff.output_port == ff.ports['Q']
+    assert ff.output_port.signal is Signal.UNDEFINED
+    assert ff.input_port.width == 4
+    assert ff.clk_port.width == 1
+    assert ff.output_port.width == 4
+    assert list(range(4)) == list(ff.input_port.segments.keys())
+    assert list(range(4)) == list(ff.output_port.segments.keys())
+    assert ff.scan_ff_equivalent == ScanDFF
+    assert ff.verilog_template == 'always @({header}) begin\n\t{set_out}\nend'
+
+    _init_dff_structure(ff)
+    target_v = "always @(posedge clk) begin\n\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\nend"
+    save_results(ff.verilog, 'txt')
+    assert ff.verilog == target_v
+
+
+def test_dff_behaviour(simple_module: Module) -> None:
+    ff = DFF(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    _init_dff_structure(ff, init_all_in=True)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.input_port.set_signals('01xz')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+
+
+def test_dff_to_scan(simple_module: Module) -> None:
+    ff = DFF(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+
+    scan_ff = ff.get_scanff()
+    assert scan_ff.name == 'dff_inst_scan'
+    assert scan_ff.parameters == ff.parameters
+
+
+def test_adff_structure(simple_module: Module) -> None:
+    ff = ADFF(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+
+    assert ff.name == 'dff_inst'
+    assert ff.instance_type == '§adff'
+    assert ff.clk_polarity is Signal.HIGH
+    assert ff.rst_polarity is Signal.LOW
+
+    assert len(ff.ports) == 4
+    assert 'D' in ff.ports
+    assert 'CLK' in ff.ports
+    assert 'RST' in ff.ports
+    assert 'Q' in ff.ports
+    assert ff.ports['D'].is_input
+    assert ff.ports['CLK'].is_input
+    assert ff.ports['RST'].is_input
+    assert ff.ports['Q'].is_output
+    assert ff.input_port == ff.ports['D']
+    assert ff.clk_port == ff.ports['CLK']
+    assert ff.rst_port == ff.ports['RST']
+    assert ff.output_port == ff.ports['Q']
+    assert ff.output_port.signal is Signal.UNDEFINED
+    assert ff.input_port.width == 4
+    assert ff.clk_port.width == 1
+    assert ff.rst_port.width == 1
+    assert ff.output_port.width == 4
+    assert list(range(4)) == list(ff.input_port.segments.keys())
+    assert list(range(4)) == list(ff.output_port.segments.keys())
+    assert ff.scan_ff_equivalent == ScanADFF
+    assert ff.verilog_template == 'always @({header}) begin\n\tif ({is_rst}) begin\n\t\t{rst_out}\n\tend else begin\n\t\t{set_out}\n\tend\nend'
+
+    _init_dff_structure(ff)
+    ff.modify_connection('RST', WireSegmentPath(raw='a.rst.0'))
+    target_v = "always @(posedge clk or negedge rst) begin\n\tif (~rst) begin\n\t\twire\t<=\t4'b0000;\n\tend else begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
+    save_results(ff.verilog, 'txt')
+    assert ff.verilog == target_v
+
+
+def test_adff_behaviour(simple_module: Module) -> None:
+    ff = ADFF(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    _init_dff_structure(ff, init_all_in=True)
+    ff.modify_connection('RST', WireSegmentPath(raw='a.rst.0'))
+    assert ff.rst_polarity is Signal.HIGH
+    assert ff.rst_val_int == 0
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.set_rst(Signal.LOW)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.set_rst(Signal.HIGH)
+    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    ff.input_port.set_signals('01xz')
+    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    ff.set_rst(Signal.LOW)
+    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+
+
+def test_dffe_structure(simple_module: Module) -> None:
+    ff = DFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+
+    assert ff.name == 'dff_inst'
+    assert ff.instance_type == '§dffe'
+    assert ff.clk_polarity is Signal.HIGH
+
+    assert len(ff.ports) == 4
+    assert 'D' in ff.ports
+    assert 'CLK' in ff.ports
+    assert 'EN' in ff.ports
+    assert 'Q' in ff.ports
+    assert ff.ports['D'].is_input
+    assert ff.ports['CLK'].is_input
+    assert ff.ports['EN'].is_input
+    assert ff.ports['Q'].is_output
+    assert ff.input_port == ff.ports['D']
+    assert ff.clk_port == ff.ports['CLK']
+    assert ff.en_port == ff.ports['EN']
+    assert ff.output_port == ff.ports['Q']
+    assert ff.output_port.signal is Signal.UNDEFINED
+    assert ff.input_port.width == 4
+    assert ff.clk_port.width == 1
+    assert ff.en_port.width == 1
+    assert ff.output_port.width == 4
+    assert list(range(4)) == list(ff.input_port.segments.keys())
+    assert list(range(4)) == list(ff.output_port.segments.keys())
+    assert ff.scan_ff_equivalent == ScanDFFE
+    assert ff.verilog_template == 'always @({header}) begin\n\tif ({en}) begin\n\t\t{set_out}\n\tend\nend'
+
+    _init_dff_structure(ff)
+    ff.modify_connection('EN', WireSegmentPath(raw='a.en.0'))
+    target_v = "always @(posedge clk) begin\n\tif (en) begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
+    save_results(ff.verilog, 'txt')
+    assert ff.verilog == target_v
+
+
+def test_dffe_behaviour(simple_module: Module) -> None:
+    ff = DFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    _init_dff_structure(ff, init_all_in=True)
+    ff.modify_connection('EN', WireSegmentPath(raw='a.en.0'))
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.input_port.set_signals('01xz')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.set_en(Signal.HIGH)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+
+
+def test_adffe_structure(simple_module: Module) -> None:
+    ff = ADFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+
+    assert ff.name == 'dff_inst'
+    assert ff.instance_type == '§adffe'
+    assert ff.clk_polarity is Signal.HIGH
     assert ff.en_polarity is Signal.HIGH
     assert ff.rst_polarity is Signal.LOW
     assert ff.rst_val == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
-    assert not ff.init_finished
 
     assert len(ff.ports) == 5
     assert 'D' in ff.ports
@@ -1757,73 +2089,46 @@ def test_dff_structure() -> None:
     assert ff.output_port.width == 4
     assert list(range(4)) == list(ff.input_port.segments.keys())
     assert list(range(4)) == list(ff.output_port.segments.keys())
-    assert ff.clk_port._listeners == {ff}
-    assert ff.rst_port._listeners == {ff}
-    assert ff.verilog_template == 'always @({clk}{two_sig}{rst}) begin\n\t{set_out}\nend'
-
-    _init_dff_structure(ff)
-    set_curr_module()
-    target_v = "always @(posedge clk) begin\n\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\nend"
-    assert ff.verilog == target_v
+    assert ff.scan_ff_equivalent == ScanADFFE
 
     _init_dff_structure(ff, True)
     save_results(ff.verilog, 'txt')
     assert (
-        ff.verilog_template
-        == 'always @({clk}{two_sig}{rst}) begin\n\tif ({is_rst}) begin\n\t\t{rst_out}\n\tend else{enable}begin\n\t\t{set_out}\n\tend\nend'
+        ff.verilog_template == 'always @({header}) begin\n\tif ({is_rst}) begin\n\t\t{rst_out}\n\tend else if ({en}) begin\n\t\t{set_out}\n\tend\nend'
     )
     target_v = "always @(posedge clk or negedge rst) begin\n\tif (~rst) begin\n\t\twire\t<=\t4'b0000;\n\tend else if (en) begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
     assert ff.verilog == target_v
 
 
-def _clk(ff: DFF, cycles: int = 1) -> None:
-    for i in range(cycles):
-        ff.set_clk(Signal.HIGH)
-        assert ff._prev_clk is not Signal.HIGH
-        assert ff._curr_clk is Signal.HIGH
-        assert ff.clk_redge or not ff._init_finished  # When FF init not finished, rising edge wont be detected, because previous value is x
-        assert not ff.clk_fedge
-        ff.set_clk(Signal.LOW)
-        assert ff._prev_clk is not Signal.LOW
-        assert ff._curr_clk is Signal.LOW
-        assert not ff.clk_redge
-        assert ff.clk_fedge
+def test_adffe_behavior_init(simple_module: Module) -> None:
+    ff = ADFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    _init_dff_structure(ff, True, True)
 
-
-def test_dff_behavior_init() -> None:
-    ff = DFF(raw_path='a.dff_inst', width=4, module=None)
-    _init_dff_structure(ff, True)
-
-    assert not ff.init_finished
     assert not ff.in_reset
     assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
     ff.set_rst(Signal.HIGH)
-    assert not ff.init_finished
     assert ff.in_reset
     assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
     ff.set_rst(Signal.LOW)
-    assert ff.init_finished
     assert not ff.in_reset
     assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
     ff.rst_val_int = 0xF
     ff.set_rst(Signal.HIGH)
-    assert ff.init_finished
     assert ff.in_reset
     assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
     _clk(ff)
     ff.set_rst(Signal.LOW)
-    assert ff.init_finished
     assert not ff.in_reset
     assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
 
 
-def test_dff_behavior_clk() -> None:
-    ff = DFF(raw_path='a.dff_inst', width=4, module=None)
+def test_adffe_behavior_clk(simple_module: Module) -> None:
+    ff = ADFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     _init_dff_structure(ff, True, True)
 
     assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
@@ -1846,8 +2151,8 @@ def test_dff_behavior_clk() -> None:
     assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
 
 
-def test_dff_behavior_4bit() -> None:
-    ff = DFF(raw_path='a.dff_inst', width=4, module=None)
+def test_adffe_behavior_4bit(simple_module: Module) -> None:
+    ff = ADFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     _init_dff_structure(ff, True, True)
 
     assert ff.output_port.signal is Signal.UNDEFINED
@@ -1873,8 +2178,8 @@ def test_dff_behavior_4bit() -> None:
     assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
 
 
-def test_dff_behavior_en() -> None:
-    ff = DFF(raw_path='a.dff_inst', module=None)
+def test_adffe_behavior_en(simple_module: Module) -> None:
+    ff = ADFFE(raw_path='a.dff_inst', module=simple_module)
     ff.modify_connection('D', WireSegmentPath(raw='a.wireA1.0'), index=0)
     ff.modify_connection('Q', WireSegmentPath(raw='a.wire.0'), index=0)
     ff.modify_connection('CLK', WireSegmentPath(raw='a.clk.0'))
@@ -1889,23 +2194,24 @@ def test_dff_behavior_en() -> None:
     _clk(ff)
     ff.set_rst(Signal.LOW)
     _clk(ff)
+    assert ff.output_port.signal is Signal.UNDEFINED
 
     # EN Unconnected -> Undefined enable signal -> do not enable
     ff.modify_connection('EN', WireSegmentPath(raw=''))
     assert ff.en_port.signal is Signal.FLOATING
     ff.input_port.set_signal(Signal.HIGH)
-    assert ff.output_port.signal is Signal.LOW
+    assert ff.output_port.signal is Signal.UNDEFINED
     _clk(ff)
-    assert ff.output_port.signal is Signal.LOW
+    assert ff.output_port.signal is Signal.UNDEFINED
 
     # EN High
     ff.modify_connection('EN', WireSegmentPath(raw='a.enable_signal.0'))
     ff.set_en(Signal.HIGH)
     assert ff.en_port.signal is Signal.HIGH
-    assert ff.output_port.signal is Signal.LOW
+    assert ff.output_port.signal is Signal.UNDEFINED
 
     ff.input_port.set_signal(Signal.HIGH)
-    assert ff.output_port.signal is Signal.LOW
+    assert ff.output_port.signal is Signal.UNDEFINED
     _clk(ff)
     assert ff.output_port.signal is Signal.HIGH
 
@@ -1922,25 +2228,338 @@ def test_dff_behavior_en() -> None:
     assert ff.output_port.signal is Signal.LOW
 
 
-def test_edge_detection() -> None:
-    ff = DFF(raw_path='a.dff_inst', module=None)
+def _init_scan_structure(ff: DFF) -> None:
+    ff.module.connect(ff.module.create_port('se', Direction.IN), ff.ports['SE'], 'se_wire')
+    ff.module.connect(ff.module.create_port('si', Direction.IN, width=4), ff.ports['SI'], 'si_wire')
+    ff.module.connect(ff.ports['SO'], ff.module.create_port('so', Direction.OUT, width=4), 'so_wire')
 
-    assert ff._edge_detection(Signal.UNDEFINED, Signal.UNDEFINED) == (Signal.UNDEFINED, False, False)
-    assert ff._edge_detection(Signal.UNDEFINED, Signal.LOW) == (Signal.UNDEFINED, False, False)
-    assert ff._edge_detection(Signal.UNDEFINED, Signal.HIGH) == (Signal.UNDEFINED, False, False)
-    assert ff._edge_detection(Signal.UNDEFINED, Signal.FLOATING) == (Signal.UNDEFINED, False, False)
-    assert ff._edge_detection(Signal.LOW, Signal.UNDEFINED) == (Signal.LOW, False, False)
-    assert ff._edge_detection(Signal.LOW, Signal.LOW) == (Signal.LOW, False, False)
-    assert ff._edge_detection(Signal.LOW, Signal.HIGH) == (Signal.LOW, True, False)
-    assert ff._edge_detection(Signal.LOW, Signal.FLOATING) == (Signal.LOW, False, False)
-    assert ff._edge_detection(Signal.HIGH, Signal.UNDEFINED) == (Signal.HIGH, False, False)
-    assert ff._edge_detection(Signal.HIGH, Signal.LOW) == (Signal.HIGH, False, True)
-    assert ff._edge_detection(Signal.HIGH, Signal.HIGH) == (Signal.HIGH, False, False)
-    assert ff._edge_detection(Signal.HIGH, Signal.FLOATING) == (Signal.HIGH, False, False)
-    assert ff._edge_detection(Signal.FLOATING, Signal.UNDEFINED) == (Signal.FLOATING, False, False)
-    assert ff._edge_detection(Signal.FLOATING, Signal.LOW) == (Signal.FLOATING, False, False)
-    assert ff._edge_detection(Signal.FLOATING, Signal.HIGH) == (Signal.FLOATING, False, False)
-    assert ff._edge_detection(Signal.FLOATING, Signal.FLOATING) == (Signal.FLOATING, False, False)
+
+def test_scandff_structure(simple_module: Module) -> None:
+    ff = ScanDFF(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+    simple_module.instances['dff_inst'] = ff
+
+    assert ff.name == 'dff_inst'
+    assert ff.instance_type == '§scan_dff'
+    assert ff.clk_polarity is Signal.HIGH
+
+    assert len(ff.ports) == 6
+    assert 'D' in ff.ports
+    assert 'CLK' in ff.ports
+    assert 'Q' in ff.ports
+    assert 'SE' in ff.ports
+    assert 'SI' in ff.ports
+    assert 'SO' in ff.ports
+    assert ff.ports['D'].is_input
+    assert ff.ports['CLK'].is_input
+    assert ff.ports['Q'].is_output
+    assert ff.ports['SE'].is_input
+    assert ff.ports['SI'].is_input
+    assert ff.ports['SO'].is_output
+    assert ff.input_port == ff.ports['D']
+    assert ff.clk_port == ff.ports['CLK']
+    assert ff.output_port == ff.ports['Q']
+    assert ff.se_port == ff.ports['SE']
+    assert ff.si_port == ff.ports['SI']
+    assert ff.so_port == ff.ports['SO']
+    assert ff.output_port.signal is Signal.UNDEFINED
+    assert ff.input_port.width == 4
+    assert ff.clk_port.width == 1
+    assert ff.output_port.width == 4
+    assert ff.se_port.width == 1
+    assert ff.si_port.width == 4
+    assert ff.so_port.width == 4
+    assert list(range(4)) == list(ff.input_port.segments.keys())
+    assert list(range(4)) == list(ff.output_port.segments.keys())
+    assert ff.scan_ff_equivalent == DFF
+    assert ff.verilog_template == 'always @({header}) begin\n\t{so}\n\tif ({se}) begin\n\t\t{si}\n\tend else begin\n\t\t{set_out}\n\tend\nend'
+
+    _init_dff_structure(ff)
+    _init_scan_structure(ff)
+    target_v = "always @(posedge clk) begin\n\tso_wire\t<=\twire;\n\tif (se_wire) begin\n\t\twire\t<=\tsi_wire;\n\tend else begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
+    save_results(ff.verilog, 'txt')
+    assert ff.verilog == target_v
+
+
+def test_scandff_behaviour(simple_module: Module) -> None:
+    ff = ScanDFF(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    simple_module.instances['dff_inst'] = ff
+    _init_dff_structure(ff, init_all_in=True)
+    _init_scan_structure(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.input_port.set_signals('01xz')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    ff.si_port.set_signals('0110')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    ff.se_port.set_signals('1')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+
+
+def test_scanadff_structure(simple_module: Module) -> None:
+    ff = ScanADFF(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+    simple_module.instances['dff_inst'] = ff
+
+    assert ff.name == 'dff_inst'
+    assert ff.instance_type == '§scan_adff'
+    assert ff.clk_polarity is Signal.HIGH
+
+    assert len(ff.ports) == 7
+    assert 'D' in ff.ports
+    assert 'CLK' in ff.ports
+    assert 'RST' in ff.ports
+    assert 'Q' in ff.ports
+    assert 'SE' in ff.ports
+    assert 'SI' in ff.ports
+    assert 'SO' in ff.ports
+    assert ff.ports['D'].is_input
+    assert ff.ports['CLK'].is_input
+    assert ff.ports['RST'].is_input
+    assert ff.ports['Q'].is_output
+    assert ff.ports['SE'].is_input
+    assert ff.ports['SI'].is_input
+    assert ff.ports['SO'].is_output
+    assert ff.input_port == ff.ports['D']
+    assert ff.clk_port == ff.ports['CLK']
+    assert ff.rst_port == ff.ports['RST']
+    assert ff.output_port == ff.ports['Q']
+    assert ff.se_port == ff.ports['SE']
+    assert ff.si_port == ff.ports['SI']
+    assert ff.so_port == ff.ports['SO']
+    assert ff.output_port.signal is Signal.UNDEFINED
+    assert ff.input_port.width == 4
+    assert ff.clk_port.width == 1
+    assert ff.rst_port.width == 1
+    assert ff.output_port.width == 4
+    assert ff.se_port.width == 1
+    assert ff.si_port.width == 4
+    assert ff.so_port.width == 4
+    assert list(range(4)) == list(ff.input_port.segments.keys())
+    assert list(range(4)) == list(ff.output_port.segments.keys())
+    assert ff.scan_ff_equivalent == ADFF
+    assert (
+        ff.verilog_template
+        == 'always @({header}) begin\n\t{so}\n\tif ({is_rst}) begin\n\t\t{rst_out}\n\tend else if ({se}) begin\n\t\t{si}\n\tend else begin\n\t\t{set_out}\n\tend\nend'
+    )
+
+    _init_dff_structure(ff)
+    _init_scan_structure(ff)
+    ff.modify_connection('RST', WireSegmentPath(raw='a.rst.0'))
+    target_v = "always @(posedge clk or negedge rst) begin\n\tso_wire\t<=\twire;\n\tif (~rst) begin\n\t\twire\t<=\t4'b0000;\n\tend else if (se_wire) begin\n\t\twire\t<=\tsi_wire;\n\tend else begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
+    save_results(ff.verilog, 'txt')
+    assert ff.verilog == target_v
+
+
+def test_scanadff_behaviour(simple_module: Module) -> None:
+    ff = ScanADFF(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    simple_module.instances['dff_inst'] = ff
+    _init_dff_structure(ff, init_all_in=True)
+    _init_scan_structure(ff)
+    ff.rst_polarity = Signal.LOW  # Low active
+    ff.modify_connection('RST', WireSegmentPath(raw='a.rst.0'))
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.input_port.set_signals('01xz')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.set_rst(1)
+    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.set_rst(0)
+    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    ff.set_rst(1)
+    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    ff.si_port.set_signals('0110')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    ff.se_port.set_signals('1')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+
+
+def test_scandffe_structure(simple_module: Module) -> None:
+    ff = ScanDFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+    simple_module.instances['dff_inst'] = ff
+
+    assert ff.name == 'dff_inst'
+    assert ff.instance_type == '§scan_dffe'
+    assert ff.clk_polarity is Signal.HIGH
+
+    assert len(ff.ports) == 7
+    assert 'D' in ff.ports
+    assert 'CLK' in ff.ports
+    assert 'EN' in ff.ports
+    assert 'Q' in ff.ports
+    assert 'SE' in ff.ports
+    assert 'SI' in ff.ports
+    assert 'SO' in ff.ports
+    assert ff.ports['D'].is_input
+    assert ff.ports['CLK'].is_input
+    assert ff.ports['EN'].is_input
+    assert ff.ports['Q'].is_output
+    assert ff.ports['SE'].is_input
+    assert ff.ports['SI'].is_input
+    assert ff.ports['SO'].is_output
+    assert ff.input_port == ff.ports['D']
+    assert ff.clk_port == ff.ports['CLK']
+    assert ff.en_port == ff.ports['EN']
+    assert ff.output_port == ff.ports['Q']
+    assert ff.se_port == ff.ports['SE']
+    assert ff.si_port == ff.ports['SI']
+    assert ff.so_port == ff.ports['SO']
+    assert ff.output_port.signal is Signal.UNDEFINED
+    assert ff.input_port.width == 4
+    assert ff.clk_port.width == 1
+    assert ff.en_port.width == 1
+    assert ff.output_port.width == 4
+    assert ff.se_port.width == 1
+    assert ff.si_port.width == 4
+    assert ff.so_port.width == 4
+    assert list(range(4)) == list(ff.input_port.segments.keys())
+    assert list(range(4)) == list(ff.output_port.segments.keys())
+    assert ff.scan_ff_equivalent == DFFE
+    assert (
+        ff.verilog_template == 'always @({header}) begin\n\t{so}\n\tif ({se}) begin\n\t\t{si}\n\tend else if ({en}) begin\n\t\t{set_out}\n\tend\nend'
+    )
+
+    _init_dff_structure(ff)
+    _init_scan_structure(ff)
+    ff.modify_connection('EN', WireSegmentPath(raw='a.en.0'))
+    target_v = "always @(posedge clk) begin\n\tso_wire\t<=\twire;\n\tif (se_wire) begin\n\t\twire\t<=\tsi_wire;\n\tend else if (en) begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
+    save_results(ff.verilog, 'txt')
+    assert ff.verilog == target_v
+
+
+def test_scandffe_behaviour(simple_module: Module) -> None:
+    ff = ScanDFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    simple_module.instances['dff_inst'] = ff
+    _init_dff_structure(ff, init_all_in=True)
+    _init_scan_structure(ff)
+    ff.modify_connection('EN', WireSegmentPath(raw='a.en.0'))
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.input_port.set_signals('01xz')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.set_en(0)
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.set_en(1)
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    ff.si_port.set_signals('0110')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    ff.se_port.set_signals('1')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+
+
+def test_scanadffe_structure(simple_module: Module) -> None:
+    ff = ScanADFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+    simple_module.instances['dff_inst'] = ff
+
+    assert ff.name == 'dff_inst'
+    assert ff.instance_type == '§scan_adffe'
+    assert ff.clk_polarity is Signal.HIGH
+
+    assert len(ff.ports) == 8
+    assert 'D' in ff.ports
+    assert 'CLK' in ff.ports
+    assert 'RST' in ff.ports
+    assert 'EN' in ff.ports
+    assert 'Q' in ff.ports
+    assert 'SE' in ff.ports
+    assert 'SI' in ff.ports
+    assert 'SO' in ff.ports
+    assert ff.ports['D'].is_input
+    assert ff.ports['CLK'].is_input
+    assert ff.ports['RST'].is_input
+    assert ff.ports['EN'].is_input
+    assert ff.ports['Q'].is_output
+    assert ff.ports['SE'].is_input
+    assert ff.ports['SI'].is_input
+    assert ff.ports['SO'].is_output
+    assert ff.input_port == ff.ports['D']
+    assert ff.clk_port == ff.ports['CLK']
+    assert ff.rst_port == ff.ports['RST']
+    assert ff.en_port == ff.ports['EN']
+    assert ff.output_port == ff.ports['Q']
+    assert ff.se_port == ff.ports['SE']
+    assert ff.si_port == ff.ports['SI']
+    assert ff.so_port == ff.ports['SO']
+    assert ff.output_port.signal is Signal.UNDEFINED
+    assert ff.input_port.width == 4
+    assert ff.clk_port.width == 1
+    assert ff.rst_port.width == 1
+    assert ff.en_port.width == 1
+    assert ff.output_port.width == 4
+    assert ff.se_port.width == 1
+    assert ff.si_port.width == 4
+    assert ff.so_port.width == 4
+    assert list(range(4)) == list(ff.input_port.segments.keys())
+    assert list(range(4)) == list(ff.output_port.segments.keys())
+    assert ff.scan_ff_equivalent == ADFFE
+    assert (
+        ff.verilog_template
+        == 'always @({header}) begin\n\t{so}\n\tif ({is_rst}) begin\n\t\t{rst_out}\n\tend else if ({se}) begin\n\t\t{si}\n\tend else if ({en}) begin\n\t\t{set_out}\n\tend\nend'
+    )
+
+    _init_dff_structure(ff, init_rst_en=True)
+    _init_scan_structure(ff)
+    target_v = "always @(posedge clk or negedge rst) begin\n\tso_wire\t<=\twire;\n\tif (~rst) begin\n\t\twire\t<=\t4'b0000;\n\tend else if (se_wire) begin\n\t\twire\t<=\tsi_wire;\n\tend else if (en) begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
+    save_results(ff.verilog, 'txt')
+    assert ff.verilog == target_v
+
+
+def test_scanadffe_behaviour(simple_module: Module) -> None:
+    ff = ScanADFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    simple_module.instances['dff_inst'] = ff
+    _init_dff_structure(ff, init_all_in=True, init_rst_en=True)
+    _init_scan_structure(ff)
+    ff.rst_polarity = Signal.LOW  # Low active
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.input_port.set_signals('01xz')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.set_rst(1)
+    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.set_rst(0)
+    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    ff.set_rst(1)
+    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    _clk(ff)
+    ff.set_en(0)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    ff.set_en(1)
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    ff.si_port.set_signals('0110')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    ff.se_port.set_signals('1')
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    _clk(ff)
+    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
 
 
 def _init_dlatch_structure(dl: DLatch, init_all: bool = False) -> None:
@@ -1961,13 +2580,12 @@ def _init_dlatch_structure(dl: DLatch, init_all: bool = False) -> None:
         dl.modify_connection('Q', WireSegmentPath(raw='a.wire.2'), index=2)
 
 
-def test_dlatch_structure() -> None:
-    dl = DLatch(raw_path='a.dlatch_inst', width=4, module=None)
+def test_dlatch_structure(simple_module: Module) -> None:
+    dl = DLatch(raw_path='a.dlatch_inst', parameters={'WIDTH': 4}, module=simple_module)
 
     assert dl.name == 'dlatch_inst'
     assert dl.instance_type == '§dlatch'
     assert dl.en_polarity is Signal.HIGH
-    assert not dl.init_finished
 
     assert len(dl.ports) == 3
     assert 'D' in dl.ports
@@ -1988,7 +2606,6 @@ def test_dlatch_structure() -> None:
     assert dl.verilog_template == 'always @(*) begin\n\tif ({en}) begin\n{assignments}\n\tend\nend'
 
     _init_dlatch_structure(dl)
-    set_curr_module()
     target_v = "always @(*) begin\n\tif (clk) begin\n\t\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]};\n\tend\nend"
     dl.en_polarity = Signal.LOW
     target_v = "always @(*) begin\n\tif (~clk) begin\n\t\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]};\n\tend\nend"
@@ -1996,8 +2613,8 @@ def test_dlatch_structure() -> None:
     assert dl.verilog == target_v
 
 
-def test_dlatch_behavior() -> None:
-    dl = DLatch(raw_path='a.dlatch_inst', width=4, module=None)
+def test_dlatch_behavior(simple_module: Module) -> None:
+    dl = DLatch(raw_path='a.dlatch_inst', parameters={'WIDTH': 4}, module=simple_module)
 
     assert all(s == Signal.FLOATING for s in dl.input_port.signal_array.values())
     assert dl.en_port.signal == Signal.FLOATING
@@ -2049,7 +2666,7 @@ def test_dlatch_behavior() -> None:
     assert dl.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.HIGH}
 
 
-def test_get() -> None:
+def test_get(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import AndGate, get
 
     and_class = get('§and')

@@ -1,19 +1,19 @@
+"""Module for graph pattern handling, used to find and/or replace patterns within a circuit."""
+
 from __future__ import annotations
 
 import time
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from networkx import MultiDiGraph as MDG
+from pydantic import PositiveInt
 
-from netlist_carpentry import CFG, EMPTY_GRAPH, LOG
+from netlist_carpentry import CFG, EMPTY_GRAPH, LOG, Direction, Instance, Module
 from netlist_carpentry.core.graph.constraint import Constraint
 from netlist_carpentry.core.graph.match import Match
 from netlist_carpentry.core.graph.utils import all_edges
-from netlist_carpentry.core.netlist_elements.instance import Instance
-from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
-from netlist_carpentry.core.port_direction import PortDirection
 from netlist_carpentry.utils.gate_lib import get
 
 
@@ -180,8 +180,8 @@ class Pattern:
             nodes = get_ports(seg.ws_path)
             p_maps.extend(nodes)
         # If instance name (0) and port name (1) are equal, index number (2) is no longer needed
-        if all(p_maps[0].parent_parent_name == p.parent_parent_name and p_maps[0].parent_name == p.parent_name for p in p_maps):
-            return (p_maps[0].parent_parent_name, p_maps[0].parent_name, -1)
+        if all(p_maps[0].grandparent_name == p.grandparent_name and p_maps[0].parent_name == p.parent_name for p in p_maps):
+            return (p_maps[0].grandparent_name, p_maps[0].parent_name, -1)
         else:
             # TODO: support for port connections, where multiple wires are connected to different port segments
             raise ValueError(f'Unable to create mapping, since some nodes are differing: {p_maps}')
@@ -264,13 +264,13 @@ class Pattern:
         """
         return self.get_data(graph, node_name, 'ntype_info')
 
-    def find_matches(self, circuit_graph: MDG[str], max_match_count: int = -1) -> Match:
+    def find_matches(self, circuit_graph: MDG[str], max_match_count: Optional[PositiveInt] = None) -> Match:
         """
         Attempts to find matches for this pattern in the given circuit graph.
 
         Args:
             circuit_graph (networkx.MultiDiGraph): The circuit graph to search for matches.
-            max_match_count (int, optional): The maximum number of matches to find. If set to -1, no limit is applied. Defaults to -1.
+            max_match_count (Optional[PositiveInt], optional): The maximum number of matches to find. If set to None, no limit is applied. Defaults to None.
 
         Returns:
             Match: A Match object containing the found matches. If no matches were found, the Match object is empty.
@@ -309,7 +309,7 @@ class Pattern:
         """
         return self.find_matches(circuit_graph).count
 
-    def _find_matching_circuit_nodes(self, circuit_graph: MDG[str], pattern_start_node: str, max_match_count: int = -1) -> Match:
+    def _find_matching_circuit_nodes(self, circuit_graph: MDG[str], pattern_start_node: str, max_match_count: Optional[PositiveInt] = None) -> Match:
         """
         Finds the number of matching circuit nodes in the circuit graph that match the given pattern.
 
@@ -319,7 +319,7 @@ class Pattern:
         Args:
             circuit_graph (networkx.MultiDiGraph): The input circuit graph.
             pattern_start_node (str): The name of the starting node in the pattern.
-            max_match_count (int): The maximum number of matches to find. If set to -1, no limit is applied. Defaults to -1.
+            max_match_count (Optional[PositiveInt], optional): The maximum number of matches to find. If set to None, no limit is applied. Defaults to None.
 
         Returns:
             Match: The match object containing all matching subgraphs found in the circuit graph.
@@ -331,7 +331,7 @@ class Pattern:
         # Iterate over all nodes in the circuit graph with their corresponding instance types
         LOG.debug(f'Searching for node with type {node_type}, which is the type of the start node from the pattern...')
         for circuit_start_node, start_node_type in circuit_nodes_with_types:
-            if len(found_pattern_matches) >= max_match_count and max_match_count > 0:
+            if max_match_count is not None and len(found_pattern_matches) >= max_match_count:
                 break
             LOG.debug(f'\tComparing node {circuit_start_node} from the circuit with {pattern_start_node} from the pattern...')
             if start_node_type == node_type:
@@ -540,7 +540,7 @@ class Pattern:
         """
         return {(u, v, k) for u, v, k in all_edges(graph, curr_node) if u not in processed_nodes or v not in processed_nodes}
 
-    def replace(self, module: Module, iterations: int = -1, replace_all_parallel: bool = False) -> int:
+    def replace(self, module: Module, iterations: Optional[PositiveInt] = None, replace_all_parallel: bool = False) -> int:
         """
         Replaces occurrences of a pattern in the given module.
 
@@ -552,7 +552,8 @@ class Pattern:
 
         Args:
             module (Module): The module in which to replace the pattern.
-            iterations (int): The number of replacement iterations to perform.
+            iterations (Optional[PositiveInt], optional): The number of replacement iterations to perform.
+                If set to None, executes replacements until none are left. Defaults to None.
             replace_all_parallel (bool): If set to True, all occurrences of the pattern will be replaced in parallel (i.e. in the same iteration).
                 Otherwise, only one occurrence per iteration will be replaced. If set to True, it may result in issues for overlapping occurrences.
 
@@ -571,13 +572,13 @@ class Pattern:
         i = 0
         while True:
             i += 1
-            total_iterations_str = f' of {iterations} ' if iterations > 0 else ' '
+            total_iterations_str = f' of {iterations} ' if iterations is not None else ' '
             LOG.debug(f'Replacement iteration {i}{total_iterations_str}in progress...')
             mgraph = module.graph()
-            matches = self.find_matches(mgraph, -1 if replace_all_parallel else 1)
+            matches = self.find_matches(mgraph, None if replace_all_parallel else 1)
             new_replacements = self._replace(module, matches, replacements_count)
             replacements_count += new_replacements
-            if iterations > 0 and i >= iterations:
+            if iterations is not None and i >= iterations:
                 LOG.info(f'Finished replacement algorithm after {i} iterations, stopping...')
                 break
             if new_replacements == 0:
@@ -612,7 +613,7 @@ class Pattern:
         for i, match in enumerate(matches.matches):
             LOG.debug(f'Iteration {i + 1} of {matches.count}:')
             # Collect instances from module to replace with the pattern instances
-            instances_to_replace: Set[Instance] = set(module.instances[n] for n in match.nodes)
+            instances_to_replace: List[Instance] = [module.instances[n] for n in match.nodes]
 
             # Collect instance (circuit-pattern) pairings for each node to map circuit to the pattern
             c2p_pairings: Dict[str, str] = self._circuit_to_pattern_pairing(matches.pairings, match, i)
@@ -699,7 +700,7 @@ class Pattern:
             pattern_inst: Instance = self.replacement_graph.nodes[new_inst_node]['ndata']
             width = max(p.width for p in pattern_inst.ports.values())
             new_inst_cls = get(inst_type) if get(inst_type) is not None else Instance
-            module.add_instance(new_inst_cls(raw_path=f'{module.name}.{inst_name}', instance_type=inst_type, width=width))
+            module.add_instance(new_inst_cls(raw_path=f'{module.name}.{inst_name}', instance_type=inst_type, width=width, module=module))
 
             # Update mapping
             pattern_inst_mapping[new_inst_node] = inst_name
@@ -766,8 +767,8 @@ class Pattern:
                 w = module.wires[wname]
                 segment_list = origin_p.segments if len(origin_p.segments) >= len(target_p.segments) else target_p.segments
                 for seg_i in segment_list:
-                    origin_inst.connect_modify(origin_pname, w[seg_i].path, PortDirection.OUT, seg_i)
-                    target_inst.connect_modify(target_pname, w[seg_i].path, PortDirection.OUT, seg_i)
+                    origin_inst.connect_modify(origin_pname, w[seg_i].path, Direction.OUT, seg_i)
+                    target_inst.connect_modify(target_pname, w[seg_i].path, Direction.OUT, seg_i)
                     w[seg_i].add_port_segments([origin_p[seg_i], target_p[seg_i]])
                 processed_connections.append((pattern_u, pattern_v, port_key))
 

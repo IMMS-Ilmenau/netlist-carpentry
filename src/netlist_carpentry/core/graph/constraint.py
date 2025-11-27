@@ -1,3 +1,5 @@
+"""Module for constraints that need to be satisfied by a possible matching subgraph."""
+
 from __future__ import annotations
 
 from networkx import MultiDiGraph as MDG

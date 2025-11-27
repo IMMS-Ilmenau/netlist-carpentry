@@ -1,11 +1,14 @@
+"""Base class with shared attributes and methods among segment (or slice) classes."""
+
 from __future__ import annotations
 
 from typing import Dict, Optional, overload
 
+from pydantic import NonNegativeInt
+
+from netlist_carpentry import Signal
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 from netlist_carpentry.core.protocols.signals import LogicLevel, SignalOrLogicLevel
-from netlist_carpentry.core.signal import Signal
-from netlist_carpentry.utils.log import LOG
 
 
 class _Segment(NetlistElement):
@@ -20,9 +23,8 @@ class _Segment(NetlistElement):
         return int(self.name) if not self.is_placeholder_instance else -1
 
     @index.setter
-    def index(self, new_index: int) -> None:
-        if isinstance(new_index, int) and new_index >= 0:
-            self.set_name(str(new_index))
+    def index(self, new_index: NonNegativeInt) -> None:
+        self.set_name(str(new_index))
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         # Check that path name ends with a digit to retrieve the index of the segment
@@ -51,4 +53,4 @@ class _Segment(NetlistElement):
     def set_name(self, new_name: str) -> None:
         if new_name.isdecimal():
             return super().set_name(new_name)
-        LOG.warn(f'Cannot apply name {new_name} to segment {self.raw_path}: Only numeric values are allowed!')
+        raise ValueError(f'Cannot apply name {new_name} to segment {self.raw_path}: Only numeric values are allowed!')

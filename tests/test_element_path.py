@@ -2,8 +2,8 @@ import os
 
 import pytest
 
+from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.netlist_elements.element_path import ElementPath, PortPath, PortSegmentPath, WireSegmentPath
-from netlist_carpentry.core.netlist_elements.element_type import EType
 
 
 @pytest.fixture

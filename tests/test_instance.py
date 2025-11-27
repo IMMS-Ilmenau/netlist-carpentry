@@ -1,30 +1,32 @@
-import copy
 import os
 
 import pytest
+from pydantic import ValidationError
 
 from netlist_carpentry import WIRE_SEGMENT_1, WIRE_SEGMENT_X
+from netlist_carpentry.core.circuit import Circuit
+from netlist_carpentry.core.enums.direction import Direction
+from netlist_carpentry.core.enums.element_type import EType
+from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.exceptions import (
     IdentifierConflictError,
-    InvalidPortDirectionError,
+    InvalidDirectionError,
     InvalidSignalError,
     ObjectLockedError,
     ObjectNotFoundError,
     ParentNotFoundError,
+    SplittingUnsupportedError,
 )
 from netlist_carpentry.core.netlist_elements.element_path import ElementPath as ElementPath
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
-from netlist_carpentry.core.port_direction import PortDirection
-from netlist_carpentry.core.signal import Signal
 
 
 @pytest.fixture
 def empty_standard_instance() -> Instance:
-    return Instance(raw_path='test_module1.test_instance1', instance_type='test_instance_type', is_primitive=True, module=None)
+    return Instance(raw_path='test_module1.test_instance1', instance_type='test_instance_type', module=Circuit(name='c').create_module('m'))
 
 
 @pytest.fixture
@@ -47,12 +49,12 @@ def test_instance_creation(empty_standard_instance: Instance) -> None:
     assert empty_standard_instance.path.type is EType.INSTANCE
     assert empty_standard_instance.path.raw == 'test_module1.test_instance1'
     assert empty_standard_instance.instance_type == 'test_instance_type'
-    assert empty_standard_instance.is_primitive is True
+    assert empty_standard_instance.is_blackbox is True
     assert empty_standard_instance.type is EType.INSTANCE
     assert empty_standard_instance.is_module_instance is False
     assert empty_standard_instance.connections == {}  # Ports are not set in default instance
     assert empty_standard_instance.ports == {}
-
+    assert not empty_standard_instance.splittable
     assert not empty_standard_instance.can_carry_signal
 
 
@@ -74,21 +76,21 @@ def test_instance_with_ports(standard_instance_with_ports: Instance) -> None:
 
     assert len(standard_instance_with_ports.ports) == 3
     assert standard_instance_with_ports.ports['PortA'].name == 'PortA'
-    assert standard_instance_with_ports.ports['PortA'].direction == PortDirection.IN
+    assert standard_instance_with_ports.ports['PortA'].direction == Direction.IN
     assert standard_instance_with_ports.ports['PortA'].is_instance_port
     assert standard_instance_with_ports.ports['PortA'].width == 1
     assert standard_instance_with_ports.ports['PortA'].signal == Signal.UNDEFINED  # Load connected -> UNDEFINED until evaluation
     standard_instance_with_ports.ports['PortA'][0].set_ws_path('')
     assert standard_instance_with_ports.ports['PortA'].signal == Signal.FLOATING  # Load unconnected -> Signal.FLOATING
     assert standard_instance_with_ports.ports['PortB'].name == 'PortB'
-    assert standard_instance_with_ports.ports['PortB'].direction == PortDirection.IN
+    assert standard_instance_with_ports.ports['PortB'].direction == Direction.IN
     assert standard_instance_with_ports.ports['PortB'].is_instance_port
     assert standard_instance_with_ports.ports['PortB'].width == 4
     assert standard_instance_with_ports.ports['PortB'][0].signal == Signal.UNDEFINED  # Load connected -> UNDEFINED until evaluation
     standard_instance_with_ports.ports['PortB'][0].set_ws_path('')
     assert standard_instance_with_ports.ports['PortB'][0].signal == Signal.FLOATING  # Load unconnected -> Signal.FLOATING
     assert standard_instance_with_ports.ports['PortC'].name == 'PortC'
-    assert standard_instance_with_ports.ports['PortC'].direction == PortDirection.OUT
+    assert standard_instance_with_ports.ports['PortC'].direction == Direction.OUT
     assert standard_instance_with_ports.ports['PortC'].is_instance_port
     assert standard_instance_with_ports.ports['PortC'].width == 1
     assert standard_instance_with_ports.ports['PortC'].signal == Signal.UNDEFINED
@@ -99,7 +101,7 @@ def test_instance_with_ports(standard_instance_with_ports: Instance) -> None:
 
 
 def test_wire_parent_init() -> None:
-    with pytest.raises(TypeError):
+    with pytest.raises(ValidationError):
         Instance(raw_path='a.b.c', instance_type='foo', module=NetlistElement(raw_path='a.b'))
 
 
@@ -116,6 +118,17 @@ def test_parent(standard_instance_with_ports: Instance) -> None:
         standard_instance_with_ports.parent
 
 
+def test_module_definition(empty_standard_instance: Instance) -> None:
+    assert empty_standard_instance.module_definition is None
+
+    c = Circuit(name='c')
+    m1 = c.create_module('m1')
+    m2 = c.create_module('m2')
+    inst = m1.create_instance(m2, 'inst')
+    assert inst.module == m1
+    assert inst.module_definition == m2
+
+
 def test_input_ports(standard_instance_with_ports: Instance) -> None:
     target_ports = (standard_instance_with_ports.ports['PortA'], standard_instance_with_ports.ports['PortB'])
     found_ports = standard_instance_with_ports.input_ports
@@ -130,17 +143,36 @@ def test_output_ports(standard_instance_with_ports: Instance) -> None:
     assert target_ports == found_ports
 
 
-def test_is_primitive_from_gatelib(standard_instance_with_ports: Instance) -> None:
-    assert not standard_instance_with_ports.is_primitive_from_gatelib
+def test_has_unconnected_port_segments(standard_instance_with_ports: Instance) -> None:
+    assert not standard_instance_with_ports.has_unconnected_port_segments
 
-    assert Instance(raw_path='', instance_type='§mux', module=None).is_primitive_from_gatelib
+    standard_instance_with_ports.disconnect('PortC')
+    assert standard_instance_with_ports.has_unconnected_port_segments
 
-    assert not Instance(raw_path='', instance_type='§some_other_instance', module=None).is_primitive_from_gatelib
+
+def test_signals(standard_instance_with_ports: Instance) -> None:
+    standard_instance_with_ports.ports['PortB'].set_signals('01zx')
+    target = {
+        'PortA': {0: Signal.UNDEFINED},
+        'PortB': {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.FLOATING, 0: Signal.UNDEFINED},
+        'PortC': {0: Signal.UNDEFINED},
+    }
+    found = standard_instance_with_ports.signals
+
+    assert target == found
+
+
+def test_is_primitive(standard_instance_with_ports: Instance) -> None:
+    assert not standard_instance_with_ports.is_primitive
+
+    assert Instance(raw_path='', instance_type='§mux', module=None).is_primitive
+
+    assert not Instance(raw_path='', instance_type='§some_other_instance', module=None).is_primitive
 
 
 def test_verilog_template(standard_instance_with_ports: Instance) -> None:
     tmp = standard_instance_with_ports.verilog_template
-    assert tmp == '{inst_type} {inst_name} ({ports});'
+    assert tmp == '{inst_type} {inst_name} {parameters}({ports});'
 
 
 def test_verilog(standard_instance_with_ports: Instance) -> None:
@@ -150,16 +182,30 @@ def test_verilog(standard_instance_with_ports: Instance) -> None:
     found_v = standard_instance_with_ports.verilog
     assert target_v == found_v
 
+    c = Circuit(name='c')
+    c.add_module(standard_instance_with_ports.parent)
+    standard_instance_with_ports.parameters['foo'] = 'bar'
+    target_v = 'test_instance_type test_instance2 #(\n\t.foo(bar)\n\t) (\n\t.PortA(wire4b[1]),\n\t.PortB({wire4b[2], wire4b[3], wire4b[2], wire4b[1]}),\n\t.PortC(wire4b[4])\n);'
+    found_v = standard_instance_with_ports.verilog
+    assert target_v == found_v
 
-def test_port_is_known(standard_instance_with_ports: Instance) -> None:
-    is_known = standard_instance_with_ports.port_is_known('PortA')
-    assert is_known
 
-    is_known = standard_instance_with_ports.port_is_known('invalid')
-    assert not is_known
+def test_verilog_parameters() -> None:
+    c = Circuit(name='c')
+    m1 = c.create_module('m1')
+    m2 = c.create_module('m2')
+    m2.parameters['foo'] = 'bar'
+    m2.parameters['baz'] = '42'
+    inst = m1.create_instance(m2, 'inst')
+    assert inst.verilog == 'm2 inst ();'
+
+    inst.parameters['foo'] = 'baz'
+    inst.parameters['baz'] = 42
+    inst.parameters['bar'] = 42
+    assert inst.verilog == 'm2 inst #(\n\t.foo(baz),\n\t.baz(42)\n\t) ();'
 
 
-def test_add_connection(standard_instance_with_ports: Instance, locked_instance: Instance) -> None:
+def test_connect(standard_instance_with_ports: Instance, locked_instance: Instance) -> None:
     standard_instance_with_ports.connect('PortD', WireSegmentPath(raw='a.b.c.xy'), index=0)
     assert len(standard_instance_with_ports.connections) == 4
     assert len(standard_instance_with_ports.connections['PortD']) == 1
@@ -181,7 +227,7 @@ def test_add_connection(standard_instance_with_ports: Instance, locked_instance:
     assert 'PortD' not in locked_instance.connections
 
 
-def test_add_connection_4b(standard_instance_with_ports: Instance) -> None:
+def test_connect_4b(standard_instance_with_ports: Instance) -> None:
     s_inst = standard_instance_with_ports
     s_inst.connect('PortD', WireSegmentPath(raw='a.b.c.xy'), index=0, width=4)
     assert len(s_inst.connections) == 4
@@ -208,19 +254,19 @@ def test_add_connection_4b(standard_instance_with_ports: Instance) -> None:
     assert [0, 10, 11, 12, 13] == list(s_inst.ports['PortA'].segments.keys())
 
 
-def test_remove_connection(standard_instance_with_ports: Instance, locked_instance: Instance) -> None:
+def test_disconnect(standard_instance_with_ports: Instance, locked_instance: Instance) -> None:
     standard_instance_with_ports.disconnect('PortB', index=0)
     assert len(standard_instance_with_ports.connections) == 3
     assert len(standard_instance_with_ports.all_connections(include_unconnected=True)['PortB']) == 4
     assert len(standard_instance_with_ports.all_connections(include_unconnected=False)['PortB']) == 3
     assert 0 not in standard_instance_with_ports.all_connections(include_unconnected=False)['PortB']
 
-    standard_instance_with_ports.disconnect('PortB', index=-1)
+    standard_instance_with_ports.disconnect('PortB', index=None)
     assert len(standard_instance_with_ports.all_connections(include_unconnected=False)) == 2
     assert 'PortB' not in standard_instance_with_ports.all_connections(include_unconnected=False)
 
     with pytest.raises(ObjectNotFoundError):
-        standard_instance_with_ports.disconnect('PortD', index=-1)
+        standard_instance_with_ports.disconnect('PortD', index=None)
     assert len(standard_instance_with_ports.all_connections(include_unconnected=False)) == 2
 
     with pytest.raises(ObjectNotFoundError):
@@ -228,7 +274,7 @@ def test_remove_connection(standard_instance_with_ports: Instance, locked_instan
     assert len(standard_instance_with_ports.all_connections(include_unconnected=False)) == 2
 
     with pytest.raises(ObjectLockedError):
-        locked_instance.disconnect('PortB', index=-1)
+        locked_instance.disconnect('PortB', index=None)
     assert len(locked_instance.connections) == 3
     assert 'PortB' in locked_instance.all_connections(include_unconnected=False)
 
@@ -344,7 +390,7 @@ def test_tie_port(standard_instance_with_ports: Instance) -> None:
         standard_instance_with_ports.tie_port('PortA', 1, 'Z')
 
     # Do not allow forcing output ports to a constant value
-    with pytest.raises(InvalidPortDirectionError):
+    with pytest.raises(InvalidDirectionError):
         standard_instance_with_ports.tie_port('PortC', 0, '1')
 
     with pytest.raises(ObjectNotFoundError):
@@ -396,12 +442,24 @@ def test_has_tied_outputs(standard_instance_with_ports: Instance) -> None:
 
 
 def test_set_name(standard_instance_with_ports: Instance) -> None:
+    assert 'test_instance2' in standard_instance_with_ports.parent.instances
+    assert 'SOME_INST' not in standard_instance_with_ports.parent.instances
+
     standard_instance_with_ports.set_name('SOME_INST')
     assert standard_instance_with_ports.name == 'SOME_INST'
     for p in standard_instance_with_ports.ports.values():
         assert p.path[1] == 'SOME_INST'
         for _, ps in p:
             assert ps.path[1] == 'SOME_INST'
+    assert 'test_instance2' not in standard_instance_with_ports.parent.instances
+    assert 'SOME_INST' in standard_instance_with_ports.parent.instances
+
+
+def test_split(standard_instance_with_ports: Instance) -> None:
+    with pytest.raises(SplittingUnsupportedError):
+        standard_instance_with_ports.split()
+    with pytest.raises(NotImplementedError):
+        standard_instance_with_ports._split()
 
 
 def test_change_mutability(standard_instance_with_ports: Instance) -> None:
@@ -468,16 +526,6 @@ def test_normalize_metadata(standard_instance_with_ports: Instance) -> None:
     # Illegal operation should be resolved to False
     found = standard_instance_with_ports.normalize_metadata(sort_by='category', filter=lambda cat, md: md.is_integer())
     assert found == {}
-
-
-def test_instance_hash(standard_instance_with_ports: Instance) -> None:
-    assert hash(standard_instance_with_ports) == hash(standard_instance_with_ports)
-
-    siwp2 = copy.deepcopy(standard_instance_with_ports)
-    assert hash(standard_instance_with_ports) == hash(siwp2)
-
-    siwp2.ports['PortB'][2].raw_path = siwp2.ports['PortB'][2].raw_path[:-1] + '42'
-    assert hash(standard_instance_with_ports) != hash(siwp2)
 
 
 def test_instance_str(empty_standard_instance: Instance) -> None:

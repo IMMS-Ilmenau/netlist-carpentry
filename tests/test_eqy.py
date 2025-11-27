@@ -4,11 +4,11 @@ import shutil
 import pytest
 from utils import save_results
 
-from netlist_carpentry import CFG
-from netlist_carpentry.api.read.yosys_netlist import YosysNetlistReader as YNR
-from netlist_carpentry.api.write.py2v import P2VTransformer as P2V
+from netlist_carpentry import read
 from netlist_carpentry.core.graph.constraint import CASCADING_OR_CONSTRAINT
 from netlist_carpentry.core.graph.pattern_generator import PatternGenerator
+from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
+from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
 from netlist_carpentry.scripts.eqy_check import EqyWrapper
 
 
@@ -56,11 +56,12 @@ def test_decentral_mux_eqy_creation() -> None:
     os.remove(eqy_path)
 
 
-@pytest.mark.skip
+@pytest.mark.skip  # @pytest.mark.skipif(os.environ.get('CI_SKIP_EQY') == 'true', reason='EQY missing in CI')
 def test_decentral_mux_eqy_run() -> None:
     name = 'decentral_mux'
     eqy_path = f'tests/files/gen/{name}.eqy'
     eqy_out = f'tests/files/gen/{name}'
+    shutil.rmtree(eqy_out, ignore_errors=True)
     eqy = EqyWrapper(eqy_path)
     eqy.create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
 
@@ -78,11 +79,12 @@ def test_decentral_mux_eqy_run() -> None:
     assert not os.path.exists(eqy_out)
 
 
-@pytest.mark.skip
+@pytest.mark.skip  # @pytest.mark.skipif(os.environ.get('CI_SKIP_EQY') == 'true', reason='EQY missing in CI')
 def test_decentral_mux_eqy_run_remove() -> None:
     name = 'decentral_mux'
     eqy_path = f'tests/files/gen/{name}.eqy'
     eqy_out = f'tests/files/gen/{name}'
+    shutil.rmtree(eqy_out, ignore_errors=True)
     eqy = EqyWrapper(eqy_path)
     eqy.create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
 
@@ -93,10 +95,9 @@ def test_decentral_mux_eqy_run_remove() -> None:
     os.remove(eqy_path)
 
 
-@pytest.mark.skip
+@pytest.mark.skip  # @pytest.mark.skipif(os.environ.get('CI_SKIP_EQY') == 'true', reason='EQY missing in CI')
 def test_decentral_mux_pattern_replace_eqy() -> None:
     # Create file before checking equality
-    CFG.simplify_escaped_identifiers = True
     find_pattern_file = 'tests/files/or_pattern_find.v'
     replace_pattern_file = 'tests/files/or_pattern_replace.v'
     p = PatternGenerator.build_from_verilog(find_pattern_file, replace_pattern_file, constraints=[CASCADING_OR_CONSTRAINT])
@@ -108,6 +109,7 @@ def test_decentral_mux_pattern_replace_eqy() -> None:
         ('§or§or_pattern_replace§v§32§3', 'Y', -1): ('§or§or_pattern_find§v§38§3', 'Y', -1),
     }
     p.mapping = mapping
+    read('tests/files/decentral_mux.v', out='tests/files/')
     module = YNR('tests/files/decentral_mux.json').transform_to_circuit().first
     p.replace(module)
     save_results(P2V().module2v(module), 'v')

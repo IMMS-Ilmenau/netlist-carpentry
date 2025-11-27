@@ -1,25 +1,26 @@
+"""Module for handling of instances inside a circuit module."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, Dict, Iterable, Literal, Optional, Tuple, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
-from netlist_carpentry import CFG, LOG, WIRE_SEGMENT_X
+from netlist_carpentry import LOG, WIRE_SEGMENT_X, Direction, Port, Signal
+from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import (
     IdentifierConflictError,
     ObjectLockedError,
     ObjectNotFoundError,
     ParentNotFoundError,
+    SplittingUnsupportedError,
 )
 from netlist_carpentry.core.netlist_elements.element_path import InstancePath, WireSegmentPath
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT, NESTED_DICT
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
-from netlist_carpentry.core.netlist_elements.port import Port
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2OBJ
-from netlist_carpentry.core.port_direction import PortDirection
 from netlist_carpentry.core.protocols.signals import LogicLevel
 from netlist_carpentry.utils.custom_dict import CustomDict
 
@@ -36,21 +37,7 @@ class Instance(NetlistElement, BaseModel):
     """
 
     _ports = CustomDict[str, Port['Instance']]()
-    is_primitive: bool = False
-    """
-    Flag indicating whether the instance represents a primitive element.
-
-    If True, this instance corresponds to a basic component such as a gate or flip-flop,
-    rather than a module instance composed of other instances.
-    """
-    module: Optional[NetlistElement] = None
-
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
-        from netlist_carpentry.core.netlist_elements.module import Module
-
-        if self.module is None or isinstance(self.module, Module):
-            return super().model_post_init(__context)
-        raise TypeError(f'Instance.module {self.raw_path} should be a module, but is a {type(self.module).__name__}!')
+    module: Optional['Module'] = None
 
     @property
     def path(self) -> InstancePath:
@@ -81,6 +68,12 @@ class Instance(NetlistElement, BaseModel):
                 + 'This is probably due to a bad instantiation (missing or bad "module" parameter), or a subsequent modification of the module, which corrupted the instance.'
             )
         raise TypeError(f'Bad type: Parent object of instance {self.raw_path} is {type(self.module).__name__}, but should be {Module.__name__}')
+
+    @property
+    def module_definition(self) -> Optional[Module]:
+        if self.instance_type in self.circuit.modules:
+            return self.circuit.modules[self.instance_type]
+        return None
 
     @property
     def connections(self) -> Dict[str, Dict[int, WireSegmentPath]]:
@@ -178,31 +171,57 @@ class Instance(NetlistElement, BaseModel):
         return tuple(p for p in self.ports.values() if p.is_output)
 
     @property
-    def is_module_instance(self) -> bool:
-        """
-        Checks whether this instance represents a module instance rather than a primitive element.
-
-        This property returns True if the instance is not marked as primitive, indicating that it corresponds to a higher-level module composed of other instances.
-
-        Returns:
-            A boolean flag indicating whether this instance represents a module instance.
-        """
-        return not self.is_primitive
+    def has_unconnected_port_segments(self) -> bool:
+        """Returns True if the instance has at least one unconnected port segment."""
+        return any(p.is_unconnected_partly for p in self.ports.values())
 
     @property
-    def is_primitive_from_gatelib(self) -> bool:
+    def signals(self) -> Dict[str, Dict[int, Signal]]:
+        """A dictionary with all signals currently present on all ports of this instance."""
+        return {pname: p.signal_array for pname, p in self.ports.items()}
+
+    @property
+    def is_blackbox(self) -> bool:
+        """
+        Flag indicating whether the instance represents neither a primitive element nor a module instance.
+
+        If True, this instance does not have a module definition, and is also not a basic component
+        (i.e. a primitive gate instance) from the internal gate library, such as a gate or flip-flop.
+        """
+        return not self.is_module_instance and not self.is_primitive
+
+    @property
+    def is_module_instance(self) -> bool:
+        """
+        Checks whether this instance represents a module instance.
+
+        This property returns True if a module definition exists for this instance,
+        indicating that it corresponds to a higher-level module composed of other instances.
+        """
+        return self.module_definition is not None
+
+    @property
+    def is_primitive(self) -> bool:
         """
         Check if the instance type is a primitive from the gate library.
 
-        This property checks if the instance type starts with the internal identifier used for
-        primitive gates and if it exists in the gate library.
-
-        Returns:
-            bool: True if the instance type is a primitive from the gate library, False otherwise.
+        This property checks if the instance exists in the gate library.
+        The property is True if the instance is a primitive from the gate library, False otherwise.
         """
         from netlist_carpentry.utils.gate_lib import get
 
-        return self.instance_type[0] == CFG.id_internal and get(self.instance_type) is not None
+        return get(self.instance_type) is not None
+
+    @property
+    def splittable(self) -> bool:
+        """
+        Whether n-bit wide instances of this type can be split into n 1-bit wide instances.
+
+        Supported for gate instances, where splitting does not change the overall behavior,
+        e.g. splitting an 8-bit AND gate into 8 1-bit AND gates works fine, but an 8bit OR-REDUCE
+        gate cannot be split, as this would change the behavior of the circuit.
+        """
+        return False
 
     @property
     def verilog_template(self) -> str:
@@ -224,7 +243,7 @@ class Instance(NetlistElement, BaseModel):
         Returns:
             str: The Verilog template string.
         """
-        return '{inst_type} {inst_name} ({ports});'
+        return '{inst_type} {inst_name} {parameters}({ports});'
 
     @property
     def verilog(self) -> str:
@@ -237,7 +256,18 @@ class Instance(NetlistElement, BaseModel):
         Returns:
             str: The generated Verilog code.
         """
-        return self.verilog_template.format(inst_type=self.instance_type, inst_name=self.name, ports=self._verilog_ports())
+        return self.verilog_template.format(
+            inst_type=self.instance_type, inst_name=self.name, parameters=self._verilog_parameters(), ports=self._verilog_ports()
+        )
+
+    def _verilog_parameters(self) -> str:
+        single_tmp = '\t.{pname}({pval}),\n'
+        param_str = ''
+        for pname, pval in self.parameters.items():
+            if self.module_definition is None or pname in self.module_definition.parameters:
+                pval = pval.value if isinstance(pval, Signal) else str(pval)
+                param_str += single_tmp.format(pname=pname, pval=pval)
+        return '#(\n' + param_str[:-2] + '\n\t) ' if param_str else ''
 
     def _verilog_ports(self) -> str:
         """
@@ -284,22 +314,12 @@ class Instance(NetlistElement, BaseModel):
         """
         return "1'bz" if seg.is_unconnected else f'{seg.ws_path.parent.name}[{seg.ws_path.name}]'
 
-    def port_is_known(self, port_name: str) -> bool:
-        """
-        Check whether a given port name is known to this instance.
-
-        This method checks if the provided `port_name` exists as a key in the instance's ports dictionary.
-
-        Args:
-            port_name (str): The name of the port to check for existence.
-
-        Returns:
-            bool: True if the port is known, False otherwise.
-        """
-        return port_name in self.ports
+    def set_name(self, new_name: str) -> None:
+        self.parent.instances[new_name] = self.parent.instances.pop(self.name)
+        super().set_name(new_name)
 
     def _connect_single(
-        self, port_name: str, ws_path: Optional[WireSegmentPath], direction: PortDirection = PortDirection.UNKNOWN, index: int = 0
+        self, port_name: str, ws_path: Optional[WireSegmentPath], direction: Direction = Direction.UNKNOWN, index: int = 0
     ) -> PortSegment:
         """
         Establish a single connection between this instance's port and a given wire segment.
@@ -309,13 +329,13 @@ class Instance(NetlistElement, BaseModel):
         Args:
             port_name (str): The name of the port where the connection should be established.
             ws_path (WireSegmentPath): The path of the wire segment that will be connected to this port.
-            direction (PortDirection, optional): The direction of the port. Defaults to PortDirection.UNKNOWN.
+            direction (Direction, optional): The direction of the port. Defaults to Direction.UNKNOWN.
             index (int, optional): The bit index within the port for this connection. Defaults to 0.
 
         Returns:
             PortSegment: The port segment with the new connection that was added.
         """
-        if self.port_is_known(port_name):
+        if port_name in self.ports:
             port = self.ports[port_name]
         else:
             port = Port(raw_path=f'{self.path.raw}.{port_name}', direction=direction, module_or_instance=self)
@@ -333,9 +353,9 @@ class Instance(NetlistElement, BaseModel):
         self,
         port_name: str,
         ws_path: Optional[WireSegmentPath],
-        direction: PortDirection = PortDirection.UNKNOWN,
-        index: int = 0,
-        width: int = 1,
+        direction: Direction = Direction.UNKNOWN,
+        index: NonNegativeInt = 0,
+        width: PositiveInt = 1,
     ) -> None:
         """
         Add connections to the specified port of this instance.
@@ -346,9 +366,9 @@ class Instance(NetlistElement, BaseModel):
             port_name (str): The name of the port where the connection(s) should be established.
             ws_path (Optional[WireSegmentPath]): The path of the wire segment that will be connected to this port.
                 If None, the associated port (segment) remains unconnected.
-            direction (PortDirection, optional): The direction of the port. Defaults to PortDirection.UNKNOWN.
-            index (int, optional): The starting bit index within the port for these connections. Defaults to 0.
-            width (int, optional): The number of consecutive bits in the port that should be connected. Defaults to 1.
+            direction (Direction, optional): The direction of the port. Defaults to Direction.UNKNOWN.
+            index (NonNegativeInt, optional): The starting bit index within the port for these connections. Defaults to 0.
+            width (PositiveInt, optional): The number of consecutive bits in the port that should be connected. Defaults to 1.
 
         Raises:
             ObjectLockedError: If this instance is currently locked, and no connection can be made.
@@ -358,7 +378,7 @@ class Instance(NetlistElement, BaseModel):
         for i in range(index, index + width):
             self._connect_single(port_name, ws_path, direction, i)
 
-    def disconnect(self, port_name: str, index: int) -> None:
+    def disconnect(self, port_name: str, index: Optional[int] = None) -> None:
         """
         Remove an existing connection from a specified port of this instance.
 
@@ -366,7 +386,8 @@ class Instance(NetlistElement, BaseModel):
 
         Args:
             port_name (str): The name of the port where the connection should be removed.
-            index (int): The bit index within the port for this disconnection.
+            index (Optional[int]): The bit index within the port for this disconnection.
+                Defaults to None, which completely disconnects the port.
 
         Raises:
             ObjectLockedError: If this instance is locked.
@@ -376,9 +397,13 @@ class Instance(NetlistElement, BaseModel):
             raise ObjectLockedError(f'Cannot remove connections from instance {self.raw_path}: Instance locked!')
         if port_name not in self.ports:
             raise ObjectNotFoundError(f'Instance {self.path} has no port {port_name}!')
-        return self.ports[port_name].change_connection(WIRE_SEGMENT_X.path, index)
+        if index is None:
+            for idx, _ in self.ports[port_name]:
+                self.ports[port_name].change_connection(WIRE_SEGMENT_X.path, idx)
+        else:
+            self.ports[port_name].change_connection(WIRE_SEGMENT_X.path, index)
 
-    def get_connection(self, port_name: str, index: int = -1) -> Union[WireSegmentPath, Dict[int, WireSegmentPath], None]:
+    def get_connection(self, port_name: str, index: Optional[NonNegativeInt] = None) -> Union[WireSegmentPath, Dict[int, WireSegmentPath], None]:
         """
         Retrieve the connection path associated with a specified port and bit index.
 
@@ -387,16 +412,16 @@ class Instance(NetlistElement, BaseModel):
 
         Args:
             port_name (str): The name of the port for which to retrieve the connection(s).
-            index (int, optional): The bit index within the port. Defaults to -1.
+            index (Optional[NonNegativeInt], optional): The bit index within the port. Defaults to None.
 
         Returns:
             Union[WireSegmentPath, Dict[int, WireSegmentPath]]: Either a single WireSegmentPath or a dictionary mapping indices to WireSegmentPaths.
         """
-        if index == -1:
+        if index is None:
             return self.connections.get(port_name, {})
         return self.connections[port_name].get(index, None)
 
-    def modify_connection(self, port_name: str, ws_path: WireSegmentPath, index: int = 0) -> None:
+    def modify_connection(self, port_name: str, ws_path: WireSegmentPath, index: NonNegativeInt = 0) -> None:
         """
         Modify an existing connection within a specified port of this instance.
 
@@ -406,7 +431,7 @@ class Instance(NetlistElement, BaseModel):
         Args:
             port_name (str): The name of the port where the connection should be modified.
             ws_path (WireSegmentPath): The new wire segment path for this connection.
-            index (int, optional): The bit index within the port. Defaults to 0.
+            index (NonNegativeInt, optional): The bit index within the port. Defaults to 0.
         """
         is_locked = self.locked or self.ports[port_name].locked if port_name in self.ports else self.locked
         if is_locked:
@@ -429,7 +454,12 @@ class Instance(NetlistElement, BaseModel):
             raise ObjectNotFoundError(f'Cannot modify connection: No port {port_name} exists for instance {self.raw_path}')
 
     def connect_modify(
-        self, port_name: str, ws_path: WireSegmentPath, direction: PortDirection = PortDirection.UNKNOWN, index: int = 0, width: int = 1
+        self,
+        port_name: str,
+        ws_path: WireSegmentPath,
+        direction: Direction = Direction.UNKNOWN,
+        index: NonNegativeInt = 0,
+        width: PositiveInt = 1,
     ) -> None:
         """
         Add a new connection or modify an existing one within the specified port of this instance.
@@ -440,15 +470,15 @@ class Instance(NetlistElement, BaseModel):
         Args:
             port_name (str): The name of the port where the connection should be established or updated.
             ws_path (WireSegmentPath): The path of the wire segment that will be connected to this port.
-            direction (PortDirection, optional): The direction of the port. Defaults to PortDirection.UNKNOWN.
-            index (int, optional): The starting bit index within the port for these connections. Defaults to 0.
-            width (int, optional): The number of consecutive bits in the port that should be connected. Defaults to 1.
+            direction (Direction, optional): The direction of the port. Defaults to Direction.UNKNOWN.
+            index (NonNegativeInt, optional): The starting bit index within the port for these connections. Defaults to 0.
+            width (PositiveInt, optional): The number of consecutive bits in the port that should be connected. Defaults to 1.
         """
         if port_name not in self.ports or index not in self.ports[port_name].segments:
             return self.connect(port_name, ws_path, direction, index, width)
         self.modify_connection(port_name, ws_path, index)
 
-    def tie_port(self, name: str, index: int, sig_value: LogicLevel) -> None:
+    def tie_port(self, name: str, index: NonNegativeInt, sig_value: LogicLevel) -> None:
         """
         Set a constant signal value for the specified port and bit index.
 
@@ -459,14 +489,14 @@ class Instance(NetlistElement, BaseModel):
 
         Args:
             name (str): The name of the port.
-            index (int): The bit index within the port.
+            index (NonNegativeInt): The bit index within the port.
             sig_value (LogicLevel): The constant signal value to be set ('0', '1', or 'Z').
 
         Raises:
             ObjectNotFoundError: If no such port or port segment exists.
             AlreadyConnectedError: (raised by: PortSegment.tie_signal) If this segment is belongs to a load port and is already connected to a wire,
                 from which it receives its value.
-            InvalidPortDirectionError: (raised by: PortSegment.tie_signal) If this port segment belongs to an instance output port,
+            InvalidDirectionError: (raised by: PortSegment.tie_signal) If this port segment belongs to an instance output port,
                 which is driven by the instance inputs and the instance's internal logic.
             InvalidSignalError: (raised by: PortSegment.tie_signal) If an invalid value is provided.
         """
@@ -531,6 +561,31 @@ class Instance(NetlistElement, BaseModel):
             for _, ps in p:
                 ps.raw_path = ps.path.replace(old_name, new_name).raw
 
+    def split(self) -> Dict[NonNegativeInt, Self]:
+        """
+        Performs a bit-wise split on this instance.
+
+        If this instance supports splitting and has a data width of n bit, this method splits
+        this instance into n 1-bit instances. This works for instances, where each output bit
+        depends only on the corresponding input bit(s), e.g. an AND gate or a D-Flipflop.
+
+        Returns:
+            Dict[int, Instance]: An n-bit large dictionary, where each key conforms to a bit of the
+                original instance, and each value is an 1-bit instance representing the corresponding
+                "slice" of the original instance.
+
+        Raises:
+            SplittingUnsupportedError: If this instance does not support splitting. Happens for any gate
+                or instance whose behavior depends on the whole bus, and splitting would make it lose its meaning.
+        """
+        if self.splittable:
+            return self._split()
+        else:
+            raise SplittingUnsupportedError(f'Cannot split instance {self.raw_path}: Cannot split instances of type {self.__class__.__name__}!')
+
+    def _split(self) -> Dict[NonNegativeInt, Self]:
+        raise NotImplementedError(f'Not implemented for class {self.__class__.__name__}!')
+
     def change_mutability(self, is_now_locked: bool, recursive: bool = False) -> Self:
         """
         Change the mutability status of this instance and optionally its ports.
@@ -562,9 +617,6 @@ class Instance(NetlistElement, BaseModel):
                 else:
                     md[cat] = val
         return md
-
-    def __hash__(self) -> int:
-        return hash((self.raw_path, self.instance_type, self.is_primitive, tuple(hash(p) for p in self.ports.values())))
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__} "{self.name}" with path {self.path.raw} (type {self.instance_type})'

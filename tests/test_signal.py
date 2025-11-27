@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from netlist_carpentry.core.signal import Signal
+from netlist_carpentry.core.enums.signal import Signal
 
 
 def test_signal_enum_values() -> None:

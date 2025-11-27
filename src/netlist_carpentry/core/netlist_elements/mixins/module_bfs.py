@@ -1,3 +1,5 @@
+"""Mixin for Breadth-First Path Search within a module."""
+
 from copy import copy
 from queue import Queue
 from typing import List, Set, Tuple
@@ -123,7 +125,7 @@ class ModuleBfsMixin(ModuleBaseMixin):
             return {wire_seg.path} if isinstance(wire_seg, WireSegment) and wire_seg is not None else set()
         elif port_segment.is_instance_port and port_segment.is_driver:  # Instance output port
             # Next path element is the input port of the instance for which port e is an output port
-            inst = self.instances[port_segment.parent_parent_name]
+            inst = self.instances[port_segment.grandparent_name]
             return {pseg.path for p in inst.input_ports for pseg in p.segments.values()}
         # Module input port
         return set()

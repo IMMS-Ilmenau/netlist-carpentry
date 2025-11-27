@@ -1,3 +1,5 @@
+"""Logging module for Netlist Carpentry, based on Python's `logging` module."""
+
 import datetime
 import inspect
 import logging

@@ -1,3 +1,5 @@
+"""Module for handling equivalence checks with Yosys EQY."""
+
 import os
 import shutil
 import subprocess

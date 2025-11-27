@@ -51,6 +51,31 @@ def test_add() -> None:
     assert test_list.count('foo') == 2
 
 
+def test_extend() -> None:
+    test_list: CustomList[str] = CustomList()
+    test_list.extend(['foo', 'bar'])
+    assert len(test_list) == 2
+    assert 'foo' in test_list
+    assert 'bar' in test_list
+
+    with pytest.raises(ObjectLockedError):
+        test_list.extend(['baz'], locked=True)
+    assert len(test_list) == 2
+    assert 'baz' not in test_list
+
+    with pytest.raises(IdentifierConflictError):
+        test_list.extend(['foo', 'qux'])
+    assert len(test_list) == 2
+
+    test_list.extend(['foo', 'qux'], allow_duplicates=True)
+    assert len(test_list) == 4
+    assert test_list.count('foo') == 2
+
+    test_list.extend(['foo', 'qux'], skip_duplicates=True)
+    assert len(test_list) == 4
+    assert test_list.count('foo') == 2
+
+
 def test_remove() -> None:
     test_list = CustomList(['foo'])
     with pytest.raises(ObjectLockedError):

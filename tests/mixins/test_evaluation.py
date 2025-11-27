@@ -23,7 +23,7 @@ def test_evaluate_wire_seg() -> None:
     em = Module(raw_path='a')
     em.create_wire('b')
     following_insts = em._evaluate_ws(WireSegmentPath(raw='a.b.0'))
-    assert following_insts == {0} - {0}  # Funny eyes <=> empty set
+    assert following_insts == []
 
 
 if __name__ == '__main__':

@@ -1,6 +1,8 @@
+"""Mixin for building module graphs."""
+
 from __future__ import annotations
 
-from typing import Set
+from typing import List
 
 import networkx as nx
 from tqdm import tqdm
@@ -12,10 +14,10 @@ from netlist_carpentry.utils.cfg import CFG
 
 
 class GraphBuildingMixin(ModuleBaseMixin):
-    def get_driving_ports(self, ws_path: WireSegmentPath) -> Set[PortSegmentLike]:
+    def get_driving_ports(self, ws_path: WireSegmentPath) -> List[PortSegmentLike]:
         raise NotImplementedError(f'Not implemented for mixin {self.__class__.__name__}. Any class using this mixin must implement this property.')
 
-    def get_load_ports(self, ws_path: WireSegmentPath) -> Set[PortSegmentLike]:
+    def get_load_ports(self, ws_path: WireSegmentPath) -> List[PortSegmentLike]:
         raise NotImplementedError(f'Not implemented for mixin {self.__class__.__name__}. Any class using this mixin must implement this property.')
 
     def build_graph(self) -> nx.MultiDiGraph[str]:
@@ -45,10 +47,10 @@ class GraphBuildingMixin(ModuleBaseMixin):
             g (networkx.MultiDiGraph): The current state of the module graph.
         """
         if self.instances:  # Suppresses tqdm output if empty
-            for inst in tqdm(self.instances.values(), desc='Building Instance Nodes'):
+            for inst in tqdm(self.instances.values(), desc='Building Instance Nodes', leave=False):
                 g.add_node(inst.name, ntype=inst.type.name, ntype_info=inst.instance_type, ndata=inst)
         if self.ports:  # Suppresses tqdm output if empty
-            for port in tqdm(self.ports.values(), desc='Building Port Nodes'):
+            for port in tqdm(self.ports.values(), desc='Building Port Nodes', leave=False):
                 g.add_node(port.name, ntype=port.type.name, ntype_info=port.direction.value, ndata=port)
 
     def _build_edges(self, g: nx.MultiDiGraph[str]) -> None:
@@ -63,7 +65,7 @@ class GraphBuildingMixin(ModuleBaseMixin):
             g (networkx.MultiDiGraph): The current state of the module graph.
         """
         if self.wires:  # Suppresses tqdm output if empty
-            for wire in tqdm(self.wires.values(), desc='Building Edges'):
+            for wire in tqdm(self.wires.values(), desc='Building Edges', leave=False):
                 for _, ws in wire:
                     drvs = self.get_driving_ports(ws.path)
                     lds = self.get_load_ports(ws.path)

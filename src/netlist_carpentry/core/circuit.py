@@ -1,11 +1,16 @@
+"""Base module for the `Circuit` class."""
+
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Literal, Optional, Set, Union, overload
+from typing import Callable, Dict, Iterator, List, Literal, Optional, Union, overload
 
-from pydantic import BaseModel
+from pydantic import BaseModel, NonNegativeInt
 
+from netlist_carpentry import Signal
+from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import ObjectNotFoundError, PathResolutionError, SignalAssignmentError
 from netlist_carpentry.core.netlist_elements.element_path import (
     T_PATH_TYPES,
@@ -17,7 +22,6 @@ from netlist_carpentry.core.netlist_elements.element_path import (
     WirePath,
     WireSegmentPath,
 )
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT, NESTED_DICT
 from netlist_carpentry.core.netlist_elements.mixins.module_base import T_MODULE_PARTS
@@ -29,7 +33,6 @@ from netlist_carpentry.core.netlist_elements.segment_base import _Segment
 from netlist_carpentry.core.netlist_elements.wire import Wire
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
 from netlist_carpentry.core.protocols.signals import LogicLevel
-from netlist_carpentry.core.signal import Signal
 from netlist_carpentry.scripts.eqy_check import EqyWrapper
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.log import LOG
@@ -54,6 +57,8 @@ class Circuit(BaseModel):
     _creator: str = ''
     """The name of the circuit's creator."""
 
+    _module_instances = CustomDict[str, List[InstancePath]]()
+
     @property
     def modules(self) -> CustomDict[str, Module]:
         """
@@ -68,11 +73,6 @@ class Circuit(BaseModel):
     def module_count(self) -> int:
         """The number of modules in the circuit."""
         return len(self)
-
-    @property
-    def module_names(self) -> Set[str]:
-        """A set of the names of the modules in the circuit."""
-        return set(self.modules.keys())
 
     @property
     def top_name(self) -> str:
@@ -100,6 +100,13 @@ class Circuit(BaseModel):
     def creator(self, new_creator: str) -> None:
         """Sets the name of the circuit's creator."""
         self._creator = new_creator
+
+    @property
+    def module_instances(self) -> CustomDict[str, List[InstancePath]]:
+        """A dictionary containing the names of all modules as keys,
+        and a list of paths to corresponding module instances throughout the circuit.
+        """
+        return self._module_instances
 
     def __getitem__(self, key: str) -> Module:
         """Returns a module from the circuit that has the given name."""
@@ -138,7 +145,16 @@ class Circuit(BaseModel):
         Returns:
             Module: The module that was added.
         """
+        module._circuit = self
+        self._add_module_instances(module)
         return self.modules.add(module.name, module)
+
+    def _add_module_instances(self, module: Module) -> None:
+        if module.name not in self.module_instances:
+            self.module_instances[module.name] = []
+        for instance in module.instances.values():
+            if instance.instance_type in self.module_instances:
+                self.module_instances[instance.instance_type].append(instance.path)
 
     def add_from_circuit(self, other_circuit: Circuit) -> Dict[str, Module]:
         """
@@ -170,6 +186,33 @@ class Circuit(BaseModel):
         """
         return self.add_module(Module(raw_path=name))
 
+    def copy_module(self, old_module: Union[str, Module], new_name: str) -> Module:
+        """Duplicates the given module, and the new instance receives the given name.
+
+        If `old_module` is a string, a module with this name must exist in this circuit.
+        This module is then copied, and receives the given name `new_name` to distinguish it
+        from the original module.
+
+        Args:
+            old_module (Union[str, Module]): The original module to copy. Can be a string, in which case
+                a module with this exact name must exist within this circuit
+            new_name (str): The new name of the freshly created module copy.
+
+        Raises:
+            ObjectNotFoundError: If a string is given and no module with such name exists in this circuit.
+
+        Returns:
+            Module: The newly created module copy.
+        """
+        if isinstance(old_module, str):
+            if old_module in self.modules:
+                old_module = self[old_module]
+            else:
+                raise ObjectNotFoundError(f'No module {old_module} exists in circuit {self.name}!')
+        new_module = deepcopy(old_module)
+        new_module.set_name(new_name)
+        return self.add_module(new_module)
+
     def remove_module(self, module_name: str) -> None:
         """
         Removes a module from the circuit.
@@ -183,7 +226,18 @@ class Circuit(BaseModel):
         if module_name == self.top_name:
             LOG.warn(f"Removing top module '{module_name}'! Set a new top module using Circuit.set_top(), otherwise hierarchy cannot be determined!")
             self._top_name = ''
+        if module_name not in self.modules:
+            raise ObjectNotFoundError(f'Unable to remove module {module_name}: No such module found!')
+        self._remove_module_instances(module_name)
         self.modules.remove(module_name)
+
+    def _remove_module_instances(self, module_name: str) -> None:
+        if module_name in self.module_instances:
+            self.module_instances.pop(module_name)
+        module = self[module_name]
+        for instance in module.instances.values():
+            if instance.instance_type in self.module_instances:
+                self.module_instances[instance.instance_type].remove(instance.path)
 
     def get_module(self, module_name: str) -> Optional[Module]:
         """
@@ -197,7 +251,7 @@ class Circuit(BaseModel):
         """
         return self.modules.get(module_name, None)
 
-    def get_module_at_idx(self, index: int) -> Optional[Module]:
+    def get_module_at_idx(self, index: NonNegativeInt) -> Optional[Module]:
         """
         Returns the module with the given index.
 
@@ -207,7 +261,7 @@ class Circuit(BaseModel):
         If there is no module at the given index (i.e. the index is out of bounds), returns None.
 
         Args:
-           index (int): The index of the module to return.
+           index (NonNegativeInt): The index of the module to return.
 
         Returns:
             Optional[Module]: The module at the given index, or None if the circuit has less modules than the given index.
@@ -330,7 +384,7 @@ class Circuit(BaseModel):
         """
         elements = path_str.split(sep)
         path_str = '.'.join(elements)  # Replace original separator with dot for conformity
-        if elements[0] not in self.module_names:
+        if elements[0] not in self.modules:
             raise PathResolutionError(f'Cannot resolve path {path_str}: No module found with name {elements[0]} in circuit {self.name}!')
         while len(elements) > 1:
             module_name = elements.pop(0)
@@ -339,7 +393,7 @@ class Circuit(BaseModel):
                 module_inst = module.instances[elements[0]]
                 next_module_name = module_inst.instance_type
                 if len(elements) > 1:
-                    if next_module_name not in self.module_names:
+                    if next_module_name not in self.modules:
                         break
                     elements[0] = next_module_name
             else:
@@ -365,7 +419,7 @@ class Circuit(BaseModel):
             return PortSegmentPath(raw=path_str)
         raise PathResolutionError(f'Cannot resolve path {path_str}: The last resolved object is an instance with path {path_str}!')
 
-    def _get_path_from_str_port(self, path_str: str, port: Port, processed_elements: List[str]) -> ElementPath:
+    def _get_path_from_str_port(self, path_str: str, port: Port[Module], processed_elements: List[str]) -> ElementPath:
         if len(processed_elements) == 1:
             return PortPath(raw=path_str)
         elif len(processed_elements) == 2 and processed_elements[1].isnumeric() and int(processed_elements[1]) in port.segments:
@@ -385,11 +439,19 @@ class Circuit(BaseModel):
     def set_signal(self, path: str, signal_value: Signal) -> None: ...
 
     def set_signal(self, path: str, signal_value: Union[LogicLevel, Signal]) -> None:
+        """Sets the signal of the port or wire (segment) at the given path to the given new signal.
+
+        Args:
+            path (str): The path to the element, whose signal should be set.
+                Must point to an element that supports signal assignment, e.g. a port, wire or a port/wire segment.
+            signal_value (Union[LogicLevel, Signal]): A signal value.
+                May be from the Signal enum, or the values `0` and `1` (integers),
+                or the values `'0'`, `'1'`, `'x'` or `'z'` (strings).
+
+        Raises:
+            SignalAssignmentError: If an object was provided that does not support signal assignment.
+        """
         element = self.get_from_path(path)
-        if element is None:
-            raise ObjectNotFoundError(f'Cannot set signal: no corresponding object for path {path}!')
-        if not element.can_carry_signal:
-            raise SignalAssignmentError(f'Cannot set signal on element {element.name} of type {element.type}')
         if isinstance(signal_value, str):
             signal_value = Signal.get(signal_value)
         if isinstance(element, _Segment):
@@ -397,6 +459,8 @@ class Circuit(BaseModel):
         elif isinstance(element, Wire) or isinstance(element, Port):
             for idx in element.segments:
                 element.set_signal(signal_value, idx)
+        else:
+            raise SignalAssignmentError(f'Cannot set signal on element {element.name} of type {element.type}')
 
     def write(self, output_file_path: Union[str, Path], overwrite: bool = False) -> None:
         """
@@ -407,9 +471,6 @@ class Circuit(BaseModel):
         Args:
             output_file_path (Union[str, Path]): The path to write the Verilog representation of the circuit to.
             overwrite (bool): Whether to overwrite a file if it already exists. Defaults to False.
-
-        Returns:
-            None
         """
         from netlist_carpentry import write
 
@@ -481,7 +542,7 @@ class Circuit(BaseModel):
 
         This method evaluates the top module in the circuit and all modules that are part of it, in a top-down manner.
         """
-        self.top.evaluate(self.modules)
+        self.top.evaluate()
 
     def export_metadata(
         self,
@@ -490,6 +551,17 @@ class Circuit(BaseModel):
         sort_by: Literal['path', 'category'] = 'path',
         filter: Callable[[str, NESTED_DICT], bool] = lambda cat, md: True,
     ) -> None:
+        """Writes all metadata from this circuit to a JSON file at the given path.
+
+        Args:
+            path (Union[str, Path]): The path to the JSON file to include the metadata.
+            include_empty (bool, optional): Whether to include empty subdictionaries
+                (e.g. if an instance does not have metadata). Defaults to False.
+            sort_by (Literal[&#39;path&#39;, &#39;category&#39;], optional): Whether to sort the metadata by the element's path
+                or by category. Defaults to 'path'.
+            filter (Callable[[str, NESTED_DICT], bool], optional): A filter function that is forwarded to `Module.normalize_metadata`
+                for each module of this circuit. Defaults to a lambda that always returns True (i.e. no filtering).
+        """
         if isinstance(path, str):
             path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)

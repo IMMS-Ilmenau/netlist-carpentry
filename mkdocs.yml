@@ -21,8 +21,12 @@ nav:
     - 09. Executing Equivalence Checks: user_guide/09_equivalence_checking.ipynb
     - 10. Implementing Custom Search & Replace Algorithms: user_guide/10_custom_search_and_replace.ipynb
     - 11. Advanced Techniques for Custom Search & Replace Algorithms: user_guide/11_custom_search_and_replace_advanced.ipynb
+    - 12. Scan Chain Insertion: user_guide/12_scan_chain_insertion.ipynb
   - Code Reference: reference/
-  - Development Guide: dev_guide/development.md
+  - Development Guide:
+    - Prerequisites and Notes: dev_guide/01_getting_started.md
+    - Development Introduction: dev_guide/02_dev_introduction.md
+    - Codebase Structure Overview: dev_guide/03_codebase_structure.md
   # TODO Add new sections to the documentation here
 
 # Project information

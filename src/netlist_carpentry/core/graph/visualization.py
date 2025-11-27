@@ -1,3 +1,5 @@
+"""Module for graph visualization (WIP)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -5,6 +7,7 @@ from typing import Callable, Dict, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import networkx as nx
+from pydantic import NonNegativeInt
 
 NodeColor = str
 NodeSize = int
@@ -12,7 +15,7 @@ FormatDict = Dict[str, Tuple[NodeColor, NodeSize]]
 
 
 class Visualization:
-    def __init__(self, graph: nx.MultiDiGraph[str], default_color: str = 'lightblue', default_size: int = 300):
+    def __init__(self, graph: nx.MultiDiGraph[str], default_color: str = 'lightblue', default_size: NonNegativeInt = 300):
         self.graph = graph
         self.default_color = default_color
         self.default_size = default_size
@@ -84,7 +87,7 @@ class Visualization:
     def visualize_in_out(
         self,
         *,
-        node_size: int = 700,
+        node_size: NonNegativeInt = 700,
         figsize: Tuple[float, float] = (10, 8),
         in_color: NodeColor = 'green',
         out_color: NodeColor = 'red',

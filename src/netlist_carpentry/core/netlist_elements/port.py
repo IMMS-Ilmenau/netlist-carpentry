@@ -1,3 +1,5 @@
+"""Module for handling of ports (both instance and module ports) inside a circuit module."""
+
 from __future__ import annotations
 
 from typing import (
@@ -6,6 +8,7 @@ from typing import (
     Dict,
     Generator,
     Generic,
+    List,
     Literal,
     Optional,
     Set,
@@ -15,25 +18,30 @@ from typing import (
     overload,
 )
 
-from pydantic import BaseModel
+from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
-from netlist_carpentry import LOG
-from netlist_carpentry.core.exceptions import ObjectLockedError, ObjectNotFoundError, ParentNotFoundError
+from netlist_carpentry import LOG, Direction, Signal
+from netlist_carpentry.core.enums.element_type import EType
+from netlist_carpentry.core.exceptions import (
+    InvalidDirectionError,
+    ObjectLockedError,
+    ObjectNotFoundError,
+    ParentNotFoundError,
+    WidthMismatchError,
+)
 from netlist_carpentry.core.netlist_elements.element_path import PortPath, WirePath, WireSegmentPath
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT, NESTED_DICT
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
-from netlist_carpentry.core.port_direction import PortDirection
 from netlist_carpentry.core.protocols.signals import LogicLevel, SignalDict, SignalOrLogicLevel
-from netlist_carpentry.core.signal import Signal
 from netlist_carpentry.utils.custom_dict import CustomDict
 
 if TYPE_CHECKING:
     from netlist_carpentry import Instance, Module
 
 T_PARENT = TypeVar('T_PARENT', bound='Union[Module, Instance]')
+ANY_PORT = Union['Port[Module]', 'Port[Instance]']
 
 
 class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
@@ -45,13 +53,13 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
     If this port belongs to a module, use `Port[Module]` otherwise use `Port[Instance]`.
 
     Attributes:
-        direction (PortDirection): The direction of this port.
+        direction (Direction): The direction of this port.
         msb_first (bool, optional): Whether the index order of this port is MSB first. Defaults to True.
         module_or_instance(Optional[Module, Instance]): The parent object (module or instance) to which this port belongs.
             Can also be None, in which case the port does not belong to any object initially, but should be assigned to an instance or module later.
     """
 
-    direction: PortDirection
+    direction: Direction
     """The direction of this port, indicating whether it's an input, output, or bidirectional connection."""
     _segments = CustomDict[int, PortSegment]()
     _signal: Signal = Signal.UNDEFINED
@@ -118,6 +126,23 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
             f'No parent port specified for port {self.raw_path}. '
             + 'This is probably due to a bad instantiation (missing or bad "module_or_instance" parameter), or a subsequent modification of either the module or instance, which corrupted the port.'
         )
+
+    @property
+    def module(self) -> 'Module':
+        """
+        The parent module of this port.
+
+        For a module port, this returns the immediate parent.
+        For an instance port, it returns the module to which the instance belongs
+        (i.e. the parent of the instance, or the grandparent of this port).
+        """
+        from netlist_carpentry import Instance, Module
+
+        if isinstance(self.parent, Module):
+            return self.parent
+        elif isinstance(self.module_or_instance, Instance) and isinstance(self.parent.parent, Module):
+            return self.parent.parent
+        raise ParentNotFoundError(f'No parent module can be determined for port {self.raw_path}!')
 
     @property
     def segments(self) -> CustomDict[int, PortSegment]:
@@ -440,16 +465,13 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         return (self.is_instance_port and self.is_input) or (self.is_module_port and self.is_output)
 
     @property
-    def connected_wire_segments(self) -> Set[WireSegmentPath]:
+    def connected_wire_segments(self) -> Dict[NonNegativeInt, WireSegmentPath]:
         """
-        Returns a set of paths of wire segments connected to this port.
+        Returns a dictionary of paths of wire segments connected to this port.
 
         A port is considered connected to a wire segment if at least one of its segments is connected to that wire segment.
-
-        Returns:
-            Set[WireSegmentPath]: A set of paths of wire segments connected to this port.
         """
-        return set(s.ws_path for s in self.segments.values())
+        return {i: s.ws_path for i, s in self.segments.items()}
 
     @property
     def connected_wires(self) -> Set[WirePath]:
@@ -457,12 +479,16 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         Returns a set of paths of wires connected to this port.
 
         A port is considered connected to a wire if at least one of its segments is connected to that wire.
-
-        Returns:
-            Set[WirePath]: A set of paths of wires connected to this port.
         """
         # "if" clause skips constant wire segments, which do not have a parent by definition
-        return set(ws.parent for ws in self.connected_wire_segments if ws.has_parent())
+        return set(ws.parent for ws in self.connected_wire_segments.values() if ws.has_parent())
+
+    def set_name(self, new_name: str) -> None:
+        old_name = self.name
+        self.parent.ports[new_name] = self.parent.ports.pop(old_name)
+        super().set_name(new_name)
+        if old_name in self.parent.wires:
+            self.parent.wires[old_name].set_name(new_name)
 
     def _add_port_segment(self, port_segment: PortSegment) -> PortSegment:
         """
@@ -476,19 +502,19 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         """
         return self.segments.add(port_segment.index, port_segment, locked=self.locked)
 
-    def create_port_segment(self, index: int) -> PortSegment:
+    def create_port_segment(self, index: NonNegativeInt) -> PortSegment:
         """
         Creates a port segment and adds it to this port.
 
         Args:
-            index (int): The index for which a PortSegment should be created and added to this port.
+            index (NonNegativeInt): The index for which a PortSegment should be created and added to this port.
 
         Returns:
             PortSegment: The PortSegment that was created and added to this port.
         """
         return self._add_port_segment(PortSegment(raw_path=f'{self.raw_path}.{index}', port=self))
 
-    def create_port_segments(self, count: int, offset: int = 0) -> Dict[int, PortSegment]:
+    def create_port_segments(self, count: PositiveInt, offset: NonNegativeInt = 0) -> Dict[int, PortSegment]:
         """
         Creates a port segment and adds it to this port.
 
@@ -497,29 +523,29 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         With `offset`, the start index can be set
 
         Args:
-            count (int): The amount of PortSegments to be created and added to this port.
-            offset (int, optional): The index from which the generated port segments start.
+            count (PositiveInt): The amount of PortSegments to be created and added to this port.
+            offset (NonNegativeInt, optional): The index from which the generated port segments start.
 
         Returns:
             List[PortSegment]: A list of PortSegment objects created and added to this port.
         """
         return {i: self.create_port_segment(i) for i in range(offset, offset + count)}
 
-    def remove_port_segment(self, index: int) -> None:
+    def remove_port_segment(self, index: NonNegativeInt) -> None:
         """
         Removes a port segment from this port.
 
         Args:
-            index: The index of the PortSegment to remove from this port.
+            index (NonNegativeInt): The index of the PortSegment to remove from this port.
         """
         self.segments.remove(index, locked=self.locked)
 
-    def get_port_segment(self, index: int) -> Optional[PortSegment]:
+    def get_port_segment(self, index: NonNegativeInt) -> Optional[PortSegment]:
         """
         Returns a PortSegment with the given index from this port.
 
         Args:
-            index: The index of the PortSegment to retrieve from this port.
+            index (NonNegativeInt): The index of the PortSegment to retrieve from this port.
 
         Returns:
             Optional[PortSegment]: The PortSegment with the given index, or None if no port segment with that index exists.
@@ -527,11 +553,11 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         return self.segments.get(index, None)
 
     @overload
-    def tie_signal(self, signal: LogicLevel, index: int = 0) -> None: ...
+    def tie_signal(self, signal: LogicLevel, index: NonNegativeInt = 0) -> None: ...
     @overload
-    def tie_signal(self, signal: Signal, index: int = 0) -> None: ...
+    def tie_signal(self, signal: Signal, index: NonNegativeInt = 0) -> None: ...
 
-    def tie_signal(self, signal: SignalOrLogicLevel, index: int = 0) -> None:
+    def tie_signal(self, signal: SignalOrLogicLevel, index: NonNegativeInt = 0) -> None:
         """
         Ties a signal to a constant value on the specified port segment.
 
@@ -544,13 +570,13 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Args:
             signal (SignalOrLogicLevel): The new constant signal value. **'X' unconnects the port**.
-            index (int): The bit index of the port segment. Defaults to 0.
+            index (NonNegativeInt): The bit index of the port segment. Defaults to 0.
 
         Raises:
             ObjectNotFoundError: If no segment with the given index exists.
             AlreadyConnectedError: (raised by: PortSegment.tie_signal) If this segment is belongs to a load port and is already connected to a wire,
                 from which it receives its value.
-            InvalidPortDirectionError: (raised by: PortSegment.tie_signal) If this port segment belongs to an instance output port,
+            InvalidDirectionError: (raised by: PortSegment.tie_signal) If this port segment belongs to an instance output port,
                 which is driven by the instance inputs and the instance's internal logic.
             InvalidSignalError: (raised by: PortSegment.tie_signal) If an invalid value is provided.
         """
@@ -559,11 +585,11 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         return self[index].tie_signal(signal)
 
     @overload
-    def set_signal(self, signal: LogicLevel, index: int = 0) -> None: ...
+    def set_signal(self, signal: LogicLevel, index: NonNegativeInt = 0) -> None: ...
     @overload
-    def set_signal(self, signal: Signal, index: int = 0) -> None: ...
+    def set_signal(self, signal: Signal, index: NonNegativeInt = 0) -> None: ...
 
-    def set_signal(self, signal: SignalOrLogicLevel, index: int = 0) -> None:
+    def set_signal(self, signal: SignalOrLogicLevel, index: NonNegativeInt = 0) -> None:
         """
         Sets the signal of the port segment at the given index to the given new signal.
 
@@ -574,13 +600,12 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Args:
             signal (SignalOrLogicLevel): The new signal to set on the port segment.
-            index (int): The index of the port segment to set the signal on. Defaults to 0, which is the LSB of the port.
+            index (NonNegativeInt): The index of the port segment to set the signal on. Defaults to 0, which is the LSB of the port.
 
         Raises:
             ValueError: If the index is out of range of the port's segments.
         """
         self[index].set_signal(signal)
-        self.notify_listeners()
 
     @overload
     def set_signals(self, signal: int) -> None: ...
@@ -599,7 +624,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
             else:
                 raise IndexError(f'Cannot set signals on port {self.raw_path}, since it does not have any segments!')
 
-    def count_signals(self, target_signal: Signal) -> int:
+    def count_signals(self, target_signal: Signal) -> NonNegativeInt:
         """
         Counts the number of occurrences of a given signal in this port's signal array.
 
@@ -607,7 +632,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
             target_signal (Signal): The signal to count occurrences of.
 
         Returns:
-            int: The number of times the target signal appears in this port's signal array.
+            NonNegativeInt: The number of times the target signal appears in this port's signal array.
 
         Example:
             ```python
@@ -622,12 +647,39 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         """
         return len([sig for sig in self.signal_array.values() if sig == target_signal])
 
+    @overload
+    def driver(self, single: Literal[True]) -> ANY_PORT: ...
+    @overload
+    def driver(self, single: Literal[False]) -> Dict[NonNegativeInt, Optional[PortSegment]]: ...
+    @overload
+    def driver(self) -> Dict[NonNegativeInt, Optional[PortSegment]]: ...
+    def driver(self, single: bool = False) -> Union[ANY_PORT, Dict[NonNegativeInt, Optional[PortSegment]]]:
+        if self.is_driver:
+            raise InvalidDirectionError(f'Cannot get driving port of port {self.raw_path}: This port is a driver and thus does not have a driver!')
+        drivers: Dict[NonNegativeInt, Optional[PortSegment]] = {}
+        for idx, ps in self:
+            if not ps.is_tied:
+                drivers[idx] = self.module.wires[ps.ws_path.parent.name][int(ps.ws_path.name)].driver()[0]
+            else:
+                drivers[idx] = None
+        if single:
+            first_ps = next(iter(drivers.values()))
+            if any(ps is None for ps in drivers.values()):
+                raise WidthMismatchError(f'Cannot determine single driving port: At least one port segment of port {self.raw_path} is undriven!')
+            elif all(first_ps.parent_name == ps.parent_name for ps in drivers.values()) and first_ps.parent.width == self.width:
+                return first_ps.port
+            raise WidthMismatchError(f'Cannot determine single driving port of port {self.raw_path}: Differing port widths!')
+        return drivers
+
+    def loads(self) -> Dict[NonNegativeInt, List[PortSegment]]:
+        return {idx: self.module.wires[self[idx].ws_path.parent.name].loads()[idx] for idx, _ in self}
+
     def set_signed(self, signed: bool) -> bool:
         prev = self.signed
         self.parameters['signed'] = int(signed)
         return prev != self.signed
 
-    def change_connection(self, new_wire_segment_path: WireSegmentPath, index: int = 0) -> None:
+    def change_connection(self, new_wire_segment_path: WireSegmentPath, index: Optional[NonNegativeInt] = 0) -> None:
         """
         Changes the connection of a port segment to the given wire segment path.
 
@@ -636,11 +688,11 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
             index (int, optional): The index of the port segment to change the connection for. Defaults to 0.
 
         Note:
-            If index is -1, changes the connections of all segments in this port to the same given wire segment.
+            If index is None, changes the connections of all segments in this port to the same given wire segment.
         """
         if self.locked:
             raise ObjectLockedError(f'Unable to connect port {self.raw_path} to {new_wire_segment_path.raw}: Port is locked!')
-        if index == -1:
+        if index is None:
             for idx in self.segments:
                 self.change_connection(new_wire_segment_path, idx)
         elif index not in self.segments:
@@ -673,17 +725,6 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
                 else:
                     md[cat] = val
         return md
-
-    def __hash__(self) -> int:
-        return hash(
-            (
-                self.raw_path,
-                self.is_instance_port,
-                self.direction.value,
-                tuple((s.raw_path, s.raw_ws_path) for s in self.segments.values()),
-                tuple(hash((p, v)) for p, v in self.parameters.items()),
-            )
-        )
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__} "{self.name}" with path {self.path.raw} ({self.direction.value} port)'

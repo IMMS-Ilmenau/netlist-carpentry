@@ -3,22 +3,24 @@ import copy
 import os
 
 import pytest
+from pydantic import ValidationError
 
+from netlist_carpentry.core.enums.direction import Direction
+from netlist_carpentry.core.enums.element_type import EType
+from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.exceptions import (
-    EvaluationError,
     IdentifierConflictError,
+    MultipleDriverError,
     ObjectLockedError,
     ObjectNotFoundError,
     ParentNotFoundError,
+    UnsupportedOperationError,
 )
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 from netlist_carpentry.core.netlist_elements.port import Port
 from netlist_carpentry.core.netlist_elements.wire import Wire
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
-from netlist_carpentry.core.port_direction import PortDirection
-from netlist_carpentry.core.signal import Signal
 
 
 @pytest.fixture
@@ -36,7 +38,7 @@ def locked_wire() -> Wire:
 
 
 def _add_multidriver(standard_wire: Wire, name: str = 'p4') -> None:
-    p = Port(raw_path=f'test_module1.{name}', direction=PortDirection.IN, module_or_instance=Module(raw_path='a'))
+    p = Port(raw_path=f'test_module1.{name}', direction=Direction.IN, module_or_instance=Module(raw_path='a'))
     p.create_port_segment(1)
     standard_wire[1].add_port_segment(p[1])
 
@@ -96,7 +98,7 @@ def test_eq(standard_wire: Wire) -> None:
 
 
 def test_wire_parent_init() -> None:
-    with pytest.raises(TypeError):
+    with pytest.raises(ValidationError):
         Wire(raw_path='test_module1.c', module=NetlistElement(raw_path='test_module1'))
 
 
@@ -360,12 +362,12 @@ def test_set_signed(standard_wire: Wire) -> None:
 
 
 def test_wire_driver(standard_wire: Wire) -> None:
-    assert standard_wire.driver() == {1: standard_wire[1].driver()}
+    assert standard_wire.driver() == {1: standard_wire[1].driver()[0]}
     w_port = standard_wire.ports[1][0]
-    assert standard_wire.driver()[1][0] == w_port
+    assert standard_wire.driver()[1] == w_port
 
     standard_wire[1].port_segments.pop(0)
-    assert standard_wire.driver()[1] == []
+    assert standard_wire.driver()[1] is None
 
 
 def test_wire_load(standard_wire: Wire) -> None:
@@ -444,12 +446,30 @@ def test_set_name() -> None:
     from utils import wire_4b
 
     w = wire_4b()
+    assert 'wire4b' in w.parent.wires
+    assert 'WIRE' not in w.parent.wires
+    for _, ws in w:
+        for ps in ws.port_segments:
+            assert 'wire4b' in ps.raw_ws_path
+            assert 'WIRE' not in ps.raw_ws_path
+
     w.set_name('WIRE')
     assert w.raw_path == 'test_module1.WIRE'
     assert w[1].raw_path == 'test_module1.WIRE.1'
     assert w[2].raw_path == 'test_module1.WIRE.2'
     assert w[3].raw_path == 'test_module1.WIRE.3'
     assert w[4].raw_path == 'test_module1.WIRE.4'
+    assert 'wire4b' not in w.parent.wires
+    assert 'WIRE' in w.parent.wires
+
+    for _, ws in w:
+        for ps in ws.port_segments:
+            assert 'wire4b' not in ps.raw_ws_path
+            assert 'WIRE' in ps.raw_ws_path
+
+    w.parent.create_port('WIRE', width=4)
+    with pytest.raises(UnsupportedOperationError):
+        w.set_name('NEW_NAME')
 
 
 def test_change_mutability(standard_wire: Wire) -> None:
@@ -470,7 +490,7 @@ def test_evaluate(standard_wire: Wire) -> None:
     for p in standard_wire.ports[1]:
         assert p.signal == Signal.UNDEFINED
 
-    standard_wire.driver()[1][0].set_signal(0)
+    standard_wire.driver()[1].set_signal(0)
     assert standard_wire.signal_array[1] == Signal.UNDEFINED
     assert standard_wire.ports[1][0].signal == Signal.LOW
     assert standard_wire.ports[1][1].signal == Signal.UNDEFINED
@@ -482,13 +502,8 @@ def test_evaluate(standard_wire: Wire) -> None:
     assert standard_wire.ports[1][2].signal == Signal.LOW
 
     _add_multidriver(standard_wire)
-    standard_wire.driver()[1][0].set_signal('Z')
-    assert standard_wire.signal_array[1] == Signal.LOW
-    assert standard_wire.ports[1][0].signal == Signal.FLOATING
-    assert standard_wire.ports[1][1].signal == Signal.LOW
-    assert standard_wire.ports[1][2].signal == Signal.LOW
-    with pytest.raises(EvaluationError):
-        standard_wire.evaluate()
+    with pytest.raises(MultipleDriverError):
+        standard_wire.driver()[1].set_signal('1')
 
 
 def test_normalize_metadata() -> None:
@@ -548,16 +563,6 @@ def test_normalize_metadata() -> None:
     found = w.normalize_metadata(sort_by='category', filter=lambda cat, md: md.is_integer())
     target = {}
     assert found == target
-
-
-def test_wire_hash(standard_wire: Wire) -> None:
-    assert hash(standard_wire) == hash(standard_wire)
-
-    w2 = copy.deepcopy(standard_wire)
-    assert hash(standard_wire) == hash(w2)
-
-    w2[1].port_segments[0].raw_path = w2[1].port_segments[0].raw_path[:-1] + '42'
-    assert hash(standard_wire) != hash(w2)
 
 
 def test_wire_str(standard_wire: Wire) -> None:

@@ -1,3 +1,5 @@
+"""Graph-related functionality and util methods."""
+
 from __future__ import annotations
 
 from networkx import MultiDiGraph as MDG

@@ -1,3 +1,5 @@
+"""Module for generation and execution of synthesis scripts with Yosys, creating generic JSON netlists."""
+
 import subprocess
 from pathlib import Path
 from typing import Any, List

@@ -1,23 +1,25 @@
+"""Module for handling of wire segments (i.e. wire slices) inside a circuit module."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, overload
 
 from pydantic import BaseModel, ConfigDict
 
-from netlist_carpentry import LOG
+from netlist_carpentry import LOG, Signal
+from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import (
     DetachedSegmentError,
     EvaluationError,
+    MultipleDriverError,
     ParentNotFoundError,
     SignalAssignmentError,
 )
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.segment_base import _Segment
 from netlist_carpentry.core.protocols.signals import LogicLevel, SignalOrLogicLevel
-from netlist_carpentry.core.signal import Signal
 from netlist_carpentry.utils.cfg import CFG
 from netlist_carpentry.utils.custom_list import CustomList
 
@@ -105,7 +107,7 @@ class WireSegment(_Segment, BaseModel):
     @property
     def nr_connected_ports(self) -> int:
         """The number of port segments connected to this wire segment."""
-        return len(set(self.port_segments))
+        return len(self.port_segments)
 
     @property
     def is_constant(self) -> bool:
@@ -174,6 +176,7 @@ class WireSegment(_Segment, BaseModel):
         Returns:
             PortSegment: The PortSegment object that was added to this wire segment.
         """
+        port_segment.set_ws_path(self.raw_path)
         return self.port_segments.add(port_segment, locked=self.locked)
 
     def add_port_segments(self, port_segments: Iterable[PortSegment]) -> List[PortSegment]:
@@ -217,7 +220,6 @@ class WireSegment(_Segment, BaseModel):
             signal = Signal.get(signal)
         if self._signal.name != signal.name:
             self._signal = signal
-            self.notify_listeners()
 
     def has_defined_signal(self) -> bool:
         """
@@ -243,8 +245,10 @@ class WireSegment(_Segment, BaseModel):
             List[PortSegment]: A list of port segments driving this wire segment.
         """
         drv_list = self._get_connection_dict(get_drivers=True)
-        if warn_if_issue and len(drv_list) != 1:
+        if warn_if_issue and not drv_list:
             LOG.warn(f'Wire Segment {self.name} does have {len(drv_list)} drivers, instead of 1! (path is {self.path})')
+        elif len(drv_list) > 1:
+            raise MultipleDriverError(f'WireSegment {self.raw_path} has multiple drivers: {drv_list}')
         return drv_list
 
     def loads(self, warn_if_issue: bool = False) -> List[PortSegment]:
@@ -298,7 +302,10 @@ class WireSegment(_Segment, BaseModel):
         Returns:
             bool: True if the wire segment has multiple drivers, False otherwise.
         """
-        return len(self.driver()) > 1
+        try:
+            return len(self.driver()) > 1
+        except MultipleDriverError:
+            return True
 
     def has_no_loads(self) -> bool:
         """
@@ -368,9 +375,6 @@ class WireSegment(_Segment, BaseModel):
         lds = self.loads()
         for ld in lds:
             ld.set_signal(new_signal)
-
-    def __hash__(self) -> int:
-        return hash((self.raw_path, tuple(p.raw_path for p in self.port_segments)))
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__} "{self.name}" with path {self.path.raw}'

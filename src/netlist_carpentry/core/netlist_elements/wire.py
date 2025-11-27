@@ -1,25 +1,27 @@
+"""Module for handling of wires inside a circuit module."""
+
 from __future__ import annotations
 
 import builtins
-from typing import TYPE_CHECKING, Callable, Dict, Generator, List, Literal, Optional, Set, Tuple, Union, overload
+from typing import TYPE_CHECKING, Callable, Dict, Generator, List, Literal, Optional, Tuple, Union, overload
 
-from pydantic import BaseModel
+from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
-from netlist_carpentry import LOG
-from netlist_carpentry.core.exceptions import ParentNotFoundError
+from netlist_carpentry import LOG, Signal
+from netlist_carpentry.core.enums.element_type import EType
+from netlist_carpentry.core.exceptions import MultipleDriverError, ParentNotFoundError, UnsupportedOperationError
 from netlist_carpentry.core.netlist_elements.element_path import WirePath
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT, NESTED_DICT
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
 from netlist_carpentry.core.protocols.signals import LogicLevel, SignalDict, SignalOrLogicLevel
-from netlist_carpentry.core.signal import Signal
 from netlist_carpentry.utils.custom_dict import CustomDict
+from netlist_carpentry.utils.custom_list import CustomList
 
 if TYPE_CHECKING:
-    from netlist_carpentry.core.netlist_elements.module import Module
+    from netlist_carpentry import Module
 
 
 class Wire(NetlistElement, BaseModel):
@@ -34,7 +36,7 @@ class Wire(NetlistElement, BaseModel):
     _segments = CustomDict[int, WireSegment]()
     msb_first: bool = True
     """Whether this port is MSB (most significant bit) first or not"""
-    module: Optional[NetlistElement]
+    module: Optional['Module']
 
     def __getitem__(self, index: int) -> WireSegment:
         """
@@ -245,14 +247,13 @@ class Wire(NetlistElement, BaseModel):
         return port_dict
 
     @property
-    def connected_port_segments(self) -> Set[PortSegment]:
-        """
-        Retrieves a set of all (unique) port segments connected to this wire.
-
-        Returns:
-            A set of PortSegment objects representing the port segments connected to this wire.
-        """
-        return {p for s in self.segments.values() for p in s.port_segments}
+    def connected_port_segments(self) -> List[PortSegment]:
+        """Retrieves a list of all (unique) port segments connected to this wire."""
+        unique_ps = CustomList()
+        for s in self.segments.values():
+            for p in s.port_segments:
+                unique_ps.add(p)
+        return unique_ps
 
     @property
     def nr_connected_port_segments(self) -> int:
@@ -266,6 +267,10 @@ class Wire(NetlistElement, BaseModel):
         """
         return len(self.connected_port_segments)
 
+    def set_name(self, new_name: str) -> None:
+        self.parent.wires[new_name] = self.parent.wires.pop(self.name)
+        super().set_name(new_name)
+
     def _add_wire_segment(self, wire_segment: WireSegment) -> None:
         """
         Adds a new wire segment to the wire.
@@ -275,12 +280,12 @@ class Wire(NetlistElement, BaseModel):
         """
         self.segments.add(wire_segment.index, wire_segment, locked=self.locked)
 
-    def create_wire_segment(self, index: int) -> WireSegment:
+    def create_wire_segment(self, index: NonNegativeInt) -> WireSegment:
         """
         Creates a new wire segment and adds it to the wire.
 
         Args:
-            index (int): The index where a new wire segment should be added.
+            index (NonNegativeInt): The index where a new wire segment should be added.
 
         Returns:
             WireSegment: The WireSegment that was added to this wire.
@@ -289,7 +294,7 @@ class Wire(NetlistElement, BaseModel):
         self._add_wire_segment(seg)
         return seg
 
-    def create_wire_segments(self, count: int, offset: int = 0) -> Dict[int, WireSegment]:
+    def create_wire_segments(self, count: PositiveInt, offset: NonNegativeInt = 0) -> Dict[int, WireSegment]:
         """
         Creates a wire segment and adds it to this wire.
 
@@ -298,15 +303,15 @@ class Wire(NetlistElement, BaseModel):
         With `offset`, the start index can be set
 
         Args:
-            count (int): The amount of WireSegments to be created and added to this wire.
-            offset (int, optional): The index from which the generated wire segments start.
+            count (PositiveInt): The amount of WireSegments to be created and added to this wire.
+            offset (NonNegativeInt, optional): The index from which the generated wire segments start.
 
         Returns:
             List[WireSegment]: A list of WireSegment objects created and added to this wire.
         """
         return {i: self.create_wire_segment(i) for i in range(offset, offset + count)}
 
-    def remove_wire_segment(self, index: int) -> None:
+    def remove_wire_segment(self, index: NonNegativeInt) -> None:
         """
         Removes a wire segment at the specified index from the wire.
 
@@ -314,7 +319,7 @@ class Wire(NetlistElement, BaseModel):
         The operation checks for immutability and performs the removal if allowed.
 
         Args:
-            index (int): The index of the wire segment to be removed.
+            index (NonNegativeInt): The index of the wire segment to be removed.
         """
         if index in self.segments:
             for ps in self[index].port_segments:
@@ -322,14 +327,14 @@ class Wire(NetlistElement, BaseModel):
                     ps.set_ws_path('')
         self.segments.remove(index, locked=self.locked)
 
-    def get_wire_segment(self, index: int) -> Optional[WireSegment]:
+    def get_wire_segment(self, index: NonNegativeInt) -> Optional[WireSegment]:
         """
         Retrieves a wire segment at the specified index from the wire.
 
         This method attempts to retrieve a wire segment from the internal segments dictionary using the specified index.
 
         Args:
-            index (int): The index of the wire segment to be retrieved.
+            index (NonNegativeInt): The index of the wire segment to be retrieved.
 
         Returns:
             Optional[WireSegment]: The wire segment at the specified index, or None if not found.
@@ -356,11 +361,11 @@ class Wire(NetlistElement, BaseModel):
         return {}
 
     @overload
-    def set_signal(self, signal: LogicLevel, index: int = 0) -> None: ...
+    def set_signal(self, signal: LogicLevel, index: NonNegativeInt = 0) -> None: ...
     @overload
-    def set_signal(self, signal: Signal, index: int = 0) -> None: ...
+    def set_signal(self, signal: Signal, index: NonNegativeInt = 0) -> None: ...
 
-    def set_signal(self, signal: SignalOrLogicLevel, index: int = 0) -> None:
+    def set_signal(self, signal: SignalOrLogicLevel, index: NonNegativeInt = 0) -> None:
         """
         Sets the signal of the wire segment at the given index to the given new signal.
 
@@ -370,13 +375,12 @@ class Wire(NetlistElement, BaseModel):
 
         Args:
             signal (SignalOrLogicLevel): The new signal to set on the wire.
-            index (int): The index of the wire to set the signal on. Defaults to 0, which is the LSB of the wire.
+            index (NonNegativeInt): The index of the wire to set the signal on. Defaults to 0, which is the LSB of the wire.
 
         Raises:
             ValueError: If the index is out of range of the wire's segments.
         """
         self[index].set_signal(signal)
-        self.notify_listeners()
 
     @overload
     def set_signals(self, signal: int) -> None: ...
@@ -398,7 +402,7 @@ class Wire(NetlistElement, BaseModel):
     def set_signed(self, signed: bool) -> None:
         self.parameters['signed'] = int(signed)
 
-    def driver(self) -> Dict[int, List[PortSegment]]:
+    def driver(self) -> Dict[int, Optional[PortSegment]]:
         """
         Returns a dictionary of wire segment indices to lists of driving ports.
 
@@ -408,7 +412,7 @@ class Wire(NetlistElement, BaseModel):
             A dictionary mapping wire segment indices (int) to a list of Port objects
             representing the driver connections (should be only one) at each index.
         """
-        return self._drv_or_lds_connections(get_drv=True)
+        return {i: dr[0] if dr else None for i, dr in self._drv_or_lds_connections(get_drv=True).items()}
 
     def loads(self) -> Dict[int, List[PortSegment]]:
         """
@@ -540,13 +544,20 @@ class Wire(NetlistElement, BaseModel):
         for s_idx in self.segments:
             s = self[s_idx]
             fnc: Callable[..., bool] = getattr(s, function_name)
-            mapping[s_idx] = fnc()
+            try:
+                mapping[s_idx] = fnc()
+            except MultipleDriverError:
+                mapping[s_idx] = True
         any_or_all: Callable[[Generator[bool, None, None]], bool] = getattr(builtins, filter)
         return mapping if get_mapping else any_or_all(mapping[k] for k in mapping)
 
     def _set_name_recursively(self, old_name: str, new_name: str) -> None:
+        if old_name in self.module.ports:
+            raise UnsupportedOperationError(f'Cannot rename wire {self.raw_path}: Cannot rename a wire that has the same name as a module port!')
         for _, ws in self:
             ws.raw_path = ws.path.replace(old_name, new_name).raw
+            for ps in ws.port_segments:
+                ps.set_ws_path(ps.raw_ws_path.replace(old_name, new_name))
 
     def change_mutability(self, is_now_locked: bool, recursive: bool = False) -> Self:
         if recursive:
@@ -573,9 +584,6 @@ class Wire(NetlistElement, BaseModel):
                 else:
                     md[cat] = val
         return md
-
-    def __hash__(self) -> int:
-        return hash((self.raw_path, tuple(hash(s) for s in self.segments.values()), tuple(hash(p) for p in self.parameters.values())))
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__} "{self.name}" with path {self.path.raw} ({self.width} bit(s) wide)'

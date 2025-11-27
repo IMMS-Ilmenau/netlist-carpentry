@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from netlist_carpentry.core.netlist_elements.element_type import EType, get_class
+from netlist_carpentry.core.enums.element_type import EType, get_class
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement

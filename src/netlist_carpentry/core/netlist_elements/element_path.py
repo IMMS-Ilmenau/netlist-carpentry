@@ -1,9 +1,11 @@
+"""Module for handling of hierarchical paths inside a given circuit."""
+
 from typing import List, Optional, Union
 
 from pydantic import BaseModel, NonNegativeInt
 from typing_extensions import Self
 
-from netlist_carpentry.core.netlist_elements.element_type import EType
+from netlist_carpentry.core.enums.element_type import EType
 
 
 class ElementPath(BaseModel):

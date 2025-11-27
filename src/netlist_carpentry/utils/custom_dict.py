@@ -1,3 +1,5 @@
+"""Module for a custom dictionary class, with some extensions to the normal Python `dict`."""
+
 from typing import Dict, List, TypeVar, Union
 
 from netlist_carpentry.core.exceptions import IdentifierConflictError, ObjectLockedError, ObjectNotFoundError

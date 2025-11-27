@@ -1,12 +1,11 @@
-import copy
 import os
 from typing import Dict
 
 import pytest
 
-from netlist_carpentry.core.exceptions import ObjectNotFoundError
+from netlist_carpentry.core.enums.element_type import EType
+from netlist_carpentry.core.exceptions import VerilogSyntaxError
 from netlist_carpentry.core.netlist_elements.element_path import ElementPath
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 
 
@@ -49,6 +48,12 @@ def test_set_name(netlist_element: NetlistElement) -> None:
     netlist_element.set_name('foo')
     assert netlist_element.name == 'foo'
 
+    with pytest.raises(VerilogSyntaxError):
+        netlist_element.set_name('module')
+
+    netlist_element.set_name('Module')  # Not a keyword, in contrast to "module"
+    assert netlist_element.name == 'Module'
+
 
 def test_hierarchy_level(netlist_element: NetlistElement) -> None:
     assert netlist_element.hierarchy_level == 4
@@ -57,6 +62,11 @@ def test_hierarchy_level(netlist_element: NetlistElement) -> None:
 def test_parent(netlist_element: NetlistElement) -> None:
     with pytest.raises(NotImplementedError):
         netlist_element.parent
+
+
+def test_circuit(netlist_element: NetlistElement) -> None:
+    with pytest.raises(NotImplementedError):
+        netlist_element.circuit
 
 
 def test_change_mutability(netlist_element: NetlistElement) -> None:
@@ -74,50 +84,6 @@ def test_is_placeholder_instance(netlist_element: NetlistElement) -> None:
     assert not netlist_element.is_placeholder_instance
 
     assert NetlistElement(raw_path='').is_placeholder_instance
-
-
-def test_add_listener(netlist_element: NetlistElement) -> None:
-    from utils import standard_instance_with_ports
-
-    assert netlist_element._listeners == {0} - {0}  # Funny eyes <=> empty set
-    inst = standard_instance_with_ports()
-    netlist_element.add_listener(inst)
-    assert netlist_element._listeners == {inst}
-
-    netlist_element.add_listener(inst)
-    assert netlist_element._listeners == {inst}
-
-
-def test_remove_listener(netlist_element: NetlistElement) -> None:
-    from utils import standard_instance_with_ports
-
-    inst = standard_instance_with_ports()
-    netlist_element.add_listener(inst)
-    assert netlist_element._listeners == {inst}
-
-    netlist_element.remove_listener(inst)
-    assert netlist_element._listeners == {0} - {0}  # Funny eyes <=> empty set
-
-    with pytest.raises(ObjectNotFoundError):
-        netlist_element.remove_listener(inst)
-    assert netlist_element._listeners == {0} - {0}  # Funny eyes <=> empty set
-
-
-def test_notify_listeners(netlist_element: NetlistElement) -> None:
-    from utils import standard_instance_with_ports
-
-    any_notified = netlist_element.notify_listeners()
-    assert not any_notified
-    inst = standard_instance_with_ports()
-    netlist_element.add_listener(inst)
-    assert netlist_element._listeners == {inst}
-    any_notified = netlist_element.notify_listeners()
-    assert any_notified
-
-
-def test_receive_notification(netlist_element: NetlistElement) -> None:
-    anything_done = netlist_element.on_notification(NetlistElement(raw_path='a.b.other_object'))
-    assert not anything_done
 
 
 def test_evaluate(netlist_element: NetlistElement) -> None:
@@ -187,17 +153,6 @@ def test_normalize_metadata(netlist_element: NetlistElement) -> None:
     target_dict = {'cat': {'a.b.c.d.test_name': {'foo': 'baz'}}, 'cat2': {'a.b.c.d.test_name': {}}}
     found_dict = netlist_element.normalize_metadata(include_empty=True, sort_by='category', filter=lambda cat, md: 'cat' in cat)
     assert target_dict == found_dict
-
-
-def test_hash(netlist_element: NetlistElement) -> None:
-    h1 = hash(netlist_element)
-    h2 = hash(copy.deepcopy(netlist_element))
-
-    assert h1 == h2
-
-    n2 = NetlistElement(raw_path='a.b.c.d.e')
-
-    assert hash(n2) != hash(netlist_element)
 
 
 def test_str(netlist_element: NetlistElement) -> None:

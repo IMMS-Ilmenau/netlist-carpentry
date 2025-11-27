@@ -5,13 +5,16 @@ import os
 import pytest
 
 from netlist_carpentry import LOG
+from netlist_carpentry.core.enums.direction import Direction
+from netlist_carpentry.core.enums.element_type import EType
+from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.exceptions import (
     DetachedSegmentError,
+    MultipleDriverError,
     ObjectLockedError,
     ParentNotFoundError,
     SignalAssignmentError,
 )
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
@@ -27,8 +30,6 @@ from netlist_carpentry.core.netlist_elements.wire_segment import (
     WireSegmentConstX,
     WireSegmentConstZ,
 )
-from netlist_carpentry.core.port_direction import PortDirection
-from netlist_carpentry.core.signal import Signal
 from netlist_carpentry.utils.cfg import CFG
 from netlist_carpentry.utils.log import initialize_logging
 
@@ -40,9 +41,9 @@ def wire_segment() -> WireSegment:
     wire = standard_wire()
     inst = Instance(raw_path='a.b', instance_type='c', module=None)
     module = Module(raw_path='a')
-    p1 = Port(raw_path='a.b.c.p1', direction=PortDirection.OUT, module_or_instance=inst)
-    p2 = Port(raw_path='a.b.d.p2', direction=PortDirection.IN, module_or_instance=inst)
-    p3 = Port(raw_path='a.b.p3', direction=PortDirection.OUT, module_or_instance=module)
+    p1 = Port(raw_path='a.b.c.p1', direction=Direction.OUT, module_or_instance=inst)
+    p2 = Port(raw_path='a.b.d.p2', direction=Direction.IN, module_or_instance=inst)
+    p3 = Port(raw_path='a.b.p3', direction=Direction.OUT, module_or_instance=module)
     p1.create_port_segment(0).set_ws_path('a.b.c.0')
     p2.create_port_segment(0).set_ws_path('a.b.c.0')
     p3.create_port_segment(0).set_ws_path('a.b.c.0')
@@ -59,7 +60,7 @@ def locked_seg() -> WireSegment:
 
 
 def _add_multidriver(wire_segment: WireSegment) -> None:
-    p = Port(raw_path='a.b.p4', direction=PortDirection.IN, module_or_instance=Module(raw_path='a'))
+    p = Port(raw_path='a.b.p4', direction=Direction.IN, module_or_instance=Module(raw_path='a'))
     p.create_port_segment(0)
     wire_segment.add_port_segment(p[0])
 
@@ -86,7 +87,8 @@ def test_wire_segment_basics(wire_segment: WireSegment) -> None:
 
     wire_segment.index = 2
     assert wire_segment.index == 2
-    wire_segment.index = 'foo'
+    with pytest.raises(ValueError):
+        wire_segment.index = 'foo'
     assert wire_segment.index == 2
 
     assert wire_segment.can_carry_signal
@@ -245,11 +247,9 @@ def test_get_driver(wire_segment: WireSegment) -> None:
 
 def test_get_drivers_multiple(wire_segment: WireSegment) -> None:
     initialize_logging(no_file=True)
-    warns = LOG.warns_quantity
     _add_multidriver(wire_segment)
-
-    assert len(wire_segment.driver(True)) == 2
-    assert LOG.warns_quantity == warns + 1
+    with pytest.raises(MultipleDriverError):
+        wire_segment.driver(True)
 
 
 def test_get_loads(wire_segment: WireSegment) -> None:
@@ -300,7 +300,8 @@ def test_is_dangling(wire_segment: WireSegment) -> None:
 def test_has_problems(wire_segment: WireSegment) -> None:
     assert not wire_segment.has_problems()
     _add_multidriver(wire_segment)
-    assert wire_segment.has_problems()
+    with pytest.raises(MultipleDriverError):
+        wire_segment.has_problems()
     wire_segment.port_segments.pop(-1)
     wire_segment.port_segments.pop(-1)
     assert not wire_segment.has_problems()
@@ -328,16 +329,6 @@ def test_evaluate(wire_segment: WireSegment) -> None:
     assert wire_segment.port_segments[0].signal == Signal.LOW
     assert wire_segment.port_segments[1].signal == Signal.LOW
     assert wire_segment.port_segments[2].signal == Signal.LOW
-
-
-def test_wire_segment_hash(wire_segment: WireSegment) -> None:
-    assert hash(wire_segment) == hash(wire_segment)
-
-    ws2 = copy.deepcopy(wire_segment)
-    assert hash(wire_segment) == hash(ws2)
-
-    ws2.port_segments[0].raw_path = ws2.port_segments[0].raw_path[:-1] + '42'
-    assert hash(wire_segment) != hash(ws2)
 
 
 def test_wire_segment_str(wire_segment: WireSegment) -> None:

@@ -1,27 +1,28 @@
 # mypy: disable-error-code="unreachable,comparison-overlap"
-import copy
 import os
 
 import pytest
 from pydantic import ValidationError
 
 from netlist_carpentry import WIRE_SEGMENT_X
+from netlist_carpentry.core.enums.direction import Direction
+from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import (
     IdentifierConflictError,
+    InvalidDirectionError,
     InvalidSignalError,
     ObjectLockedError,
     ObjectNotFoundError,
     ParentNotFoundError,
+    WidthMismatchError,
 )
 from netlist_carpentry.core.netlist_elements.element_path import WirePath, WireSegmentPath
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 from netlist_carpentry.core.netlist_elements.port import Port
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
-from netlist_carpentry.core.netlist_elements.wire import Signal
-from netlist_carpentry.core.port_direction import PortDirection
+from netlist_carpentry.core.netlist_elements.wire import Signal, Wire
 
 
 @pytest.fixture
@@ -52,24 +53,22 @@ def test_port_creation(standard_port_in: Port[Instance], standard_port_out: Port
     assert standard_port_in.path.raw == 'test_module1.test_port1'
     assert standard_port_in.width == 1
     assert standard_port_in.offset == 0
-    assert standard_port_in.direction == PortDirection.IN
+    assert standard_port_in.direction == Direction.IN
     assert standard_port_in.is_instance_port
     assert not standard_port_in.is_module_port
     assert standard_port_in.type is EType.PORT
     assert standard_port_in.signal is Signal.FLOATING  # Unconnected load port => Signal.FLOATING
     assert standard_port_in.signal_array == {0: Signal.FLOATING}
     assert standard_port_in.signal_str == 'z'
-    assert standard_port_in._listeners == {0} - {0}  # Funny eyes <=> empty set
 
     assert standard_port_out.width == 2
-    assert standard_port_out.direction == PortDirection.OUT
+    assert standard_port_out.direction == Direction.OUT
     assert not standard_port_out.is_instance_port
     assert standard_port_out.is_module_port
     assert standard_port_out[0].path.raw == 'test_module1.test_port2.0'
     assert standard_port_out[1].path.raw == 'test_module1.test_port2.1'
     assert standard_port_out[0] == standard_port_out[0]
     assert standard_port_out[1] == standard_port_out[1]
-    assert standard_port_out._listeners == {0} - {0}  # Funny eyes <=> empty set
     assert standard_port_out.signal is Signal.UNDEFINED  # Unconnected driving port (i.e. no load) => Signal.UNDEFINED until evaluated
     assert standard_port_out.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED}
     assert standard_port_out.signal_str == 'xx'
@@ -79,7 +78,7 @@ def test_port_creation(standard_port_in: Port[Instance], standard_port_out: Port
     assert standard_port_in.can_carry_signal
 
     with pytest.raises(ParentNotFoundError):
-        Port(raw_path='a.b', direction=PortDirection.IN, module_or_instance=None).is_module_port
+        Port(raw_path='a.b', direction=Direction.IN, module_or_instance=None).is_module_port
 
 
 def test_port_len(standard_port_in: Port[Instance], standard_port_out: Port[Module]) -> None:
@@ -99,7 +98,7 @@ def test_port_iter(standard_port_in: Port[Instance], standard_port_out: Port[Mod
 
 def test_port_parent_init() -> None:
     with pytest.raises(ValidationError):
-        Port(raw_path='a.b.c', direction=PortDirection.IN, module_or_instance=NetlistElement(raw_path='a.b'))
+        Port(raw_path='a.b.c', direction=Direction.IN, module_or_instance=NetlistElement(raw_path='a.b'))
 
 
 def test_parent(standard_port_in: Port[Instance]) -> None:
@@ -115,6 +114,25 @@ def test_parent(standard_port_in: Port[Instance]) -> None:
         standard_port_in.parent
 
 
+def test_module(standard_port_in: Port[Instance]) -> None:
+    from utils import empty_module
+
+    m = empty_module()
+    standard_port_in.module_or_instance = m
+    module = standard_port_in.module
+    assert module == m
+
+    m2 = empty_module()
+    a = m2.create_instance(Module(raw_path='m'), 'a')
+    standard_port_in.module_or_instance = a
+    module = standard_port_in.module
+    assert module == m2
+
+    standard_port_in.module_or_instance = None
+    with pytest.raises(ParentNotFoundError):
+        standard_port_in.module
+
+
 def test_port_signal_int(standard_port_in: Port[Instance], standard_port_out: Port[Module]) -> None:
     assert standard_port_in.signal_int is None
     standard_port_in.tie_signal('1', 0)
@@ -126,12 +144,12 @@ def test_port_signal_int(standard_port_in: Port[Instance], standard_port_out: Po
     assert standard_port_out.signal_int is None
     standard_port_out[0].set_ws_path('')
     standard_port_out[1].set_ws_path('')
-    standard_port_out.tie_signal('1', 0)
+    standard_port_out.tie_signal(1, 0)
     standard_port_out.tie_signal('1', 1)
     assert standard_port_out.signal_int == 3
     standard_port_out.set_signed(True)
     assert standard_port_out.signal_int == -1
-    standard_port_out.tie_signal('0', 0)
+    standard_port_out.tie_signal(0, 0)
     standard_port_out.tie_signal('1', 1)  # MSB_FIRST is false for standard_port_out => in 01, the 0 is actually the LSB
     assert standard_port_out.signal_int == 1
 
@@ -267,18 +285,18 @@ def test_port_is_input(standard_port_in: Port[Instance], standard_port_out: Port
     assert standard_port_in.is_input
     assert not standard_port_out.is_input
 
-    standard_port_out.direction = PortDirection.IN_OUT
+    standard_port_out.direction = Direction.IN_OUT
     assert standard_port_out.is_input
-    assert standard_port_out.direction == PortDirection.IN_OUT
+    assert standard_port_out.direction == Direction.IN_OUT
 
 
 def test_port_is_output(standard_port_in: Port[Instance], standard_port_out: Port[Module]) -> None:
     assert not standard_port_in.is_output
     assert standard_port_out.is_output
 
-    standard_port_in.direction = PortDirection.IN_OUT
+    standard_port_in.direction = Direction.IN_OUT
     assert standard_port_in.is_output
-    assert standard_port_in.direction == PortDirection.IN_OUT
+    assert standard_port_in.direction == Direction.IN_OUT
 
 
 def test_port_is_driver(standard_port_in: Port[Instance], standard_port_out: Port[Module]) -> None:
@@ -302,27 +320,27 @@ def test_port_is_load(standard_port_in: Port[Instance], standard_port_out: Port[
 
 
 def test_connected_wire_segments(standard_port_in: Port[Instance], standard_port_out: Port[Module]) -> None:
-    set1 = standard_port_in.connected_wire_segments
-    assert len(set1) == 1
-    assert standard_port_in[0].ws_path in set1
+    dict1 = standard_port_in.connected_wire_segments
+    assert len(dict1) == 1
+    assert dict1[0] == standard_port_in[0].ws_path
 
     standard_port_out[1].change_connection(WireSegmentPath(raw='test_module1.d.0'))
-    set2 = standard_port_out.connected_wire_segments
-    assert len(set2) == 2
-    assert standard_port_out[0].ws_path in set2
-    assert standard_port_out[1].ws_path in set2
+    dict2 = standard_port_out.connected_wire_segments
+    assert len(dict2) == 2
+    assert dict2[0] == standard_port_out[0].ws_path
+    assert dict2[1] == standard_port_out[1].ws_path
 
     pseg = standard_port_in.get_port_segment(0)
     pseg.set_name('1')
     standard_port_in._add_port_segment(pseg)
-    set3 = standard_port_in.connected_wire_segments
-    assert len(set3) == 1
-    assert standard_port_in[0].ws_path in set3
-    assert standard_port_in[1].ws_path in set3
+    dict3 = standard_port_in.connected_wire_segments
+    assert len(dict3) == 2
+    assert dict3[0] == standard_port_in[0].ws_path
+    assert dict3[1] == standard_port_in[1].ws_path
 
-    p = Port(raw_path='', direction=PortDirection.IN_OUT, module_or_instance=None)
-    set4 = p.connected_wire_segments
-    assert not set4
+    p = Port(raw_path='', direction=Direction.IN_OUT, module_or_instance=None)
+    dict4 = p.connected_wire_segments
+    assert dict4 == {}
 
 
 def test_connected_wires(standard_port_in: Port[Instance], standard_port_out: Port[Module]) -> None:
@@ -511,6 +529,51 @@ def test_count_signal(standard_port_out: Port[Module]) -> None:
     assert standard_port_out.count_signals(Signal.LOW) == 0
 
 
+def test_driver() -> None:
+    m = Module(raw_path='m')
+    in1 = m.create_port('in1', Direction.IN, width=4)
+    out = m.create_port('out', Direction.OUT, width=4)
+    m.connect(in1, out)
+
+    dr = out.driver()
+    assert dr == {0: in1[0], 1: in1[1], 2: in1[2], 3: in1[3]}
+
+    dr_port = out.driver(single=True)
+    assert dr_port == in1
+
+    with pytest.raises(InvalidDirectionError):
+        in1.driver()
+
+    in2 = m.create_port('in2', Direction.IN, width=4)
+    out2 = m.create_port('out2', Direction.OUT, width=2)
+    assert out2.driver() == {0: None, 1: None}
+    with pytest.raises(WidthMismatchError):
+        out2.driver(single=True)
+
+    m.connect(in2[0], out2[0])
+    assert out2.driver() == {0: in2[0], 1: None}
+    with pytest.raises(WidthMismatchError):
+        out2.driver(single=True)
+
+    m.connect(in2[1], out2[1])
+    assert out2.driver() == {0: in2[0], 1: in2[1]}
+    with pytest.raises(WidthMismatchError):
+        out2.driver(single=True)
+
+
+def test_loads() -> None:
+    m = Module(raw_path='m')
+    in1 = m.create_port('in1', Direction.IN, width=4)
+    out = m.create_port('out', Direction.OUT, width=4)
+    m.connect(in1, out)
+
+    lds = out.loads()
+    assert lds == {0: [out[0]], 1: [out[1]], 2: [out[2]], 3: [out[3]]}
+
+    lds = in1.loads()
+    assert lds == {0: [out[0]], 1: [out[1]], 2: [out[2]], 3: [out[3]]}
+
+
 def test_set_signed(standard_port_out: Port[Module]) -> None:
     assert not standard_port_out.signed
     is_set = standard_port_out.set_signed(True)
@@ -535,7 +598,7 @@ def test_change_connection(standard_port_in: Port[Instance], standard_port_out: 
     assert standard_port_out[0].raw_ws_path == 'test_module1.wire1.0'
     assert standard_port_out[1].raw_ws_path == 'test_module1'
 
-    standard_port_out.change_connection(WireSegmentPath(raw='test_module1'), -1)
+    standard_port_out.change_connection(WireSegmentPath(raw='test_module1'), None)
     assert standard_port_out[0].raw_ws_path == 'test_module1'
     assert standard_port_out[1].raw_ws_path == 'test_module1'
 
@@ -545,10 +608,23 @@ def test_change_connection(standard_port_in: Port[Instance], standard_port_out: 
 
 
 def test_set_name(standard_port_out: Port[Module]) -> None:
+    assert 'test_port2' in standard_port_out.parent.ports
+    assert 'PORT' not in standard_port_out.parent.ports
+
     standard_port_out.set_name('PORT')
     assert standard_port_out.raw_path == 'test_module1.PORT'
     assert standard_port_out[0].raw_path == 'test_module1.PORT.0'
     assert standard_port_out[1].raw_path == 'test_module1.PORT.1'
+    assert 'test_port2' not in standard_port_out.parent.ports
+    assert 'PORT' in standard_port_out.parent.ports
+
+    w = Wire(raw_path=standard_port_out.module.name + '.PORT', module=standard_port_out.module)
+    standard_port_out.module.wires['PORT'] = w
+    standard_port_out.set_name('NEW_NAME')
+    assert 'PORT' not in standard_port_out.parent.ports
+    assert 'NEW_NAME' in standard_port_out.parent.ports
+    assert 'PORT' not in standard_port_out.parent.wires
+    assert 'NEW_NAME' in standard_port_out.parent.wires
 
 
 def test_change_mutability(standard_port_out: Port[Module]) -> None:
@@ -609,16 +685,6 @@ def test_normalize_metadata(standard_port_out: Port[Module]) -> None:
     found = standard_port_out.normalize_metadata(sort_by='category', filter=lambda cat, md: md.is_integer())
     target = {}
     assert found == target
-
-
-def test_port_hash(standard_port_in: Port[Instance]) -> None:
-    assert hash(standard_port_in) == hash(standard_port_in)
-
-    spi2 = copy.deepcopy(standard_port_in)
-    assert hash(standard_port_in) == hash(spi2)
-
-    spi2[0].raw_path = spi2[0].raw_path[:-1] + '42'
-    assert hash(standard_port_in) != hash(spi2)
 
 
 def test_port_str(standard_port_in: Port[Instance]) -> None:

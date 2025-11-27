@@ -1,3 +1,5 @@
+"""Module for a custom list class, with some extensions to the normal Python `list`."""
+
 from typing import Generator, Iterable, List, TypeVar, Union
 
 from netlist_carpentry.core.exceptions import IdentifierConflictError, ObjectLockedError, ObjectNotFoundError
@@ -44,10 +46,16 @@ class CustomList(List[V]):
         """
         if locked:
             raise ObjectLockedError(f'Unable to add object {object} to the target list: Object is marked as locked!')
-        if object not in self or allow_duplicates:
+        if allow_duplicates or object not in self:
             super().append(object)
             return object
         raise IdentifierConflictError(f'An object {object} already exists in this list!' + 'Set allow_duplicates to True, if this is intended.')
+
+    def extend(self, iterable: Iterable[V], locked: bool = False, allow_duplicates: bool = False, skip_duplicates: bool = False) -> None:
+        for element in iterable:
+            if skip_duplicates and element in self:
+                continue
+            self.add(element, locked, allow_duplicates)
 
     def remove(self, object: V, locked: bool = False) -> None:
         """

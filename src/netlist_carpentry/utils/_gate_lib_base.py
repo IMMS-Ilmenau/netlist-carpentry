@@ -1,3 +1,4 @@
+# mypy: disable-error-code="typeddict-item"
 """
 This module provides a set of classes for modeling digital circuits at the gate level.
 It currently includes base classes for primitive gates, unary gates, binary gates, and clocked gates,
@@ -7,45 +8,38 @@ including methods for setting input signals, evaluating output signals, and upda
 See the gate_lib.py module for further information.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple, Type
 
-from pydantic import BaseModel, PositiveInt
+from pydantic import BaseModel, NonNegativeInt, PositiveInt
+from typing_extensions import Self
 
-from netlist_carpentry import CFG, LOG
-from netlist_carpentry.core.netlist_elements.instance import Instance
-from netlist_carpentry.core.netlist_elements.module import Module
-from netlist_carpentry.core.netlist_elements.port import Port
+from netlist_carpentry import CFG, LOG, Direction, Instance, Module, Port, Signal
+from netlist_carpentry.core.netlist_elements.port import ANY_PORT
 from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2OBJ, WIRE_SEGMENT_X, WireSegment
-from netlist_carpentry.core.port_direction import PortDirection
-from netlist_carpentry.core.signal import Signal
+from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
+from netlist_carpentry.utils.gate_lib_dataclasses import (
+    AllParams,
+    BinaryParams,
+    DFFParams,
+    InstanceParams,
+    UnaryParams,
+    _SequentialParams,
+)
+from netlist_carpentry.utils.safe_format_dict import SafeFormatDict
 
 
 class LibUtils:
-    """Class for some methods related to handling elements from the Gate Library.
+    """
+    Class for some methods related to handling elements from the Gate Library.
 
-    This class contains information about the currently selected module.
-    Furthermore, this class provides methods for collecting wire segments connected
+    This class provides methods for collecting wire segments connected
     to a port segment and transforming them into Verilog syntax.
 
     More functionality may be added later as needed.
     """
 
-    _gatelib_current_module: Optional[Module] = None
-    _tmp_reg_idx: int = 0
-
     @classmethod
-    def curr_module(cls) -> Optional[Module]:
-        return LibUtils._gatelib_current_module
-
-    @classmethod
-    def change_current_module(cls, new_module: Module) -> None:
-        if LibUtils.curr_module() != new_module:
-            # Required for write-out to keep track to which module an instance (and the connected wires) belong to
-            LOG.debug(f'Changing current module in the gate library to {new_module.name}...')
-            LibUtils._gatelib_current_module = new_module
-
-    @classmethod
-    def p2ws2v(cls, port: Port, exclude_indices: List[int] = []) -> str:
+    def p2ws2v(cls, port: ANY_PORT, exclude_indices: List[int] = []) -> str:
         """
         Converts a Port object to its corresponding Verilog structure by using the connected wire segments.
 
@@ -68,11 +62,7 @@ class LibUtils:
         Raises:
             AttributeError: If the currently selected module does not match the module of the port.
         """
-        curr_module = LibUtils.curr_module()
-        if curr_module is None:
-            raise AttributeError('No module currently selected!')
-        if curr_module.name not in port.raw_path:
-            raise AttributeError(f'Currently selected module ("{curr_module.raw_path}") does not match the module of port {port.raw_path}!')
+        curr_module = port.module
         wsegs: List[WireSegment] = []
         for idx, ps in reversed(port.segments.items()):
             if idx not in exclude_indices:
@@ -84,22 +74,22 @@ class LibUtils:
                         raise ValueError(f'No wire found for path {ps.ws_path}!')
                 else:
                     wsegs.append(CONST_MAP_VAL2OBJ.get(ps.raw_ws_path, WIRE_SEGMENT_X))
-        return LibUtils._ws2v(wsegs)
+        return LibUtils._ws2v(curr_module, wsegs)
 
     @classmethod
-    def _ws2v(cls, wsegs: List[WireSegment]) -> str:
+    def _ws2v(cls, module: Module, wsegs: List[WireSegment]) -> str:
         """
         Transforms a list of WireSegments into Verilog code.
 
         Args:
+            module (Module): The module to which the port and the wire segments belong.
             wsegs (List[WireSegment]): The list of WireSegments to be transformed into Verilog code.
 
         Returns:
             str: A string representing the Verilog code corresponding to the input list of WireSegments.
         """
-        from netlist_carpentry.api.write.py2v import P2VTransformer as P2V
+        from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
 
-        module = LibUtils.curr_module()
         if module is not None:
             return P2V.simplify_wire_segments(module, wsegs)
         raise ValueError(
@@ -108,7 +98,7 @@ class LibUtils:
         )
 
     @classmethod
-    def get_unconnected_idx(cls, port: Port) -> List[int]:
+    def get_unconnected_idx(cls, port: ANY_PORT) -> List[int]:
         exclude_indices = [idx for idx, ps in port.segments.items() if ps.is_unconnected]
         if exclude_indices:
             LOG.warn(f'Excluding these segments from port {port.raw_path} from write-out, since they are unconnected: {exclude_indices}')
@@ -123,9 +113,18 @@ class _PrimitiveGate(Instance, BaseModel):
     This class provides a common interface for all primitive gates, including methods for evaluating the gate's output and setting its output signal.
     """
 
-    width: PositiveInt = 1
-    is_primitive: bool = True
     instance_type: str = CFG.id_internal
+
+    parameters: AllParams = {}
+
+    @property
+    def width(self) -> PositiveInt:
+        """Width of the gate, based on a certain port's width, depending on the actual gate."""
+        return self.parameters['Y_WIDTH'] if 'Y_WIDTH' in self.parameters else 1
+
+    @width.setter
+    def width(self, new_width: PositiveInt) -> None:
+        self.parameters['Y_WIDTH'] = new_width
 
     @property
     def is_combinatorial(self) -> bool:
@@ -136,14 +135,17 @@ class _PrimitiveGate(Instance, BaseModel):
         return not self.is_combinatorial
 
     @property
-    def output_port(self) -> Port:
-        """
-        The output port of the gate.
-
-        Returns:
-            Port: The output port of the gate.
-        """
+    def output_port(self) -> Port[Instance]:
+        """The output port of the gate."""
         raise NotImplementedError('Not implemented in base class!')
+
+    @property
+    def is_primitive(self) -> bool:
+        return True
+
+    @property
+    def is_module_instance(self) -> bool:
+        return False
 
     @property
     def data_width(self) -> int:
@@ -163,6 +165,29 @@ class _PrimitiveGate(Instance, BaseModel):
     def verilog_template(self) -> str:
         return 'assign {out} = {in1};'
 
+    def sync_parameters(self) -> InstanceParams:
+        return self.parameters
+
+    def _fix_signedness_mismatch(self, port_name: str, param_name: Literal['A_SIGNED', 'B_SIGNED']) -> bool:
+        if self.parameters.get(param_name, False) != self.ports[port_name].signed:
+            LOG.warn(
+                f"Detected parameter mismatch: Parameter {param_name} of instance {self.raw_path} is different from the port's parameter 'signed'. "
+                + 'To change the signedness of the port, change it directly at the port, via port.set_signed(new_value). '
+                + "Aligning param_name with the port's current parameter to fix the mismatch..."
+            )
+            self.parameters[param_name] = self.ports[port_name].signed
+        return self.parameters.get(param_name, False)
+
+    def set(self, port_name: str, new_signal: SignalOrLogicLevel) -> None:
+        """
+        Sets the signal on a port.
+
+        Args:
+            port_name (str): The name of the port to set the signal on.
+            new_signal (Signal): The new signal value.
+        """
+        self.ports[port_name].set_signal(new_signal)
+
     def evaluate(self) -> None:
         """
         Evaluates the gate's output signal based on its input signals.
@@ -174,7 +199,7 @@ class _PrimitiveGate(Instance, BaseModel):
             new_signals.update(self._calc_output(i))
         self._set_output(new_signals=new_signals)
 
-    def _calc_output(self, idx: int = 0) -> Dict[int, Signal]:
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
         Calculates the gate's output signal based on its input signals.
 
@@ -194,6 +219,19 @@ class _PrimitiveGate(Instance, BaseModel):
         for idx, sig in new_signals.items():
             self.output_port.set_signal(signal=sig, index=idx)
 
+    def _split(self) -> Dict[NonNegativeInt, Self]:
+        new_insts: Dict[NonNegativeInt, Self] = {}
+        connections = self.connections
+        super_module = self.parent
+        super_module.remove_instance(self.name)
+        for idx in range(self.data_width):
+            inst: Self = super_module.add_instance(self.__class__(raw_path=f'{self.raw_path}_{idx}'))
+            for pname in list(inst.ports.keys()):
+                p = inst.ports[pname]
+                super_module.connect(connections[pname][idx], p[0])
+            new_insts[idx] = inst
+        return new_insts
+
 
 class _UnaryGate(_PrimitiveGate, BaseModel):
     """
@@ -203,42 +241,43 @@ class _UnaryGate(_PrimitiveGate, BaseModel):
     This class provides a common interface for all unary gates, including methods for evaluating the gate's output and setting its output signal.
     """
 
+    parameters: UnaryParams = {}
+
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         """
         Initializes the gate's ports and connections.
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        self.connect('A', None, direction=PortDirection.IN, width=self.width)
-        self.connect('Y', None, direction=PortDirection.OUT, width=self.width)
+        self.connect('A', None, direction=Direction.IN, width=self.width)
+        self.connect('Y', None, direction=Direction.OUT, width=self.width)
         return super().model_post_init(__context)
 
     @property
-    def input_port(self) -> Port:
-        """
-        The input port of the gate.
-
-        Returns:
-            Port: The input port of the gate.
-        """
+    def input_port(self) -> Port[Instance]:
+        """The input port of the gate."""
         return self.ports['A']
 
     @property
-    def output_port(self) -> Port:
-        """
-        The output port of the gate.
+    def a_signed(self) -> bool:
+        """The signedness of input port A."""
+        return self._fix_signedness_mismatch('A', 'A_SIGNED')
 
-        Returns:
-            Port: The output port of the gate.
-        """
+    @property
+    def output_port(self) -> Port[Instance]:
+        """The output port of the gate."""
         return self.ports['Y']
+
+    @property
+    def splittable(self) -> bool:
+        return True
 
     @property
     def verilog_template(self) -> str:
         return 'assign {out} = {in1};'
 
     def _check_signal_signed(self, a: str) -> str:
-        if self.parameters.get('A_SIGNED', False):
+        if self.a_signed:
             a = f'$signed({a})'
         return a
 
@@ -252,7 +291,14 @@ class _UnaryGate(_PrimitiveGate, BaseModel):
             return self.verilog_template.format(out=out_str, in1=in1_str)
         return ''
 
-    def signal_in(self, idx: int = 0) -> Signal:
+    def sync_parameters(self) -> UnaryParams:
+        super().sync_parameters()
+        self.parameters['A_WIDTH'] = self.input_port.width
+        self.parameters['A_SIGNED'] = self.input_port.signed
+        self.parameters['Y_WIDTH'] = self.data_width
+        return self.parameters
+
+    def signal_in(self, idx: NonNegativeInt = 0) -> Signal:
         """
         The input signal of the gate.
 
@@ -261,7 +307,7 @@ class _UnaryGate(_PrimitiveGate, BaseModel):
         """
         return self.input_port.signal_array[idx]
 
-    def signal_out(self, idx: int = 0) -> Signal:
+    def signal_out(self, idx: NonNegativeInt = 0) -> Signal:
         """
         The output signal of the gate.
 
@@ -285,8 +331,21 @@ class _ReduceGate(_UnaryGate, BaseModel):
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        self.connect('A', None, direction=PortDirection.IN, width=self.width)
-        self.connect('Y', None, direction=PortDirection.OUT)
+        self.connect('A', None, direction=Direction.IN, width=self.width)
+        self.connect('Y', None, direction=Direction.OUT)
+
+    @property
+    def width(self) -> PositiveInt:
+        """Width of the gate, based on a certain port's width, depending on the actual gate."""
+        return self.parameters['A_WIDTH'] if 'A_WIDTH' in self.parameters else 1
+
+    @width.setter
+    def width(self, new_width: PositiveInt) -> None:
+        self.parameters['A_WIDTH'] = new_width
+
+    @property
+    def splittable(self) -> bool:
+        return False
 
     @property
     def verilog_template(self) -> str:
@@ -300,12 +359,7 @@ class _ReduceGate(_UnaryGate, BaseModel):
         return self.verilog_template.format(out=LibUtils.p2ws2v(self.ports['Y']), in1=in1) if LibUtils.p2ws2v(self.ports['Y']) != "1'bx" else ''
 
     def signal_out(self) -> Signal:  # type: ignore[override]
-        """
-        The output signal of the gate.
-
-        Returns:
-            Signal: The output signal of the gate.
-        """
+        """The output signal of the gate."""
         return self.output_port.signal
 
 
@@ -317,36 +371,42 @@ class _BinaryGate(_PrimitiveGate, BaseModel):
     This class provides a common interface for all binary gates, including methods for evaluating the gate's output and setting its output signal.
     """
 
+    parameters: BinaryParams = {}
+
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         """
         Initializes the gate's ports and connections.
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        self.connect('A', None, direction=PortDirection.IN, width=self.width)
-        self.connect('B', None, direction=PortDirection.IN, width=self.width)
-        self.connect('Y', None, direction=PortDirection.OUT, width=self.width)
+        self.connect('A', None, direction=Direction.IN, width=self.width)
+        self.connect('B', None, direction=Direction.IN, width=self.width)
+        self.connect('Y', None, direction=Direction.OUT, width=self.width)
         return super().model_post_init(__context)
 
     @property
-    def input_ports(self) -> Tuple[Port, Port]:
-        """
-        The input ports of the gate.
-
-        Returns:
-            Tuple[Port, Port]: The input ports of the gate.
-        """
+    def input_ports(self) -> Tuple[Port[Instance], Port[Instance]]:
+        """The input ports of the gate as a 2-tuple."""
         return (self.ports['A'], self.ports['B'])
 
     @property
-    def output_port(self) -> Port:
-        """
-        The output port of the gate.
+    def a_signed(self) -> bool:
+        """The signedness of input port A."""
+        return self._fix_signedness_mismatch('A', 'A_SIGNED')
 
-        Returns:
-            Port: The output port of the gate.
-        """
+    @property
+    def b_signed(self) -> bool:
+        """The signedness of input port B."""
+        return self._fix_signedness_mismatch('B', 'B_SIGNED')
+
+    @property
+    def output_port(self) -> Port[Instance]:
+        """The output port of the gate."""
         return self.ports['Y']
+
+    @property
+    def splittable(self) -> bool:
+        return True
 
     @property
     def verilog_template(self) -> str:
@@ -363,14 +423,23 @@ class _BinaryGate(_PrimitiveGate, BaseModel):
             return self.verilog_template.format(out=out_str, in1=in1_str, in2=in2_str)
         return ''
 
+    def sync_parameters(self) -> BinaryParams:
+        super().sync_parameters()
+        self.parameters['A_WIDTH'] = self.ports['A'].width
+        self.parameters['A_SIGNED'] = self.ports['A'].signed
+        self.parameters['B_WIDTH'] = self.ports['B'].width
+        self.parameters['B_SIGNED'] = self.ports['B'].signed
+        self.parameters['Y_WIDTH'] = self.data_width
+        return self.parameters
+
     def _check_signal_signed(self, a: str, b: str) -> Tuple[str, str]:
-        if self.parameters.get('A_SIGNED', False):
+        if self.a_signed:
             a = f'$signed({a})'
-        if self.parameters.get('B_SIGNED', False):
+        if self.b_signed:
             b = f'$signed({b})'
         return (a, b)
 
-    def signals_in(self, idx: int = 0) -> Tuple[Signal, Signal]:
+    def signals_in(self, idx: NonNegativeInt = 0) -> Tuple[Signal, Signal]:
         """
         The input signals of the gate.
 
@@ -379,7 +448,7 @@ class _BinaryGate(_PrimitiveGate, BaseModel):
         """
         return (self.input_ports[0].signal_array[idx], self.input_ports[1].signal_array[idx])
 
-    def signal_out(self, idx: int = 0) -> Signal:
+    def signal_out(self, idx: NonNegativeInt = 0) -> Signal:
         """
         The output signal of the gate.
 
@@ -390,8 +459,12 @@ class _BinaryGate(_PrimitiveGate, BaseModel):
 
 
 class _ShiftGate(_BinaryGate, BaseModel):
+    @property
+    def splittable(self) -> bool:
+        return False
+
     def _check_signal_signed(self, a: str, b: str) -> Tuple[str, str]:
-        if self.parameters.get('A_SIGNED', False):
+        if self.a_signed:
             a = f'$signed({a})'
         # Do not modify b to $signed({b}), because second operator of shift gates cannot be signed.
         return a, b
@@ -405,21 +478,33 @@ class _ArithmeticGate(_PrimitiveGate, BaseModel):
     This class provides a common interface for all arithmetic gates, including methods for evaluating the gate's output and setting its output signal.
     """
 
+    parameters: BinaryParams = {}
+
+    @property
+    def a_signed(self) -> bool:
+        """The signedness of input port A."""
+        return self._fix_signedness_mismatch('A', 'A_SIGNED')
+
+    @property
+    def b_signed(self) -> bool:
+        """The signedness of input port B."""
+        return self._fix_signedness_mismatch('B', 'B_SIGNED')
+
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         """
         Initializes the gate's ports and connections.
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        self.connect('A', None, direction=PortDirection.IN, width=self.width)
-        self.connect('B', None, direction=PortDirection.IN, width=self.width)
-        self.connect('Y', None, direction=PortDirection.OUT, width=self.width)
+        self.connect('A', None, direction=Direction.IN, width=self.width)
+        self.connect('B', None, direction=Direction.IN, width=self.width)
+        self.connect('Y', None, direction=Direction.OUT, width=self.width)
         return super().model_post_init(__context)
 
     def _check_signal_signed(self, a: str, b: str) -> Tuple[str, str]:
-        if self.parameters.get('A_SIGNED', False):
+        if self.a_signed:
             a = f'$signed({a})'
-        if self.parameters.get('B_SIGNED', False):
+        if self.b_signed:
             b = f'$signed({b})'
         return (a, b)
 
@@ -444,6 +529,15 @@ class _ArithmeticGate(_PrimitiveGate, BaseModel):
         in1_str, in2_str = self._check_signal_signed(in1, in2)
         return self.verilog_template.format(out=out, in1=in1_str, in2=in2_str)
 
+    def sync_parameters(self) -> BinaryParams:
+        super().sync_parameters()
+        self.parameters['A_WIDTH'] = self.ports['A'].width
+        self.parameters['A_SIGNED'] = self.ports['A'].signed
+        self.parameters['B_WIDTH'] = self.ports['B'].width
+        self.parameters['B_SIGNED'] = self.ports['B'].signed
+        self.parameters['Y_WIDTH'] = self.data_width
+        return self.parameters
+
 
 class _BinaryNto1Gate(_BinaryGate, BaseModel):
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
@@ -454,7 +548,20 @@ class _BinaryNto1Gate(_BinaryGate, BaseModel):
         """
         super().model_post_init(__context)
         self.ports.pop('Y')
-        self.connect('Y', None, direction=PortDirection.OUT)
+        self.connect('Y', None, direction=Direction.OUT)
+
+    @property
+    def width(self) -> PositiveInt:
+        """Width of the gate, based on a certain port's width, depending on the actual gate."""
+        return self.parameters['A_WIDTH'] if 'A_WIDTH' in self.parameters else 1
+
+    @width.setter
+    def width(self, new_width: PositiveInt) -> None:
+        self.parameters['A_WIDTH'] = new_width
+
+    @property
+    def splittable(self) -> bool:
+        return False
 
     @property
     def verilog(self) -> str:
@@ -471,9 +578,7 @@ class _BinaryNto1Gate(_BinaryGate, BaseModel):
 
 
 class _StorageGate(_PrimitiveGate, BaseModel):
-    en_polarity: Signal = Signal.HIGH
-    """Which EN-signal level enables writing on the data storage. Default is Signal.HIGH.
-    """
+    parameters: _SequentialParams = {}
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         """
@@ -481,77 +586,91 @@ class _StorageGate(_PrimitiveGate, BaseModel):
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        self.connect('D', None, direction=PortDirection.IN, width=self.width)
-        self.connect('EN', None, direction=PortDirection.IN)
-        self.connect('Q', None, direction=PortDirection.OUT, width=self.width)
+        self.connect('D', None, direction=Direction.IN, width=self.width)
+        self.connect('Q', None, direction=Direction.OUT, width=self.width)
 
+        self._curr_out = [Signal.UNDEFINED for i in range(self.data_width)]
         return super().model_post_init(__context)
 
     @property
-    def input_port(self) -> Port:
-        """
-        The input port of the gate.
+    def width(self) -> PositiveInt:
+        return self.parameters['WIDTH'] if 'WIDTH' in self.parameters else 1
 
-        Returns:
-            Port: The input port of the gate.
-        """
+    @width.setter
+    def width(self, new_width: PositiveInt) -> None:
+        self.parameters['WIDTH'] = new_width
+
+    @property
+    def is_combinatorial(self) -> bool:
+        return False
+
+    @property
+    def input_port(self) -> Port[Instance]:
+        """The input port of the gate."""
         return self.ports['D']
 
     @property
-    def en_port(self) -> Port:
-        """
-        The enable port of the gate.
-
-        Returns:
-            Port: The enable port of the gate.
-        """
-        return self.ports['EN']
-
-    @property
-    def output_port(self) -> Port:
-        """
-        The output port of the gate.
-
-        Returns:
-            Port: The output port of the gate.
-        """
+    def output_port(self) -> Port[Instance]:
+        """The output port of the gate."""
         return self.ports['Q']
 
     @property
-    def en_signal(self) -> Signal:
-        """
-        The enable signal of the gate.
-
-        Returns:
-            Signal: The enable signal of the gate.
-        """
-        return self.en_port.signal
-
-
-class _ClockedGate(_StorageGate, BaseModel):
-    """A base class for clocked gates.Clocked gates are gates that have a clock signal and a reset signal.
-    This class provides a common interface for all clocked gates, including methods for evaluating the gate's output and setting its output signal.
-
-    Attributes:
-        rst_val (Signal): The value of the reset signal.
-        clk_polarity (Signal): The polarity of the clock signal.
-        rst_polarity (Signal): The polarity of the reset signal.
-    """
-
-    rst_val_int: int = 0
-    clk_polarity: Signal = Signal.HIGH
-    """Which clock edge activates the flip-flop. Default is Signal.HIGH, i.e. rising edge."""
-    rst_polarity: Signal = Signal.HIGH
-    """Which reset level resets the flip-flop. Default is Signal.HIGH: the flipflop is in reset, if the reset signal is HIGH."""
-    _clk_redge: bool = False
-    _clk_fedge: bool = False
-    _rst_redge: bool = False
-    _rst_fedge: bool = False
+    def splittable(self) -> bool:
+        return True
 
     @property
-    def rst_val(self) -> Dict[int, Signal]:
-        """The value of the flipflop during and after reset. Default is Signal.LOW, i.e. the initial flipflop state is 0 by default."""
-        return Signal.from_int(self.rst_val_int, fixed_width=self.data_width)
+    def verilog_context_map(self) -> SafeFormatDict:
+        return SafeFormatDict()
+
+    def _storage_assigns(self, sig_value: str = '') -> str:
+        in1 = sig_value if sig_value != '' else LibUtils.p2ws2v(self.input_port)
+        out = LibUtils.p2ws2v(self.output_port)
+        return f'{out}\t<=\t{in1};' if out != "1'bx" else ''
+
+    def _v_header(self, port: Port[Instance], polarity: Signal) -> str:
+        wire = LibUtils.p2ws2v(port) if LibUtils.p2ws2v(port) != "1'bx" else ''
+        return ('posedge ' if polarity == Signal.HIGH else 'negedge ') + wire if wire else ''
+
+    def sync_parameters(self) -> _SequentialParams:
+        super().sync_parameters()
+        self.parameters['WIDTH'] = self.data_width
+        return self.parameters
+
+    def _split(self) -> Dict[NonNegativeInt, Self]:
+        new_insts: Dict[NonNegativeInt, Self] = {}
+        connections = self.connections
+        super_module = self.parent
+        super_module.remove_instance(self.name)
+        for idx in range(self.data_width):
+            inst: Self = super_module.add_instance(self.__class__(raw_path=f'{self.raw_path}_{idx}'))
+            for pname in list(inst.ports.keys()):
+                p = inst.ports[pname]
+                if pname == 'D' or pname == 'Q':
+                    super_module.connect(connections[pname][idx], p[0])
+                else:
+                    for conn_idx in connections[pname]:
+                        super_module.connect(connections[pname][conn_idx], p[conn_idx])
+
+            new_insts[idx] = inst
+        return new_insts
+
+
+class _ClkMixin(_StorageGate):
+    """
+    A mixin class for clocked gates. Clocked gates are gates that have a clock signal.
+    This class provides a common interface for all clocked gates, including methods for evaluating the gate's output and setting its output signal.
+    """
+
+    parameters: DFFParams = {}
+
+    @property
+    def clk_polarity(self) -> Signal:
+        """Which clock edge activates the flip-flop. Default is Signal.HIGH, i.e. rising edge."""
+        return self.parameters['CLK_POLARITY'] if 'CLK_POLARITY' in self.parameters else Signal.HIGH
+
+    @clk_polarity.setter
+    def clk_polarity(self, new_signal: Signal) -> None:
+        self.parameters['CLK_POLARITY'] = new_signal
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         """
@@ -560,99 +679,290 @@ class _ClockedGate(_StorageGate, BaseModel):
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
         super().model_post_init(__context)
-        self.connect('CLK', None, direction=PortDirection.IN)
-        self.connect('RST', None, direction=PortDirection.IN)
-        # Add listener after connection is added
-        # Otherwise the hash value would change because of the structural change of the instance
-        # Then the set would no longer directly reference the flip-flop
-        # TODO reference listeners via ID (Dict[ID, Listener]) and not in Set (and hash calculation)!
-        self.clk_port.add_listener(self)
-        self.clk_port[0].add_listener(self)
-        self.rst_port.add_listener(self)
-        self.rst_port[0].add_listener(self)
-
-        self._init_finished = False
-        self._prev_clk = Signal.UNDEFINED
-        self._curr_clk = Signal.UNDEFINED
-        self._prev_rst = Signal.UNDEFINED
-        self._curr_rst = Signal.UNDEFINED
-
-        self._curr_out = [Signal.UNDEFINED for i in range(self.data_width)]
+        self.connect('CLK', None, direction=Direction.IN)
 
     @property
-    def is_combinatorial(self) -> bool:
-        return False
-
-    @property
-    def clk_port(self) -> Port:
-        """
-        The clock port of the gate.
-
-        Returns:
-            Port: The clock port of the gate.
-        """
+    def clk_port(self) -> Port[Instance]:
+        """The clock port of the gate."""
         return self.ports['CLK']
 
     @property
-    def rst_port(self) -> Port:
+    def _verilog_clk(self) -> str:
         """
-        The reset port of the gate.
+        The verilog representation of the clock sensitivity list entry.
 
-        Returns:
-            Port: The reset port of the gate.
+        Has the form `posedge clk_net_name` or `negedge clk_net_name`, depending on the clock polarity.
         """
-        return self.ports['RST']
+        return self._v_header(self.clk_port, self.clk_polarity)
 
-    @property
-    def clk_signal(self) -> Signal:
-        """
-        The clock signal of the gate.
+    def sync_parameters(self) -> DFFParams:
+        super().sync_parameters()
+        self.parameters['CLK_POLARITY'] = self.clk_polarity
+        return self.parameters
 
-        Returns:
-            Signal: The clock signal of the gate.
+    def set_clk(self, new_signal: SignalOrLogicLevel) -> None:
         """
-        return self.clk_port.signal
+        Sets the clock signal.
 
-    @property
-    def clk_redge(self) -> bool:
+        Args:
+            new_signal (Signal): The new clock signal value.
         """
-        Whether the clock signal has a rising edge.
+        self.set(self.clk_port.name, new_signal)
+        self.evaluate()
 
-        Returns:
-            bool: True if the clock signal has a rising edge, False otherwise.
-        """
-        return self._clk_redge
+
+class _EnMixin(_StorageGate):
+    parameters: DFFParams = {}
 
     @property
-    def clk_fedge(self) -> bool:
-        """
-        Whether the clock signal has a falling edge.
+    def en_polarity(self) -> Signal:
+        """Which EN-signal level enables writing on the data storage. Default is Signal.HIGH."""
+        return self.parameters['EN_POLARITY'] if 'EN_POLARITY' in self.parameters else Signal.HIGH
 
-        Returns:
-            bool: True if the clock signal has a falling edge, False otherwise.
-        """
-        return self._clk_fedge
-
-    @property
-    def rst_redge(self) -> bool:
-        """
-        Whether the reset signal has a rising edge.
-
-        Returns:
-            bool: True if the reset signal has a rising edge, False otherwise.
-        """
-        return self._rst_redge
+    @en_polarity.setter
+    def en_polarity(self, new_signal: Signal) -> None:
+        self.parameters['EN_POLARITY'] = new_signal
 
     @property
-    def rst_fedge(self) -> bool:
-        """
-        Whether the reset signal has a falling edge.
+    def en_port(self) -> Port[Instance]:
+        """The enable port of the gate."""
+        return self.ports['EN']
 
-        Returns:
-            bool: True if the reset signal has a falling edge, False otherwise.
+    @property
+    def en_signal(self) -> Signal:
+        """The enable signal of the gate."""
+        return self.en_port.signal
+
+    @property
+    def _verilog_en(self) -> str:
         """
-        return self._rst_fedge
+        The verilog representation of the enable net.
+
+        Has the form `en_net_name` or `~en_net_name`, depending on the enable polarity.
+        """
+        en_wire = LibUtils.p2ws2v(self.en_port) if LibUtils.p2ws2v(self.en_port) != "1'bx" else ''
+        inv = '' if self.en_polarity == Signal.HIGH else '~'
+        return inv + en_wire
 
     @property
     def verilog_template(self) -> str:
-        return 'always @({clk} or {rst}) begin\n\t{behavior}\nend'
+        return super().verilog_template.replace('{set_out}', 'if ({en}) begin\n\t\t{set_out}\n\tend')
+
+    @property
+    def verilog_context_map(self) -> SafeFormatDict:
+        context_map = super().verilog_context_map
+        context_map.update(en=self._verilog_en)
+        return context_map
+
+    def sync_parameters(self) -> DFFParams:
+        super().sync_parameters()
+        self.parameters['EN_POLARITY'] = self.en_polarity
+        return self.parameters
+
+    def set_en(self, new_signal: SignalOrLogicLevel) -> None:
+        """
+        Sets the enable signal.
+
+        Args:
+            new_signal (Signal): The new enable signal value.
+        """
+        self.set('EN', new_signal)
+
+    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+        super().model_post_init(__context)
+        self.connect('EN', None, direction=Direction.IN)
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        if self.input_port[idx].signal.is_defined and self.en_signal.is_defined:
+            return {idx: self.input_port[idx].signal if self.en_signal is self.en_polarity else self.output_port[idx].signal}
+        return {idx: Signal.UNDEFINED}
+
+
+class _RstMixin(_StorageGate):
+    parameters: DFFParams = {}
+
+    @property
+    def rst_polarity(self) -> Signal:
+        """Which reset level resets the flip-flop. Default is Signal.HIGH: the flipflop is in reset, if the reset signal is HIGH."""
+        return self.parameters['ARST_POLARITY'] if 'ARST_POLARITY' in self.parameters else Signal.HIGH
+
+    @rst_polarity.setter
+    def rst_polarity(self, new_signal: Signal) -> None:
+        self.parameters['ARST_POLARITY'] = new_signal
+
+    @property
+    def rst_val_int(self) -> int:
+        """Reset value of the flip-flop as integer. Default is 0."""
+        return self.parameters['ARST_VALUE'] if 'ARST_VALUE' in self.parameters else 0
+
+    @rst_val_int.setter
+    def rst_val_int(self, new_rst_val_int: int) -> None:
+        self.parameters['ARST_VALUE'] = new_rst_val_int
+
+    @property
+    def rst_port(self) -> Port[Instance]:
+        """The reset port of the gate."""
+        return self.ports['RST']
+
+    @property
+    def rst_val(self) -> Dict[int, Signal]:
+        """The value of the flipflop during and after reset. Default is Signal.LOW, i.e. the initial flipflop state is 0 by default."""
+        return Signal.from_int(self.rst_val_int, fixed_width=self.data_width)
+
+    @property
+    def in_reset(self) -> bool:
+        """True if the gate is currently in reset, False otherwise."""
+        return self.rst_port.signal is self.rst_polarity
+
+    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+        super().model_post_init(__context)
+        self.connect('RST', None, direction=Direction.IN)
+
+    @property
+    def _verilog_rst(self) -> str:
+        """
+        The verilog representation of the reset sensitivity list entry.
+
+        Has the form `posedge rst_net_name` or `negedge rst_net_name`, depending on the reset polarity.
+        """
+        return self._v_header(self.rst_port, self.rst_polarity)
+
+    @property
+    def _verilog_rst_net(self) -> str:
+        """
+        The verilog representation of the reset net.
+
+        Has the form `rst_net_name` or `~rst_net_name`, depending on the reset polarity.
+        """
+        rst_net = LibUtils.p2ws2v(self.rst_port) if LibUtils.p2ws2v(self.rst_port) != "1'bx" else ''
+        return rst_net if self.rst_polarity == Signal.HIGH else f'~{rst_net}'
+
+    @property
+    def _verilog_rst_sig_val(self) -> str:
+        return f"{self.output_port.width}'b{f'{Signal.dict_to_bin(self.rst_val)}'.zfill(self.output_port.width)}"
+
+    @property
+    def _verilog_header(self) -> str:
+        return self._verilog_rst
+
+    @property
+    def verilog_template(self) -> str:
+        return super().verilog_template.replace('{set_out}', 'if ({is_rst}) begin\n\t\t{rst_out}\n\tend else begin\n\t\t{set_out}\n\tend')
+
+    @property
+    def verilog_context_map(self) -> SafeFormatDict:
+        rst_out = super()._storage_assigns(sig_value=self._verilog_rst_sig_val)
+        context_map = super().verilog_context_map
+        context_map.update(header=self._verilog_header, is_rst=self._verilog_rst_net, rst_out=rst_out)
+        return context_map
+
+    def sync_parameters(self) -> DFFParams:
+        super().sync_parameters()
+        self.parameters['ARST_POLARITY'] = self.rst_polarity
+        self.parameters['ARST_VALUE'] = self.rst_val_int
+        return self.parameters
+
+    def set_rst(self, new_signal: SignalOrLogicLevel) -> None:
+        """
+        Sets the reset signal.
+
+        Args:
+            new_signal (Signal): The new reset signal value.
+        """
+        self.set(self.rst_port.name, new_signal)
+        self.evaluate()
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        if self.rst_port.signal is self.rst_polarity:
+            return {idx: self.rst_val[idx]}
+        return super()._calc_output(idx)
+
+
+class _ScanMixin(_StorageGate):
+    parameters: DFFParams = {}
+
+    @property
+    def se_port(self) -> Port[Instance]:
+        return self.ports['SE']
+
+    @property
+    def si_port(self) -> Port[Instance]:
+        return self.ports['SI']
+
+    @property
+    def so_port(self) -> Port[Instance]:
+        return self.ports['SO']
+
+    @property
+    def se_signal(self) -> Signal:
+        """The scan enable signal of the gate."""
+        return self.se_port.signal
+
+    @property
+    def scan_ff_equivalent(self) -> Type[_ClkMixin]:
+        """Returns the Scan-FF type equivalent for normal FF and the FF type equivalent for Scan-FF."""
+        from netlist_carpentry.utils.gate_lib import ADFF, ADFFE, DFF, DFFE
+
+        mapping: Dict[str, Type['DFF']] = {
+            '§scan_dff': DFF,
+            '§scan_adff': ADFF,
+            '§scan_dffe': DFFE,
+            '§scan_adffe': ADFFE,
+        }
+        return mapping[self.instance_type]
+
+    @property
+    def verilog_template(self) -> str:
+        # TODO Very ugly, just like meee
+        # But this property can be changed to be less ugly
+        base_split = super().verilog_template.splitlines()
+        base_split.insert(1, '\t{so}')
+        for i, ln in enumerate(base_split):
+            if '{set_out}' in ln:
+                break
+        scan_base = 'if ({se}) begin\n\t\t{si}\n\tend'
+        if 'else' in base_split[i - 1]:
+            base_split[i - 1] = base_split[i - 1].replace('else', f'else {scan_base} else')
+        else:
+            if 'if' in base_split[i - 1]:
+                base_split[i - 1] = f'\t{scan_base} else ' + base_split[i - 1][1:]
+            else:
+                base_split[i] = f'\t{scan_base} else begin' + '\n\t\t{set_out}\n\tend'
+        return '\n'.join(base_split)
+
+    @property
+    def verilog_context_map(self) -> SafeFormatDict:
+        se = LibUtils.p2ws2v(self.se_port)
+        si = LibUtils.p2ws2v(self.si_port)
+        so = LibUtils.p2ws2v(self.so_port)
+        si_str = f'{LibUtils.p2ws2v(self.output_port)}\t<=\t{si};'
+        so_str = f'{so}\t<=\t{LibUtils.p2ws2v(self.output_port)};'
+
+        context_map = super().verilog_context_map
+        context_map.update(se=se, si=si_str, so=so_str)
+        return context_map
+
+    def set_se(self, new_signal: SignalOrLogicLevel) -> None:
+        """
+        Sets the scan enable signal.
+
+        Args:
+            new_signal (Signal): The new scan enable signal value.
+        """
+        self.set('SE', new_signal)
+
+    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+        super().model_post_init(__context)
+        self.connect('SE', None, direction=Direction.IN)
+        self.connect('SI', None, direction=Direction.IN, width=self.width)
+        self.connect('SO', None, direction=Direction.OUT, width=self.width)
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        if self.se_signal is Signal.HIGH:
+            return {idx: self.si_port.signal_array[idx]}
+        return super()._calc_output(idx)
+
+    def _set_output(self, new_signals: Dict[int, Signal]) -> None:
+        for idx, sig in new_signals.items():
+            self.so_port.set_signal(signal=sig, index=idx)
+        return super()._set_output(new_signals)

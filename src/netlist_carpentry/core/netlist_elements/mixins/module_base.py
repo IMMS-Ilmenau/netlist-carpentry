@@ -1,4 +1,6 @@
-from typing import Dict, Union, overload
+"""Base structure of the `Module` class."""
+
+from typing import TYPE_CHECKING, Dict, Union, overload
 
 from netlist_carpentry.core.netlist_elements.element_path import (
     T_PATH_TYPES,
@@ -16,7 +18,11 @@ from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.wire import Wire
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
 
-T_MODULE_PARTS = Union[Instance, Port, PortSegment, Wire, WireSegment]
+if TYPE_CHECKING:
+    from netlist_carpentry import Module
+
+
+T_MODULE_PARTS = Union[Instance, Port['Module'], Port[Instance], PortSegment, Wire, WireSegment]
 
 
 class ModuleBaseMixin(NetlistElement):
@@ -25,7 +31,7 @@ class ModuleBaseMixin(NetlistElement):
         raise NotImplementedError(f'Not implemented for mixin {self.__class__.__name__}. Any class using this mixin must implement this property.')
 
     @property
-    def ports(self) -> Dict[str, Port]:
+    def ports(self) -> Dict[str, Port['Module']]:
         raise NotImplementedError(f'Not implemented for mixin {self.__class__.__name__}. Any class using this mixin must implement this property.')
 
     @property
@@ -35,7 +41,7 @@ class ModuleBaseMixin(NetlistElement):
     @overload
     def get_from_path(self, element_path: InstancePath) -> Instance: ...
     @overload
-    def get_from_path(self, element_path: PortPath) -> Port: ...
+    def get_from_path(self, element_path: PortPath) -> Union[Port['Module'], Port['Instance']]: ...
     @overload
     def get_from_path(self, element_path: PortSegmentPath) -> PortSegment: ...
     @overload

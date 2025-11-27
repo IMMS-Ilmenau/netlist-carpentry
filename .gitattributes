@@ -1,3 +1,13 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 *.lock -text
+
+# Do not include these files into the repository archive
+openmsp430 export-ignore
+tests/imms_internal export-ignore
+.copier-answers.yml export-ignore
+.gitattributes export-ignore
+.gitlab-ci.yml export-ignore
+.gitmodules export-ignore
+github_cleaning.sh export-ignore
+mkdocs-gitlab.yml export-ignore

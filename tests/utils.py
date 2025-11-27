@@ -7,17 +7,11 @@ from typing import Callable, Union
 
 from typing_extensions import TypeAlias
 
-from netlist_carpentry import CFG
-from netlist_carpentry.core.circuit import Circuit
+from netlist_carpentry import CFG, Circuit, Direction, Instance, Module, Port, Wire, read
+from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.netlist_elements.element_path import WirePath, WireSegmentPath
-from netlist_carpentry.core.netlist_elements.instance import Instance
-from netlist_carpentry.core.netlist_elements.module import Module
-from netlist_carpentry.core.netlist_elements.port import Port
-from netlist_carpentry.core.netlist_elements.wire import Wire
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
-from netlist_carpentry.core.port_direction import PortDirection
-from netlist_carpentry.core.signal import Signal
-from netlist_carpentry.utils.gate_lib import NotGate, XorGate
+from netlist_carpentry.utils.gate_lib import ADFFE, NotGate, XorGate
 
 StrOrBytesPath: TypeAlias = Union[str, bytes, os.PathLike[str], os.PathLike[bytes]]
 
@@ -49,17 +43,19 @@ def profile(fnc: Callable[..., Union[None, object]], path: str, **kwargs: object
     return val
 
 
-def standard_instance_with_ports() -> Instance:
+def standard_instance_with_ports(init_module: bool = True) -> Instance:
     m = empty_module()
-    m.add_wire(wire_4b())
+    m.add_wire(wire_4b(init_module=False))
     inst = Instance(raw_path='test_module1.test_instance2', instance_type='test_instance_type', is_primitive=True, module=m)
-    inst.connect('PortA', WireSegmentPath(raw='test_module1.wire4b.1'), direction=PortDirection.IN, index=0)
-    inst.connect('PortB', WireSegmentPath(raw='test_module1.wire4b.2'), direction=PortDirection.IN, index=0)
+    inst.connect('PortA', WireSegmentPath(raw='test_module1.wire4b.1'), direction=Direction.IN, index=0)
+    inst.connect('PortB', WireSegmentPath(raw='test_module1.wire4b.2'), direction=Direction.IN, index=0)
     inst.connect('PortB', WireSegmentPath(raw='test_module1.wire4b.3'), index=1)
     inst.connect('PortB', WireSegmentPath(raw='test_module1.wire4b.2'), index=2)
-    inst.connect('PortB', WireSegmentPath(raw='test_module1.wire4b.1'), direction=PortDirection.OUT, index=3)
-    inst.connect('PortC', WireSegmentPath(raw='test_module1.wire4b.4'), direction=PortDirection.OUT, index=0)
+    inst.connect('PortB', WireSegmentPath(raw='test_module1.wire4b.1'), direction=Direction.OUT, index=3)
+    inst.connect('PortC', WireSegmentPath(raw='test_module1.wire4b.4'), direction=Direction.OUT, index=0)
     m.add_instance(inst)
+    if not init_module:
+        inst.module = None
     return inst
 
 
@@ -68,31 +64,36 @@ def locked_instance() -> Instance:
     return inst.change_mutability(True)
 
 
-def standard_port_in() -> Port[Instance]:
+def standard_port_in(init_module: bool = True) -> Port[Instance]:
     inst = Instance(raw_path='test_module1.some_test_inst', instance_type='some_type')
-    p = Port(raw_path='test_module1.test_port1', direction=PortDirection.IN, module_or_instance=inst)
+    p = Port(raw_path='test_module1.test_port1', direction=Direction.IN, module_or_instance=inst)
     p.create_port_segment(0)
+    if not init_module:
+        p.module_or_instance = None
     return p
 
 
-def standard_port_out() -> Port[Module]:
-    module = Module(raw_path='some_other_module')
-    p = Port(raw_path='test_module1.test_port2', direction=PortDirection.OUT, msb_first=False, module_or_instance=module)
-    p.create_port_segment(0).set_ws_path('test_module1.wire1.0')
-    p.create_port_segment(1).set_ws_path('test_module1.wire1.0')
+def standard_port_out(init_module: bool = True) -> Port[Module]:
+    module = Module(raw_path='test_module1')
+    p = module.create_port('test_port2', direction=Direction.OUT, width=2)
+    p.msb_first = False
+    p[0].set_ws_path('test_module1.wire1.0')
+    p[1].set_ws_path('test_module1.wire1.0')
+    if not init_module:
+        p.module_or_instance = None
     return p
 
 
 def locked_port() -> Port[Module]:
-    p = Port(raw_path='', direction=PortDirection.IN_OUT, module_or_instance=Module(raw_path=''))
+    p = Port(raw_path='', direction=Direction.IN_OUT, module_or_instance=Module(raw_path=''))
     p.create_port_segment(0)
     return p.change_mutability(True)
 
 
 def standard_wire() -> Wire:
-    p1 = Port(raw_path='test_module1.c.p1', direction=PortDirection.OUT, module_or_instance=Instance(raw_path='test_module1.c', instance_type='foo'))
-    p2 = Port(raw_path='test_module1.d.p2', direction=PortDirection.IN, module_or_instance=Instance(raw_path='test_module1.d', instance_type='foo'))
-    p3 = Port(raw_path='test_module1.p3', direction=PortDirection.OUT, module_or_instance=Module(raw_path='test_module1'))
+    p1 = Port(raw_path='test_module1.c.p1', direction=Direction.OUT, module_or_instance=Instance(raw_path='test_module1.c', instance_type='foo'))
+    p2 = Port(raw_path='test_module1.d.p2', direction=Direction.IN, module_or_instance=Instance(raw_path='test_module1.d', instance_type='foo'))
+    p3 = Port(raw_path='test_module1.p3', direction=Direction.OUT, module_or_instance=Module(raw_path='test_module1'))
     ps1 = p1.create_port_segment(0).set_ws_path('test_module1.wire1')
     ps2 = p2.create_port_segment(0).set_ws_path('test_module1.wire1')
     ps3 = p3.create_port_segment(0).set_ws_path('test_module1.wire1')
@@ -103,8 +104,8 @@ def standard_wire() -> Wire:
 
 
 def wire_1b() -> Wire:
-    p1 = Port(raw_path='test_module1.a.p1', direction=PortDirection.OUT, module_or_instance=Instance(raw_path='test_module1.a', instance_type='foo'))
-    p2 = Port(raw_path='test_module1.b.p2', direction=PortDirection.IN, module_or_instance=Instance(raw_path='test_module1.b', instance_type='foo'))
+    p1 = Port(raw_path='test_module1.a.p1', direction=Direction.OUT, module_or_instance=Instance(raw_path='test_module1.a', instance_type='foo'))
+    p2 = Port(raw_path='test_module1.b.p2', direction=Direction.IN, module_or_instance=Instance(raw_path='test_module1.b', instance_type='foo'))
     p1.create_port_segment(0)
     p2.create_port_segment(0)
     w = Wire(raw_path='test_module1.wire1b', module=None)
@@ -112,19 +113,27 @@ def wire_1b() -> Wire:
     return w
 
 
-def wire_4b() -> Wire:
-    p1 = Port(raw_path='test_module1.a.p1', direction=PortDirection.OUT, module_or_instance=Instance(raw_path='test_module1.a', instance_type='foo'))
-    p2 = Port(raw_path='test_module1.b.p2', direction=PortDirection.IN, module_or_instance=Instance(raw_path='test_module1.b', instance_type='foo'))
-    p3 = Port(raw_path='test_module1.p3', direction=PortDirection.OUT, module_or_instance=Module(raw_path='test_module1'))
+def wire_4b(init_module: bool = True) -> Wire:
+    m = empty_module()
+    foo = Module(raw_path='foo')
+    a = m.create_instance(foo, 'a')
+    b = m.create_instance(foo, 'b')
+    p1 = Port(raw_path='test_module1.a.p1', direction=Direction.OUT, module_or_instance=a)
+    p2 = Port(raw_path='test_module1.b.p2', direction=Direction.IN, module_or_instance=b)
+    p3 = m.create_port('p3', direction=Direction.OUT)
     p1.create_port_segment(0)
     p2.create_port_segment(0)
-    p3.create_port_segment(0)
+    a.ports[p1.name] = p1
+    b.ports[p2.name] = p2
     ps = [p1[0], p2[0], p3[0]]
-    w = Wire(raw_path='test_module1.wire4b', msb_first=False, module=None)
-    w.create_wire_segment(1).add_port_segments(ps)
-    w.create_wire_segment(2).add_port_segments(ps)
-    w.create_wire_segment(3).add_port_segments(ps)
-    w.create_wire_segment(4).add_port_segments(ps)
+    w = m.create_wire('wire4b', width=4, offset=1)
+    w.msb_first = False
+    w[1].add_port_segments(ps)
+    w[2].add_port_segments(ps)
+    w[3].add_port_segments(ps)
+    w[4].add_port_segments(ps)
+    if not init_module:
+        w.module = None
     return w
 
 
@@ -135,7 +144,7 @@ def locked_wire() -> Wire:
 
 
 def locked_wire_segment() -> WireSegment:
-    p = Port(raw_path='p1', direction=PortDirection.IN_OUT, module_or_instance=None)
+    p = Port(raw_path='p1', direction=Direction.IN_OUT, module_or_instance=None)
     p.create_port_segment(0)
     ports = [p[0]]
     w = WireSegment(raw_path='locked_seg.0', wire=None)
@@ -150,13 +159,13 @@ def empty_module() -> Module:
 def locked_module() -> Module:
     m = Module(raw_path='locked_module')
     m.add_instance(Instance(raw_path='test_inst', instance_type='test_type'))
-    m.create_port('test_port', direction=PortDirection.IN_OUT)
+    m.create_port('test_port', direction=Direction.IN_OUT)
     m.create_wire('test_wire')
     return m.change_mutability(True)
 
 
 def connected_module() -> Module:
-    from netlist_carpentry.utils.gate_lib import DFF, AndGate, NotGate, OrGate, XorGate
+    from netlist_carpentry.utils.gate_lib import AndGate, NotGate, OrGate, XorGate
 
     m = empty_module()
 
@@ -173,20 +182,20 @@ def connected_module() -> Module:
     m.create_wire('out')
     m.create_wire('out_ff')
 
-    m.connect(WirePath(raw=f'{m.name}.in1'), m.create_port('in1', PortDirection.IN))
-    m.connect(WirePath(raw=f'{m.name}.in2'), m.create_port('in2', PortDirection.IN))
-    m.connect(WirePath(raw=f'{m.name}.in3'), m.create_port('in3', PortDirection.IN))
-    m.connect(WirePath(raw=f'{m.name}.in4'), m.create_port('in4', PortDirection.IN))
-    m.connect(WirePath(raw=f'{m.name}.clk'), m.create_port('clk', PortDirection.IN))
-    m.connect(WirePath(raw=f'{m.name}.rst'), m.create_port('rst', PortDirection.IN))
-    m.connect(WirePath(raw=f'{m.name}.out'), m.create_port('out', PortDirection.OUT))
-    m.connect(WirePath(raw=f'{m.name}.out_ff'), m.create_port('out_ff', PortDirection.OUT))
+    m.connect(WirePath(raw=f'{m.name}.in1'), m.create_port('in1', Direction.IN))
+    m.connect(WirePath(raw=f'{m.name}.in2'), m.create_port('in2', Direction.IN))
+    m.connect(WirePath(raw=f'{m.name}.in3'), m.create_port('in3', Direction.IN))
+    m.connect(WirePath(raw=f'{m.name}.in4'), m.create_port('in4', Direction.IN))
+    m.connect(WirePath(raw=f'{m.name}.clk'), m.create_port('clk', Direction.IN))
+    m.connect(WirePath(raw=f'{m.name}.rst'), m.create_port('rst', Direction.IN))
+    m.connect(WirePath(raw=f'{m.name}.out'), m.create_port('out', Direction.OUT))
+    m.connect(WirePath(raw=f'{m.name}.out_ff'), m.create_port('out_ff', Direction.OUT))
 
-    m.add_instance(AndGate(raw_path=f'{m.name}.and_inst'))
-    m.add_instance(OrGate(raw_path=f'{m.name}.or_inst'))
-    m.add_instance(XorGate(raw_path=f'{m.name}.xor_inst'))
-    m.add_instance(NotGate(raw_path=f'{m.name}.not_inst'))
-    m.add_instance(DFF(raw_path=f'{m.name}.dff_inst', rst_polarity=Signal.LOW))
+    m.add_instance(AndGate(raw_path=f'{m.name}.and_inst', module=m))
+    m.add_instance(OrGate(raw_path=f'{m.name}.or_inst', module=m))
+    m.add_instance(XorGate(raw_path=f'{m.name}.xor_inst', module=m))
+    m.add_instance(NotGate(raw_path=f'{m.name}.not_inst', module=m))
+    m.add_instance(ADFFE(raw_path=f'{m.name}.dff_inst', parameters={'ARST_POLARITY': Signal.LOW}, module=m))
 
     m.connect(m.wires['in1'][0], m.instances['and_inst'].ports['A'][0])
     m.connect(m.wires['in2'][0], m.instances['and_inst'].ports['B'][0])
@@ -230,6 +239,18 @@ def modified_module() -> Module:
     return module
 
 
+def dff_module() -> Module:
+    from netlist_carpentry.utils.gate_lib_factory import dff
+
+    m = empty_module()
+    d = m.create_port('D', Direction.IN, width=4)
+    clk = m.create_port('CLK', Direction.IN)
+    q = m.create_port('Q', Direction.OUT, width=4)
+
+    dff(m, 'dff_inst', D=d, CLK=clk, Q=q)
+    return m
+
+
 def simple_circuit() -> Circuit:
     c = Circuit(name='test_circuit')
     m1 = Module(raw_path='m1')
@@ -237,14 +258,14 @@ def simple_circuit() -> Circuit:
     m1.create_wire('w2')
     m1.create_wire('w3')
 
-    m1.connect(WirePath(raw='m1.w1'), m1.create_port('A', direction=PortDirection.IN))
-    m1.connect(WirePath(raw='m1.w2'), m1.create_port('B', direction=PortDirection.IN))
-    m1.connect(WirePath(raw='m1.w3'), m1.create_port('Y', direction=PortDirection.OUT))
+    m1.connect(WirePath(raw='m1.w1'), m1.create_port('A', direction=Direction.IN))
+    m1.connect(WirePath(raw='m1.w2'), m1.create_port('B', direction=Direction.IN))
+    m1.connect(WirePath(raw='m1.w3'), m1.create_port('Y', direction=Direction.OUT))
 
     i1 = Instance(raw_path='m1.and_inst', instance_type='and', is_primitive=True)
-    i1.connect('A', WireSegmentPath(raw='m1.w1.ws1'), direction=PortDirection.IN)
-    i1.connect('B', WireSegmentPath(raw='m1.w2.ws1'), direction=PortDirection.IN)
-    i1.connect('Y', WireSegmentPath(raw='m1.w3.ws1'), direction=PortDirection.IN)
+    i1.connect('A', WireSegmentPath(raw='m1.w1.ws1'), direction=Direction.IN)
+    i1.connect('B', WireSegmentPath(raw='m1.w2.ws1'), direction=Direction.IN)
+    i1.connect('Y', WireSegmentPath(raw='m1.w3.ws1'), direction=Direction.IN)
 
     c.add_module(m1)
     return c
@@ -267,14 +288,14 @@ def connected_circuit() -> Circuit:
     cm_wrapper.create_wire('out')
     cm_wrapper.create_wire('out_ff')
 
-    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.in1'), cm_wrapper.create_port('in1', PortDirection.IN))
-    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.in2'), cm_wrapper.create_port('in2', PortDirection.IN))
-    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.in3'), cm_wrapper.create_port('in3', PortDirection.IN))
-    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.in4'), cm_wrapper.create_port('in4', PortDirection.IN))
-    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.clk'), cm_wrapper.create_port('clk', PortDirection.IN))
-    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.rst'), cm_wrapper.create_port('rst', PortDirection.IN))
-    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.out'), cm_wrapper.create_port('out', PortDirection.OUT))
-    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.out_ff'), cm_wrapper.create_port('out_ff', PortDirection.OUT))
+    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.in1'), cm_wrapper.create_port('in1', Direction.IN))
+    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.in2'), cm_wrapper.create_port('in2', Direction.IN))
+    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.in3'), cm_wrapper.create_port('in3', Direction.IN))
+    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.in4'), cm_wrapper.create_port('in4', Direction.IN))
+    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.clk'), cm_wrapper.create_port('clk', Direction.IN))
+    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.rst'), cm_wrapper.create_port('rst', Direction.IN))
+    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.out'), cm_wrapper.create_port('out', Direction.OUT))
+    cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.out_ff'), cm_wrapper.create_port('out_ff', Direction.OUT))
 
     cm_wrapper.create_instance(cm, 'I_cm')
     i_cm = cm_wrapper.instances['I_cm']
@@ -290,3 +311,7 @@ def connected_circuit() -> Circuit:
     c.add_module(cm_wrapper)
     c.set_top(cm_wrapper)
     return c
+
+
+def dff_circuit() -> Circuit:
+    return read('tests/files/dff_circuit.v', top='Top', circuit_name='dff_circuit')

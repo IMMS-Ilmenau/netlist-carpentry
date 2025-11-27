@@ -5,15 +5,15 @@ import networkx as nx
 import pytest
 import utils
 
-from netlist_carpentry import CFG, EMPTY_GRAPH, EMPTY_PATTERN
-from netlist_carpentry.api.read.gen_nl import generate_json_netlist
-from netlist_carpentry.api.read.read_utils import read
-from netlist_carpentry.api.read.yosys_netlist import YosysNetlistReader as YNR
+from netlist_carpentry import EMPTY_GRAPH, EMPTY_PATTERN
 from netlist_carpentry.core.graph.pattern import Pattern
 from netlist_carpentry.core.graph.pattern_generator import PatternGenerator
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.port import Port
+from netlist_carpentry.io.read.gen_nl import generate_json_netlist
+from netlist_carpentry.io.read.read_utils import read
+from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
 from netlist_carpentry.utils.gate_lib import NandGate, XnorGate
 
 
@@ -380,8 +380,8 @@ def test_build_pattern_verilog() -> None:
 
 
 def test_build_pattern_yosys() -> None:
-    generate_json_netlist('tests/files/or_pattern_find.v', 'or_pattern_find.json')
-    generate_json_netlist('tests/files/or_pattern_replace.v', 'or_pattern_replace.json')
+    generate_json_netlist('tests/files/or_pattern_find.v', 'tests/files/or_pattern_find.json')
+    generate_json_netlist('tests/files/or_pattern_replace.v', 'tests/files/or_pattern_replace.json')
     find_pattern_file = 'tests/files/or_pattern_find.json'
     replace_pattern_file = 'tests/files/or_pattern_replace.json'
 
@@ -403,7 +403,7 @@ def test_build_pattern_yosys() -> None:
 
 
 def test_graph_from_file_fail() -> None:
-    generate_json_netlist('tests/files/dec.v', 'dec.json')
+    generate_json_netlist('tests/files/dec.v', 'tests/files/dec.json')
     with pytest.raises(ValueError):
         # Contains multiple modules
         PatternGenerator._module_from_json('tests/files/dec.json', remove_ports=True)
@@ -436,19 +436,24 @@ def test_add_node_metadata() -> None:
 
 
 def test_get_mapping() -> None:
-    CFG.simplify_escaped_identifiers = True
     find_pattern_file = 'tests/files/or_pattern_find.json'
     replace_pattern_file = 'tests/files/or_pattern_replace.json'
 
     target_mapping = {
-        ('§or§or_pattern_replace§v§30§1', 'A', -1): ('§or§or_pattern_find§v§34§1', 'A', -1),
-        ('§or§or_pattern_replace§v§30§1', 'B', -1): ('§or§or_pattern_find§v§34§1', 'B', -1),
-        ('§or§or_pattern_replace§v§31§2', 'A', -1): ('§or§or_pattern_find§v§36§2', 'B', -1),
-        ('§or§or_pattern_replace§v§31§2', 'B', -1): ('§or§or_pattern_find§v§38§3', 'B', -1),
-        ('§or§or_pattern_replace§v§32§3', 'Y', -1): ('§or§or_pattern_find§v§38§3', 'Y', -1),
+        ('or_pattern_replace§v§30§1', 'A', -1): ('or_pattern_find§v§34§1', 'A', -1),
+        ('or_pattern_replace§v§30§1', 'B', -1): ('or_pattern_find§v§34§1', 'B', -1),
+        ('or_pattern_replace§v§31§2', 'A', -1): ('or_pattern_find§v§36§2', 'B', -1),
+        ('or_pattern_replace§v§31§2', 'B', -1): ('or_pattern_find§v§38§3', 'B', -1),
+        ('or_pattern_replace§v§32§3', 'Y', -1): ('or_pattern_find§v§38§3', 'Y', -1),
     }
     find_module = YNR(find_pattern_file).transform_to_circuit().first
     replace_module = YNR(replace_pattern_file).transform_to_circuit().first
+    for inst in find_module.instances.values():
+        idx = inst.name.find('or_pattern_find§v§')
+        inst.set_name(inst.name[idx:])
+    for inst in replace_module.instances.values():
+        idx = inst.name.find('or_pattern_replace§v§')
+        inst.set_name(inst.name[idx:])
     found_mapping = Pattern.get_mapping(find_module, replace_module)
     pprint(found_mapping)
     for map_k, map_v in target_mapping.items():
@@ -457,6 +462,9 @@ def test_get_mapping() -> None:
 
 
 def test_get_mapping_not_matching() -> None:
+    generate_json_netlist('tests/files/or_pattern_find.v', 'tests/files/or_pattern_find.json')
+    generate_json_netlist('tests/files/simpleAdder.v', 'tests/files/simpleAdder.json')
+
     find_pattern_file = 'tests/files/or_pattern_find.json'
     not_matching_file = 'tests/files/simpleAdder.json'
 
@@ -467,7 +475,6 @@ def test_get_mapping_not_matching() -> None:
 
 
 def test_build_pattern_edge_cases() -> None:
-    CFG.simplify_escaped_identifiers = True
     multi_module_path = 'tests/files/adderWrapper.json'
     with pytest.raises(ValueError):
         PatternGenerator.build_from_yosys_netlists(multi_module_path)

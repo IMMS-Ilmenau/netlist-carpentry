@@ -1,29 +1,30 @@
+"""Module for handling of port segments (i.e. port slices) inside a circuit module."""
+
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, Optional, overload
+from typing import TYPE_CHECKING, Dict, List, Optional, Union, overload
 
 from pydantic import BaseModel, ConfigDict
 from typing_extensions import Self
 
-from netlist_carpentry import CFG, LOG
+from netlist_carpentry import CFG, LOG, Direction, Signal
+from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import (
     AlreadyConnectedError,
     DetachedSegmentError,
-    InvalidPortDirectionError,
+    InvalidDirectionError,
     InvalidSignalError,
     ObjectLockedError,
     ParentNotFoundError,
 )
 from netlist_carpentry.core.netlist_elements.element_path import PortSegmentPath, WireSegmentPath
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 from netlist_carpentry.core.netlist_elements.segment_base import _Segment
-from netlist_carpentry.core.port_direction import PortDirection
 from netlist_carpentry.core.protocols.signals import LogicLevel, SignalOrLogicLevel
-from netlist_carpentry.core.signal import Signal
 
 if TYPE_CHECKING:
-    from netlist_carpentry.core.netlist_elements.port import Port
+    from netlist_carpentry import Instance, Module, Port
+    from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
 
 
 class PortSegment(_Segment, BaseModel):
@@ -92,7 +93,7 @@ class PortSegment(_Segment, BaseModel):
         return EType.PORT_SEGMENT
 
     @property
-    def parent(self) -> Port[NetlistElement]:
+    def parent(self) -> Union['Port[Module]', 'Port[Instance]']:
         from netlist_carpentry.core.netlist_elements.port import Port
 
         if isinstance(self.port, Port):
@@ -117,6 +118,11 @@ class PortSegment(_Segment, BaseModel):
         if self.raw_ws_path == '':
             return WIRE_SEGMENT_X.path
         return WireSegmentPath(raw=self.raw_ws_path)
+
+    @property
+    def ws(self) -> 'WireSegment':
+        """Returns the wire segment connected to this port segment."""
+        return self.parent.module.get_from_path(self.ws_path)
 
     @property
     def wire_name(self) -> str:
@@ -301,7 +307,7 @@ class PortSegment(_Segment, BaseModel):
         return (self.is_instance_port and self.is_input) or (self.is_module_port and self.is_output)
 
     @property
-    def direction(self) -> PortDirection:
+    def direction(self) -> Direction:
         """Returns the direction of the port."""
         return self.parent.direction
 
@@ -322,7 +328,7 @@ class PortSegment(_Segment, BaseModel):
         return ''
 
     @property
-    def parent_parent_name(self) -> str:
+    def grandparent_name(self) -> str:
         """
         Retrieves the name of the instance or module that contains this PortSegment.
 
@@ -369,17 +375,17 @@ class PortSegment(_Segment, BaseModel):
         Raises:
             AlreadyConnectedError: If this segment is belongs to a load port and is already connected to a wire,
                 from which it receives its value.
-            InvalidPortDirectionError: If this port segment belongs to an instance output port,
+            InvalidDirectionError: If this port segment belongs to an instance output port,
                 which is driven by the instance inputs and the instance's internal logic.
             InvalidSignalError: If an invalid value is provided.
         """
-        signal_val = str(signal.value).upper() if isinstance(signal, Signal) else signal
+        signal_val = str(signal.value).upper() if isinstance(signal, Signal) else str(signal)
         if not self.is_tied:
             raise AlreadyConnectedError(
                 f'Unable to tie signal on port segment {self.raw_path} to value {signal_val}: Disconnect it first from its current wire!'
             )
         if self.is_instance_port and self.is_output:
-            raise InvalidPortDirectionError(
+            raise InvalidDirectionError(
                 f'Cannot tie constant signal on instance output port segment {self.raw_path}, since it is driven by the instance it belongs to!'
             )
         if signal_val not in ['0', '1', 'Z', 'X']:
@@ -422,7 +428,16 @@ class PortSegment(_Segment, BaseModel):
             LOG.warn(f'Cannot set signal on port segment {self.raw_path}: Port Segment is tied to {self.signal}!')
         elif signal != prev_signal:
             self._signal = signal
-            self.notify_listeners()
+
+    def driver(self) -> Optional[PortSegment]:
+        if self.is_driver:
+            raise InvalidDirectionError(
+                f'Cannot get driving port of port segment {self.raw_path}: This port segment is a driver and thus does not have a driver!'
+            )
+        return self.parent.module.wires[self.ws_path.parent.name].driver()[self.index]
+
+    def loads(self) -> List[PortSegment]:
+        return self.parent.module.wires[self.ws_path.parent.name].loads()[self.index]
 
     def change_connection(self, new_wire_segment_path: WireSegmentPath = WireSegmentPath(raw='')) -> None:
         """
@@ -439,9 +454,6 @@ class PortSegment(_Segment, BaseModel):
         if self.locked:
             raise ObjectLockedError(f'Unable to connect port segment {self.raw_path} to {new_wire_segment_path.raw}: Port segment is locked!')
         self.set_ws_path(new_wire_segment_path.raw)
-
-    def __hash__(self) -> int:
-        return hash((self.raw_path, self.raw_ws_path))
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__} "{self.name}" with path {self.path.raw}'

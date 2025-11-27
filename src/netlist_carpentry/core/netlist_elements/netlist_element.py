@@ -1,16 +1,21 @@
+"""Base class for all netlist (or circuit) elements."""
+
 from __future__ import annotations
 
-from typing import Callable, Dict, Literal, Set, Union
+from typing import TYPE_CHECKING, Callable, Dict, Literal
 
 from pydantic import BaseModel
 from typing_extensions import Self
 
 from netlist_carpentry import LOG
-from netlist_carpentry.core.exceptions import ObjectNotFoundError
+from netlist_carpentry.core.enums.element_type import EType
+from netlist_carpentry.core.exceptions import VerilogSyntaxError
 from netlist_carpentry.core.netlist_elements.element_path import ElementPath
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT, NESTED_DICT, MetadataMixin
-from netlist_carpentry.core.protocols.netlist_elements import NetlistElementLike
+from netlist_carpentry.utils.verilog import VERILOG_KEYWORDS
+
+if TYPE_CHECKING:
+    from netlist_carpentry.core.circuit import Circuit
 
 
 class NetlistElement(BaseModel):
@@ -25,10 +30,9 @@ class NetlistElement(BaseModel):
     """The hierarchical path of the element in the design as a plain string."""
     _locked: bool = False
     """Whether the element is structurally unchangeable (e.g. if set to True, connections cannot be changed). Defaults to False."""
-    _listeners: Set[NetlistElementLike] = set()
 
-    parameters: Dict[str, Union[str, int]] = {}
-    """Attributes of a netlist element. Can be user-defined, or e. g. by Yosys (such as `width` for some instances)."""
+    parameters: Dict[str, object] = {}
+    """Attributes of a netlist element. Can be user-defined, or e. g. by Yosys (such as `WIDTH` for some instances)."""
 
     metadata: MetadataMixin = MetadataMixin()
     """
@@ -94,6 +98,34 @@ class NetlistElement(BaseModel):
         raise NotImplementedError(f'Not implemented for {self.type.name} objects by default! The problematic {self.type.value} is {self.raw_path}')
 
     @property
+    def circuit(self) -> 'Circuit':
+        """The circuit object to which this netlist element belongs to.
+
+        - For a module, returns the circuit to which the module belongs.
+        - For any other netlist element, recursively returns the circuit of the parent,
+        which ultimately leads to a module, to which the netlist element belongs.
+
+        Raises:
+            ParentNotFoundError: If a parent cannot be resolved somewhere in the hierarchical chain.
+            ObjectNotFoundError: If for a module no circuit is set.
+        """
+        return self.parent.circuit
+
+    @property
+    def has_circuit(self) -> bool:
+        """
+        Whether this netlist element has a defined circuit it belongs to.
+
+        Tries to access `self.circuit` and returns whether the call was successful.
+        Can be used instead of a try-except clause around the call to `NetlistElement.circuit`.
+        """
+        try:
+            self.circuit
+            return True
+        except Exception:
+            return False
+
+    @property
     def locked(self) -> bool:
         """
         True if this NetlistElement instance is locked (i.e. it is currently structurally unchangeable), False if it is mutable.
@@ -135,6 +167,8 @@ class NetlistElement(BaseModel):
         Args:
             new_name (str): The new name to set to the object.
         """
+        if new_name in VERILOG_KEYWORDS:
+            raise VerilogSyntaxError(f'Cannot set name {new_name}: Is a verilog keyword!')
         old_name = self.name
         if new_name != old_name:
             LOG.info(f'Changing instance name from object at {self.raw_path} from {self.name} to {new_name}!')
@@ -175,70 +209,6 @@ class NetlistElement(BaseModel):
             LOG.debug(f'Changing mutability of {self.type.value} {self.name} to {is_now_locked}')
         self._locked = is_now_locked
         return self
-
-    def add_listener(self, element: NetlistElementLike) -> None:
-        """
-        Add a listener to this element.
-
-        Listeners are notified whenever the element changes (e.g. when a connection is added or removed, or a signal changes).
-        The listener (another netlist element) is expected to have a method "on_notification" that takes one argument,
-        which is the element sending the notification.
-        The method should return True if the listener did something as a result of the notification, False otherwise.
-
-        Args:
-            element (NetlistElement): The element to add as a listener.
-        """
-        if element not in self._listeners:
-            self._listeners.add(element)
-        else:
-            LOG.info(f'Did not add listener {element.raw_path} to {self.raw_path}: Listener already present!')
-
-    def remove_listener(self, element: NetlistElementLike) -> None:
-        """
-        Remove a listener from this element.
-
-        Listeners are notified whenever the element changes (e.g. when a connection is added or removed, or a signal changes).
-        The listener (another netlist element) is expected to have a method "on_notification" that takes one argument,
-        which is the element sending the notification.
-        The method should return True if the listener did something as a result of the notification, False otherwise.
-
-        Args:
-            element (NetlistElement): The element to remove as a listener.
-
-        Returns:
-            bool: Whether the element was successfully removed as a listener.
-        """
-        if element in self._listeners:
-            return self._listeners.remove(element)
-        raise ObjectNotFoundError(f'Unable to remove listener {element.raw_path}: No such listener in {self.raw_path}!')
-
-    def notify_listeners(self) -> bool:
-        """
-        Notify all listeners that this element has changed.
-
-        Listeners are notified whenever the element changes (e.g. when a connection is added or removed, or a signal changes).
-        The listener (another netlist element) is expected to have a method "on_notification" that takes one argument,
-        which is the element sending the notification.
-        The method should return True if the listener did something as a result of the notification, False otherwise.
-
-        Returns:
-            bool: Whether any listeners were notified.
-        """
-        for e in self._listeners:
-            e.on_notification(self)
-        return bool(self._listeners)
-
-    def on_notification(self, element: NetlistElementLike) -> bool:
-        """Called whenever an object changes, to which this object listens to.
-
-        Args:
-            element (NetlistElement): The object sending a notification to this object to do something.
-                In general, "element" is another object requiring this object to update itself.
-
-        Returns:
-            bool: Whether anything was done subsequently to the notification.
-        """
-        return False
 
     def evaluate(self) -> None:
         """
@@ -300,9 +270,6 @@ class NetlistElement(BaseModel):
         if sort_by == 'category':
             return {cat: {self.raw_path: val} for cat, val in self.metadata.items() if condition(cat, val)}
         return {self.raw_path: {cat: val for cat, val in self.metadata.items() if condition(cat, val)}}  # sort_by == 'path' or fallback
-
-    def __hash__(self) -> int:
-        return hash((self.name, self.type, self.raw_path))
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__}: {self.type.name} "{self.name}" with path {self.path.raw}'

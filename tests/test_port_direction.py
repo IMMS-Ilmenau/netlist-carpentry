@@ -2,42 +2,42 @@ import os
 
 import pytest
 
-from netlist_carpentry.core.port_direction import PortDirection
+from netlist_carpentry.core.enums.direction import Direction
 
 
 def test_is_input():
-    assert PortDirection.IN.is_input
-    assert not PortDirection.OUT.is_input
-    assert PortDirection.IN_OUT.is_input
-    assert not PortDirection.UNKNOWN.is_input
+    assert Direction.IN.is_input
+    assert not Direction.OUT.is_input
+    assert Direction.IN_OUT.is_input
+    assert not Direction.UNKNOWN.is_input
 
 
 def test_is_output():
-    assert not PortDirection.IN.is_output
-    assert PortDirection.OUT.is_output
-    assert PortDirection.IN_OUT.is_output
-    assert not PortDirection.UNKNOWN.is_output
+    assert not Direction.IN.is_output
+    assert Direction.OUT.is_output
+    assert Direction.IN_OUT.is_output
+    assert not Direction.UNKNOWN.is_output
 
 
 def test_is_defined():
-    assert PortDirection.IN.is_defined
-    assert PortDirection.OUT.is_defined
-    assert PortDirection.IN_OUT.is_defined
-    assert not PortDirection.UNKNOWN.is_defined
+    assert Direction.IN.is_defined
+    assert Direction.OUT.is_defined
+    assert Direction.IN_OUT.is_defined
+    assert not Direction.UNKNOWN.is_defined
 
 
 def test_str():
-    assert str(PortDirection.IN) == 'input'
-    assert str(PortDirection.OUT) == 'output'
-    assert str(PortDirection.IN_OUT) == 'inout'
-    assert str(PortDirection.UNKNOWN) == 'unknown'
+    assert str(Direction.IN) == 'input'
+    assert str(Direction.OUT) == 'output'
+    assert str(Direction.IN_OUT) == 'inout'
+    assert str(Direction.UNKNOWN) == 'unknown'
 
 
 def test_get():
-    assert PortDirection.get('input') == PortDirection.IN
-    assert PortDirection.get('output') == PortDirection.OUT
-    assert PortDirection.get('inout') == PortDirection.IN_OUT
-    assert PortDirection.get('foo') == PortDirection.UNKNOWN
+    assert Direction.get('input') == Direction.IN
+    assert Direction.get('output') == Direction.OUT
+    assert Direction.get('inout') == Direction.IN_OUT
+    assert Direction.get('foo') == Direction.UNKNOWN
 
 
 if __name__ == '__main__':

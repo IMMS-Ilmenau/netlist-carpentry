@@ -1,3 +1,5 @@
+"""Generator module used to create pattern objects from given HDL code, circuits, or JSON netlists."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -5,11 +7,10 @@ from typing import List, Tuple
 
 from networkx import MultiDiGraph as MDG
 
-from netlist_carpentry.api.read.yosys_netlist import YosysNetlistReader as YNR
-from netlist_carpentry.core.circuit import Circuit
+from netlist_carpentry import Circuit, Module
 from netlist_carpentry.core.graph.constraint import Constraint
 from netlist_carpentry.core.graph.pattern import Pattern
-from netlist_carpentry.core.netlist_elements.module import Module
+from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
 
 
 class PatternGenerator:
@@ -152,7 +153,7 @@ class PatternGenerator:
         Raises:
             ValueError: If the provided file contains more or less than one module.
         """
-        from netlist_carpentry.api.read.read_utils import read
+        from netlist_carpentry.io.read.read_utils import read
 
         circuit = read(Path(file_path))
         return PatternGenerator._from_circuit(circuit, remove_ports)

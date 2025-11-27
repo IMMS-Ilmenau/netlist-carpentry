@@ -1,3 +1,6 @@
+"""Module for handling global configuration of Netlist Carpentry."""
+
+
 class Config:
     """
     Configuration class containing application settings and constants.
@@ -32,9 +35,6 @@ class Config:
         """The identifier used for external naming conventions, e. g. for write-out into a Verilog file. Defaults to '__' (two underscores)."""
         self.id_internal = '§'
         """The identifier used for internal naming conventions, e. g. for instance handling. Defaults to '§'."""
-
-        self.simplify_escaped_identifiers = True
-        """Whether to simplify Verilog identifiers with escaped special characters or not. Defaults to True, in which case all names with escaped special characters are modified."""
 
         self.allow_detached_segments = False
         """Whether to allow port or wire segments to exist without a parent object. Defaults to False, raising a DetachedSegementError whenever a segment exists without a parent"""

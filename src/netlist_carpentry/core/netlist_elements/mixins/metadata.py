@@ -1,3 +1,5 @@
+"""Mixin for metadata, generally used by netlist elements."""
+
 from __future__ import annotations
 
 from typing import Dict, List, Optional, Union

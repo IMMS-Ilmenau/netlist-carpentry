@@ -1,3 +1,5 @@
+"""Wrapper module to handle found pattern occurrences in a circuit graph."""
+
 from __future__ import annotations
 
 import time
@@ -5,6 +7,7 @@ from copy import deepcopy
 from typing import Dict, List, Optional, Set, Tuple
 
 import networkx as nx
+from pydantic import NonNegativeInt
 
 from netlist_carpentry import CFG, LOG
 from netlist_carpentry.core.graph.utils import all_edges
@@ -166,7 +169,7 @@ class Match:
         self,
         circuit_graph: nx.MultiDiGraph[str],
         interface: Dict[int, Dict[Tuple[str, str, int], Set[Tuple[str, str, int]]]],
-        match_idx: int,
+        match_idx: NonNegativeInt,
         match_graph: nx.MultiDiGraph[str],
     ) -> None:
         """
@@ -179,7 +182,7 @@ class Match:
         Args:
             circuit_graph (networkx.MultiDiGraph[str]): The original circuit graph.
             interface (Dict[int, Dict[Tuple[str, str, int], Set[Tuple[str, str, int]]]]): A dictionary to store the interfaces for each match.
-            match_idx (int): The index of the current match in the list of matches.
+            match_idx (NonNegativeInt): The index of the current match in the list of matches.
             match_graph (networkx.MultiDiGraph[str]): The matched subgraph.
         """
         interface[match_idx] = {}

@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from netlist_carpentry.core.port_direction import PortDirection
+from netlist_carpentry import Direction
 
 
 class Connectable(Protocol):
@@ -23,7 +23,7 @@ class DirectedElement(Protocol):
     @property
     def is_output(self) -> bool: ...
     @property
-    def direction(self) -> PortDirection: ...
+    def direction(self) -> Direction: ...
 
 
 class DirectedPortElement(DirectedElement, Protocol):

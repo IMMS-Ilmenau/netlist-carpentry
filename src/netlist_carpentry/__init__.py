@@ -5,6 +5,7 @@ import shutil
 from netlist_carpentry.utils.cfg import CFG  # Config and log must be loaded before the other modules
 from netlist_carpentry.utils.log import Log, LOG, initialize_logging
 from netlist_carpentry.core.graph import EMPTY_GRAPH
+from netlist_carpentry.core.enums import Direction, Signal
 from netlist_carpentry.core.netlist_elements.wire_segment import (
     WIRE_SEGMENT_0,
     WIRE_SEGMENT_1,
@@ -14,18 +15,21 @@ from netlist_carpentry.core.netlist_elements.wire_segment import (
     CONST_MAP_VAL2VERILOG,
     CONST_MAP_YOSYS2OBJ,
 )
-from netlist_carpentry.core.graph.pattern import EMPTY_PATTERN
-from netlist_carpentry.scripts import NC_SCRIPTS_DIR
-from netlist_carpentry.api.read.read_utils import read_json, read
-from netlist_carpentry.api.write.write_utils import write
-from netlist_carpentry.core.netlist_elements.instance import Instance
-from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.port import Port
 from netlist_carpentry.core.netlist_elements.wire import Wire
+from netlist_carpentry.core.netlist_elements.instance import Instance
+from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.utils import gate_lib, gate_lib_factory
+from netlist_carpentry.io.read.read_utils import read_json, read
+from netlist_carpentry.io.write.write_utils import write
+from netlist_carpentry.core.graph.pattern import EMPTY_PATTERN
+from netlist_carpentry.scripts import NC_SCRIPTS_DIR
 
 Port.model_rebuild()
+Wire.model_rebuild()
+Instance.model_rebuild()
+Module.model_rebuild()
 
 __all__ = [
     'CFG',
@@ -42,9 +46,11 @@ __all__ = [
     'WIRE_SEGMENT_X',
     'WIRE_SEGMENT_Z',
     'Circuit',
+    'Direction',
     'Instance',
     'Module',
     'Port',
+    'Signal',
     'Wire',
     'gate_lib',
     'gate_lib_factory',

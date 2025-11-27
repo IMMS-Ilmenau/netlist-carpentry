@@ -1,20 +1,27 @@
+"""Module for handling circuit modules."""
+
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
-from typing import Callable, Dict, List, Literal, Optional, Set, Tuple, Type, TypeVar, Union, overload
+from typing import TYPE_CHECKING, Callable, Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union, overload
 
 import networkx as nx
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
-from netlist_carpentry import LOG
+from netlist_carpentry import LOG, Direction, Instance, Port, Wire
+from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import (
     AlreadyConnectedError,
-    InvalidPortDirectionError,
+    IdentifierConflictError,
+    InvalidDirectionError,
     ObjectLockedError,
     ObjectNotFoundError,
     PathResolutionError,
+    SingleOwnershipError,
+    StructureMismatchError,
     WidthMismatchError,
 )
 from netlist_carpentry.core.netlist_elements.element_path import (
@@ -27,8 +34,6 @@ from netlist_carpentry.core.netlist_elements.element_path import (
     WirePath,
     WireSegmentPath,
 )
-from netlist_carpentry.core.netlist_elements.element_type import EType
-from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.mixins.evaluation import EvaluationMixin
 from netlist_carpentry.core.netlist_elements.mixins.graph_building import GraphBuildingMixin
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT, NESTED_DICT
@@ -36,11 +41,8 @@ from netlist_carpentry.core.netlist_elements.mixins.module_base import T_MODULE_
 from netlist_carpentry.core.netlist_elements.mixins.module_bfs import ModuleBfsMixin
 from netlist_carpentry.core.netlist_elements.mixins.module_dfs import ModuleDfsMixin
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
-from netlist_carpentry.core.netlist_elements.port import Port
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
-from netlist_carpentry.core.netlist_elements.wire import Wire
 from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2OBJ, WireSegment
-from netlist_carpentry.core.port_direction import PortDirection
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.custom_list import CustomList
 
@@ -48,8 +50,12 @@ T_NETLIST_ELEMENT = TypeVar('T_NETLIST_ELEMENT', bound=NetlistElement)
 T_INSTANCE = TypeVar('T_INSTANCE', bound=Instance)
 T_PORT = Union[Port['Module'], Port[Instance]]
 
+if TYPE_CHECKING:
+    from netlist_carpentry import Circuit
+
 
 class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin, NetlistElement, BaseModel):
+    _circuit: Optional['Circuit'] = None
     _instances = CustomDict[str, Instance]()
     _ports = CustomDict[str, Port['Module']]()
     _wires = CustomDict[str, Wire]()
@@ -59,7 +65,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         self._graph: nx.MultiDiGraph[str] = self.build_graph()
-        self._prev_hash: int = hash(self)
+        self._prev_state: Tuple[Dict[str, object], ...] = ()
         return super().model_post_init(__context)
 
     def __eq__(self, value: object) -> bool:
@@ -80,6 +86,12 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             ModulePath: The hierarchical path of the netlist element.
         """
         return ModulePath(raw=self.raw_path)
+
+    @property
+    def circuit(self) -> 'Circuit':
+        if self._circuit is not None:
+            return self._circuit
+        raise ObjectNotFoundError(f'No circuit set for module {self.raw_path}!')
 
     @property
     def type(self) -> EType:
@@ -126,48 +138,42 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         return self._wires
 
     @property
-    def input_ports(self) -> Set[Port[Module]]:
+    def input_ports(self) -> List[Port[Module]]:
         """
-        Returns a set of input ports in the module.
+        Returns a list of input ports in the module.
 
         This property filters the ports based on their direction, returning only those with an input direction.
-
-        Returns:
-            A set of Port objects representing the input ports.
         """
-        return {p for p in self.ports.values() if p.is_input}
+        return [p for p in self.ports.values() if p.is_input]
 
     @property
-    def output_ports(self) -> Set[Port[Module]]:
+    def output_ports(self) -> List[Port[Module]]:
         """
-        Returns a set of output ports in the module.
+        Returns a list of output ports in the module.
 
         This property filters the ports based on their direction, returning only those with an output direction.
-
-        Returns:
-            A set of Port objects representing the output ports.
         """
-        return {p for p in self.ports.values() if p.is_output}
+        return [p for p in self.ports.values() if p.is_output]
 
     @property
-    def instances_with_constant_inputs(self) -> Set[Instance]:
-        """A set of Instance objects where at least one input port is tied to a constant."""
-        return {i for i in self.instances.values() if i.has_tied_inputs()}
+    def instances_with_constant_inputs(self) -> List[Instance]:
+        """A list of Instance objects where at least one input port is tied to a constant."""
+        return [i for i in self.instances.values() if i.has_tied_inputs()]
 
     @property
-    def submodules(self) -> Set[Instance]:
-        """A set of submodule instances in the module."""
-        return {i for i in self.instances.values() if i.is_module_instance}
+    def submodules(self) -> List[Instance]:
+        """A list of submodule instances in the module."""
+        return [i for i in self.instances.values() if i.is_module_instance]
 
     @property
-    def primitives(self) -> Set[Instance]:
-        """A set of instances marked as primitive in the module."""
-        return {i for i in self.instances.values() if i.is_primitive}
+    def primitives(self) -> List[Instance]:
+        """A list of instances marked as primitive in the module."""
+        return [i for i in self.instances.values() if i.is_primitive]
 
     @property
-    def gatelib_primitives(self) -> Set[Instance]:
-        """A set of primitive instances in the module that are based on gates from the gate library."""
-        return {i for i in self.instances.values() if i.is_primitive_from_gatelib}
+    def gatelib_primitives(self) -> List[Instance]:
+        """A list of primitive instances in the module that are based on gates from the gate library."""
+        return [i for i in self.instances.values() if i.is_primitive]
 
     def valid_module_path(self, path: ElementPath) -> bool:
         """
@@ -313,6 +319,10 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         inst = self.get_instance(element_path.get(port_holder_idx))
         return inst.ports.get(element_path.get(port_idx))
 
+    def _raise_if_occupied(self, name: str) -> None:
+        if self.name_occupied(name):
+            raise IdentifierConflictError(f'An object with name {name} exists already in module {self.name}!')
+
     def add_instance(self, instance: T_INSTANCE) -> T_INSTANCE:
         """
         Adds an instance to the module.
@@ -323,6 +333,12 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Returns:
             Instance: the instance that was added.
         """
+        self._raise_if_occupied(instance.name)
+        if instance.module is not None and instance.module is not self:
+            raise SingleOwnershipError(f'Instance {self.raw_path} belongs to module {instance.module.name}. Cannot add it to module {self.name}!')
+        instance.module = self
+        if self.has_circuit and instance.is_module_instance:
+            self.circuit.module_instances.append_or_create(instance.instance_type, instance.path)
         return self.instances.add(instance.name, instance, locked=self.locked)
 
     @overload
@@ -359,11 +375,13 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if instance_name is None:
             instance_name = self._get_generic_inst_name(interface_definition)
         if isinstance(interface_definition, Module):
-            inst = Instance(raw_path=self.raw_path + self.path.sep + instance_name, instance_type=interface_definition.name, module=self)
+            inst = Instance(
+                raw_path=self.raw_path + self.path.sep + instance_name, instance_type=interface_definition.name, module=self, parameters=params
+            )
             for pname, p in interface_definition.ports.items():
                 inst.connect(pname, ws_path=None, direction=p.direction, width=p.width)
         else:
-            inst = interface_definition(raw_path=self.raw_path + self.path.sep + instance_name, module=self, **params)
+            inst = interface_definition(raw_path=self.raw_path + self.path.sep + instance_name, module=self, parameters=params)
         return self.add_instance(inst)
 
     def _get_generic_inst_name(self, module_or_inst_cls: Union[Module, Type[Instance]]) -> str:
@@ -371,6 +389,76 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         while f'_{type_abbrev}_{self._inst_gen_i}_' in self.instances:
             self._inst_gen_i += 1
         return f'_{type_abbrev}_{self._inst_gen_i}_'
+
+    def copy_instance(self, instance: Union[str, Instance], instance_name: str, keep_inputs: bool = False) -> Instance:
+        """
+        Copies the given instance within this module.
+
+        Takes either an Instance object or a string (which must be a name of an already existing instance within this module.
+        The instance is then copied and is completely identical to the given instance (or the instance with the given name,
+        if a string is passed instead), except for the given `instance_name`.
+        Also, all ports of the new instance are initially unconnected.
+
+        Args:
+            instance (Union[str, Instance]): The instance to copy. If a string is provided, it must be the name of an instance
+                that exists within this module.
+            instance_name (str): The name of the copied instance. Must be a name that is not already given to another instance.
+            keep_inputs (bool, optional): Whether to disconnect the input ports of the instance (so it is entirely unconnected).
+                Defaults to True.
+        """
+        if isinstance(instance, str):
+            instance = self.instances[instance]
+        new_instance = copy.deepcopy(instance)
+        if instance_name in self.instances:
+            raise IdentifierConflictError(
+                f'Error whilst copying instance {instance.raw_path}: Unable to set new name {instance_name}, as it is already occupied!'
+            )
+        new_instance.set_name(instance_name)
+        new_instance.module = None
+
+        self.add_instance(new_instance)
+        ports = new_instance.ports.values() if not keep_inputs else new_instance.output_ports
+        for p in ports:
+            try:
+                self.disconnect(p)
+            except PathResolutionError:  # noqa: PERF203
+                new_instance.disconnect(p.name)
+        return new_instance
+
+    def replace(self, old_instance: Union[str, Instance], new_instance: Instance, silent: bool = False) -> None:
+        if isinstance(old_instance, Instance):
+            old_instance = old_instance.name
+        if old_instance not in self.instances:
+            raise ObjectNotFoundError(f'Cannot replace instance {old_instance}, since no such instance exists in module {self.name}!')
+        if new_instance.name in self.instances:
+            raise IdentifierConflictError(
+                f'Error whilst replacing instance {old_instance} with {new_instance.raw_path}: '
+                + f'An instance with name {new_instance.name} already exists in module {self.name}!'
+            )
+        self._replace(self.instances[old_instance], new_instance, silent)
+
+    def _replace(self, old_instance: Instance, new_instance: Instance, silent: bool) -> None:
+        missing_ports = set(old_instance.ports.keys()).difference(new_instance.ports.keys())
+        if missing_ports:
+            raise StructureMismatchError(
+                f'Unable to replace {old_instance.raw_path}: New instance {new_instance.raw_path} is missing these ports: {", ".join(missing_ports)}'
+            )
+        connections = old_instance.connections
+        for pname, p in old_instance.ports.items():
+            pnew = new_instance.ports[pname]
+            if p.width != pnew.width:
+                raise WidthMismatchError(
+                    f'Port {pname} is {p.width} bit wide in {old_instance.raw_path}, but {pnew.width} bit wide in {new_instance.raw_path}'
+                )
+        self.remove_instance(old_instance)
+        self.add_instance(new_instance)
+        for pname in list(new_instance.ports.keys()):
+            if pname in connections:
+                p = new_instance.ports[pname]
+                for idx, ps in p:
+                    self.connect(connections[pname][idx], ps)
+            elif not silent:
+                LOG.warn(f'No port {pname} in old instance {old_instance.raw_path}: This port is left unconnected!')
 
     @overload
     def remove_instance(self, instance: str) -> None: ...
@@ -386,7 +474,11 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         instance_name = instance.name if isinstance(instance, Instance) else instance
         if instance_name in self.instances:
-            for p in self.instances[instance_name].ports.values():
+            inst = self.instances[instance_name]
+            if self.has_circuit and inst.instance_type in self.circuit.module_instances:
+                self.circuit.module_instances[inst.instance_type].remove(inst.path)
+            inst.module = None
+            for p in inst.ports.values():
                 for _, ps in p:
                     self.disconnect(ps)
         self.instances.remove(instance_name, locked=self.locked)
@@ -405,7 +497,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         return self.instances.get(instance_name, None)
 
-    def get_instances(self, name: str = '', type: str = '', fuzzy: bool = False) -> List[Instance]:
+    def get_instances(self, name: str = '', type: str = '', fuzzy: bool = False, recursive: bool = False) -> List[Instance]:
         """
         Retrieves a list of instances based on the given criteria.
 
@@ -413,6 +505,10 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             name (str, optional): The name of the instance to be searched for. Defaults to ''.
             type (str, optional): The type of the instance to be searched for. Defaults to ''.
             fuzzy (bool, optional): Whether to perform a fuzzy search or not. Defaults to False.
+                Fuzzy search means, the given string is used case-insensitive and substrings are accepted.
+                If a name "inst" is given, this method will return instances named "INST", "someInst",
+                i.e. all instances whose name contains "inst", regardless of case and pre- or suffixes.
+            recursive (bool, optional): Whether to scan submodules as well. Defaults to False.
 
         Returns:
             List[Instance]: A list of instances matching the specified criteria.
@@ -421,13 +517,17 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if nr_set_args > 1:
             LOG.warn(f'Only one argument of "name" or "type" must be set to get instances, but {nr_set_args} arguments were set!')
             return []
+        sub_insts: List[Instance] = []
+        if recursive:
+            for inst in self.submodules:
+                sub_insts.extend(inst.module_definition.get_instances(name=name, type=type, fuzzy=fuzzy, recursive=True))
         if name:
-            return [self.instances[i_name] for i_name in self.instances if (name in i_name and fuzzy) or (name == i_name)]
+            return [self.instances[i_name] for i_name in self.instances if (name in i_name and fuzzy) or (name == i_name)] + sub_insts
         if type:
             inst_list = CustomList(
                 [self.instances_by_types[i_type] for i_type in self.instances_by_types if (type in i_type and fuzzy) or (type == i_type)]
             )
-            return inst_list.flatten()
+            return inst_list.flatten() + sub_insts
         LOG.warn(f'At least "name" or "type" must be set to get instances, but name was "{name}" and type was "{type}"!')
         return []
 
@@ -441,14 +541,19 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Returns:
             Port: The port that was added.
         """
+        if port.name in self.instances or port.name in self.ports:  # Ignore wires, as ports normally have a wire with the same name
+            raise IdentifierConflictError(f'An object with name {port.name} exists already in module {self.name}!')
+        if port.module_or_instance is not None and port.module_or_instance is not self:
+            raise SingleOwnershipError(f'Port {self.raw_path} belongs to module {port.module.name}. Cannot add it to module {self.name}!')
+        port.module_or_instance = self
         return self.ports.add(port.name, port, locked=self.locked)
 
     def create_port(
         self,
         port_name: str,
-        direction: PortDirection = PortDirection.UNKNOWN,
-        width: int = 1,
-        offset: int = 0,
+        direction: Direction = Direction.UNKNOWN,
+        width: PositiveInt = 1,
+        offset: NonNegativeInt = 0,
         is_locked: bool = False,
     ) -> Port[Module]:
         """
@@ -459,9 +564,9 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Args:
             port_name (str): The name of the port to be created.
-            direction (PortDirection, optional): The direction of the port. Defaults to PortDirection.UNKNOWN.
-            width (int, optional): The width of the port. Defaults to 1, which means the port is 1 bit wide.
-            offset (int, optional): The index offset for port slices. Defaults to 0, which means the port indexing starts at 0.
+            direction (Direction, optional): The direction of the port. Defaults to Direction.UNKNOWN.
+            width (PositiveInt, optional): The width of the port. Defaults to 1, which means the port is 1 bit wide.
+            offset (NonNegativeInt, optional): The index offset for port slices. Defaults to 0, which means the port indexing starts at 0.
             is_locked (bool, optional): Whether the port should be unchangeable after creation or not. Defaults to False.
 
         Returns:
@@ -491,6 +596,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         port_name = port.name if isinstance(port, Port) else port
         if port_name in self.ports:
+            self.ports[port_name].module_or_instance = None
             for _, ps in self.ports[port_name]:
                 self.disconnect(ps.path)
         self.ports.remove(port_name, locked=self.locked)
@@ -509,14 +615,17 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         return self.ports.get(port_name, None)
 
-    def get_ports(self, name: str = '', direction: Optional[PortDirection] = None, fuzzy: bool = False) -> List[Port[Module]]:
+    def get_ports(self, name: str = '', direction: Optional[Direction] = None, fuzzy: bool = False) -> List[Port[Module]]:
         """
         Retrieves a list of ports based on the given criteria.
 
         Args:
             name (str, optional): The name of the port to be searched for. Defaults to ''.
-            direction (PortDirection, optional): The direction of the port to be searched for. Defaults to None.
+            direction (Direction, optional): The direction of the port to be searched for. Defaults to None.
             fuzzy (bool, optional): Whether to perform a fuzzy search or not. Defaults to False.
+                Fuzzy search means, the given string is used case-insensitive and substrings are accepted.
+                If a name "port" is given, this method will return ports named "PORT", "somePort",
+                i.e. all ports whose name contains "port", regardless of case and pre- or suffixes.
 
         Returns:
             List[Port]: A list of ports matching the specified criteria.
@@ -536,18 +645,18 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         LOG.warn(f'At least "name" or "direction" must be set to get ports, but name was "{name}" and direction was "{direction}"!')
         return []
 
-    def _fuzzy_direction(self, target_dir: PortDirection, found_dir: PortDirection) -> bool:
+    def _fuzzy_direction(self, target_dir: Direction, found_dir: Direction) -> bool:
         """
         Checks if a port direction matches the target direction in a fuzzy manner.
 
         Args:
-            target_dir (PortDirection): The target direction to be matched.
-            found_dir (PortDirection): The direction of the port being checked.
+            target_dir (Direction): The target direction to be matched.
+            found_dir (Direction): The direction of the port being checked.
 
         Returns:
             bool: True if the port direction matches the target direction, False otherwise.
         """
-        return target_dir == found_dir or found_dir == PortDirection.IN_OUT
+        return target_dir == found_dir or found_dir == Direction.IN_OUT
 
     def add_wire(self, wire: Wire) -> Wire:
         """
@@ -559,9 +668,13 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Returns:
             Wire: The wire that was added.
         """
+        self._raise_if_occupied(wire.name)
+        if wire.module is not None and wire.module is not self:
+            raise SingleOwnershipError(f'Wire {self.raw_path} belongs to module {wire.module.name}. Cannot add it to module {self.name}!')
+        wire.module = self
         return self.wires.add(wire.name, wire, locked=self.locked)
 
-    def create_wire(self, wire_name: Optional[str] = None, width: PositiveInt = 1, is_locked: bool = False, index_offset: int = 0) -> Wire:
+    def create_wire(self, wire_name: Optional[str] = None, width: PositiveInt = 1, is_locked: bool = False, offset: NonNegativeInt = 0) -> Wire:
         """
         Creates a new wire within the module.
 
@@ -572,27 +685,27 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 In this case, the name of the wire is `_ncgen_{index}_`.
             width (PositiveInt, optional): The number of segments in the wire. Defaults to 1.
             is_locked (bool, optional): Whether the wire should be unchangeable after creation or not. Defaults to False.
-            index_offset (int, optional): The offset for the segment indices. Defaults to 0.
+            offset (NonNegativeInt, optional): The offset for the segment indices. Defaults to 0.
 
         Returns:
             Optional[Wire]: The wire if the wire was successfully created and added, None otherwise (if a wire with this name already exists).
         """
         if not wire_name:
-            return self._create_generic_wire(width, is_locked, index_offset)
+            return self._create_generic_wire(width, is_locked, offset)
         e = f'{self.path.raw}.{wire_name}'
         w = Wire(raw_path=e, module=self)
-        w.create_wire_segments(width, index_offset)
+        w.create_wire_segments(width, offset)
         w.change_mutability(is_now_locked=is_locked)
         return self.add_wire(w)
 
-    def _create_generic_wire(self, width: PositiveInt = 1, is_locked: bool = False, index_offset: NonNegativeInt = 0) -> Wire:
+    def _create_generic_wire(self, width: PositiveInt = 1, is_locked: bool = False, offset: NonNegativeInt = 0) -> Wire:
         """
         Creates a new wire with a generic name within the module and returns the wire object.
 
         Args:
             width (PositiveInt, optional): The number of segments in the wire. Defaults to 1.
             is_locked (bool, optional): Whether the wire should be unchangeable after creation or not. Defaults to False.
-            index_offset (NonNegativeInt, optional): The offset for the segment indices. Defaults to 0.
+            offset (NonNegativeInt, optional): The offset for the segment indices. Defaults to 0.
 
         Returns:
             Wire: The created wire.
@@ -600,7 +713,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         while f'_ncgen_{self._wire_gen_i}_' in self.wires:
             self._wire_gen_i += 1
         gen_name = f'_ncgen_{self._wire_gen_i}_'
-        return self.create_wire(gen_name, width=width, is_locked=is_locked, index_offset=index_offset)
+        return self.create_wire(gen_name, width=width, is_locked=is_locked, offset=offset)
 
     @overload
     def remove_wire(self, wire: str) -> None: ...
@@ -616,6 +729,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         wire_name = wire.name if isinstance(wire, Wire) else wire
         if wire_name in self.wires:
+            self.wires[wire_name].module = None
             for p in self.wires[wire_name].connected_port_segments:
                 self.disconnect(p.path)
         self.wires.remove(wire_name, locked=self.locked)
@@ -641,6 +755,9 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Args:
             name (str, optional): The name of the wire to be searched for. Defaults to ''.
             fuzzy (bool, optional): Whether to perform a fuzzy search or not. Defaults to False.
+                Fuzzy search means, the given string is used case-insensitive and substrings are accepted.
+                If a name "wire" is given, this method will return wires named "WIRE", "someWire",
+                i.e. all wires whose name contains "wire", regardless of case and pre- or suffixes.
 
         Returns:
             List[Wire]: A list of wires matching the specified criteria.
@@ -649,6 +766,9 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             return [self.wires[w_name] for w_name in self.wires if (name in w_name and fuzzy) or (name == w_name)]
         LOG.warn(f'A "name" must be set to get wires, but name was "{name}"!')
         return []
+
+    def name_occupied(self, name: str) -> bool:
+        return name in self.instances or name in self.ports or name in self.wires
 
     @overload
     def connect(
@@ -714,7 +834,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
     def _connect_ports_full(self, driver: T_PORT, load: T_PORT, new_wire_name: Optional[str] = None) -> None:
         if load.is_driver:
-            raise InvalidPortDirectionError(f'Received a signal driving port {load.raw_path}, but expected a load!')
+            raise InvalidDirectionError(f'Received a signal driving port {load.raw_path}, but expected a load!')
         if driver.width != load.width:
             raise WidthMismatchError(
                 f'Connection failed: Port {driver.raw_path} is {driver.width} bit wide and port {load.raw_path} is {load.width} bit wide. '
@@ -758,7 +878,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             p = port_like[port_like.offset]  # equal to port[0] in most cases
         else:
             p = port_like
-        if p.locked or w.locked or self.locked:
+        if p.locked or (w.locked and not w.is_constant) or self.locked:
             LOG.error(f'Unable to connect port segment at {p.raw_path} to wire segment {w.raw_path} in module {self.name}: locked object!')
             return
         self._connect_to_wire_segment(p, w)
@@ -774,27 +894,18 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             w (WireSegment): The wire segment to be connected.
         """
         # Connect Wire -> Port
-        if p not in w.port_segments:
-            w.port_segments.append(p)
-        w.notify_listeners()
+        if not w.is_constant:
+            w.port_segments.add(p)
         # Connect Port -> Wire
-        if p.parent_parent_name == self.name:
+        if p.grandparent_name == self.name:
             # Connect a module port segment to a wire segment
             p.set_ws_path(w.raw_path)
-            p.notify_listeners()
         else:
             # Connect an instance port segment to a wire segment
-            inst = self.instances[p.parent_parent_name]
+            inst = self.instances[p.grandparent_name]
             inst.modify_connection(p.parent_name, w.path, index=p.index)
 
-    @overload
-    def disconnect(self, port_like: PortSegmentPath) -> None: ...
-    @overload
-    def disconnect(self, port_like: PortSegment) -> None: ...
-    @overload
-    def disconnect(self, port_like: T_PORT) -> None: ...
-
-    def disconnect(self, port_like: Union[PortSegmentPath, PortSegment, T_PORT]) -> None:
+    def disconnect(self, port_like: Union[PortSegmentPath, PortPath, PortSegment, T_PORT]) -> None:
         """
         Disconnects a port segment from its connected wire segment.
 
@@ -804,10 +915,10 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         if isinstance(port_like, Port):
             return self._disconnect_port(port_like)
+        elif isinstance(port_like, PortPath):
+            return self.disconnect(self.get_from_path(port_like))
         elif isinstance(port_like, PortSegmentPath):
             p = self.get_from_path(port_like)
-            if p is None:
-                raise ObjectNotFoundError(f'Unable to disconnect port at {port_like.raw} in module {self.name}: no such element!')
         else:
             p = port_like
         w = self.get_from_path(p.ws_path)
@@ -842,43 +953,34 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         # Disconnect Wire -> Port
         if p in w.port_segments:
             w.port_segments.remove(p)
-            w.notify_listeners()
         # Disconnect Port -> Wire
         if p.raw_ws_path != w.raw_path:
             # To prevent discrepancies if the port segment was tied to a value (which does not notify the wire segment)
             return
-        if p.parent_parent_name == self.name:
-            return self._disconnect_module_port(p)
-        return self._disconnect_instance_port(p.parent_parent_name, p)
-
-    def _disconnect_module_port(self, p: PortSegment) -> None:
-        """
-        Disconnects a module port segment from its connected wire segment.
-
-        This method sets the raw wire segment path of the given port segment to 'X', indicating no connection.
-
-        Args:
-            p (PortSegment): The port segment to be disconnected.
-        """
-        p.set_ws_path('')
-        p.notify_listeners()
-
-    def _disconnect_instance_port(self, instance_name: str, p: PortSegment) -> None:
-        """
-        Disconnects an instance port segment from its connected wire segment.
-
-        This method modifies the connection of the given instance port segment to 'X', indicating no connection.
-
-        Args:
-            instance_name (str): The name of the instance.
-            p (PortSegment): The port segment to be disconnected.
-        """
-        inst = self.get_instance(instance_name)
-        inst.disconnect(p.parent_name, index=p.index)
+        if p.grandparent_name == self.name:
+            p.set_ws_path('')
+        else:
+            inst = self.instances[p.grandparent_name]
+            inst.disconnect(p.parent_name, index=p.index)
 
     def _collect_port_edges(self, instance: Instance, port_name: str) -> Dict[int, WireSegment]:
         connections = instance.connections[port_name]
         return {index: self.get_from_path(connections[index]) for index in connections}
+
+    def update_module_instances(self) -> None:
+        for inst_path in self.circuit.module_instances[self.name]:
+            inst = self.circuit.get_from_path(inst_path)
+            for pname, p in self.ports.items():
+                if pname not in inst.ports:
+                    offset = p.offset if p.offset is not None else 0
+                    inst.connect(pname, None, direction=p.direction, index=offset, width=p.width)
+            mark_del = set()
+            for pname in inst.ports:
+                if pname not in self.ports:
+                    inst.disconnect(pname)
+                    mark_del.add(pname)
+            for pname in mark_del:
+                inst.ports.pop(pname)
 
     @overload
     def get_edges(self, instance: Instance) -> Dict[str, Dict[int, WireSegment]]: ...
@@ -928,8 +1030,8 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         LOG.error(f'Cannot get connected instance from port segment with path {segment_path.raw} in module {self.name}: Path seems invalid!')
         return None
 
-    def _get_connected_nodes(self, ws_path: WireSegmentPath, ps_fc: Callable[[PortSegment], bool] = lambda ps: True) -> Set[PortSegment]:
-        """Returns a set of port segment instances connected to the wire that is represented by the given wire segment path.
+    def _get_connected_nodes(self, ws_path: WireSegmentPath, ps_fc: Callable[[PortSegment], bool] = lambda ps: True) -> List[PortSegment]:
+        """Returns a list of port segment instances connected to the wire that is represented by the given wire segment path.
 
         Args:
             ws_path (WireSegmentPath): Path of the wire segment in question.
@@ -938,16 +1040,16 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 The filter function (if given) must take a port segment instance and return a bool.
 
         Returns:
-            Set[PortSegment]: A set of port segments that are connected to the given wire segment path
+            List[PortSegment]: A list of port segments that are connected to the given wire segment path
                 and match the filter function (if given).
         """
         try:
             ws = self.get_from_path(ws_path)
-            return {ps for ps in ws.port_segments if ps_fc(ps)}
+            return [ps for ps in ws.port_segments if ps_fc(ps)]
         except PathResolutionError as e:
             raise PathResolutionError(f'Unable to find wire segment {ws_path.raw} in module {self.name}!') from e
 
-    def get_wire_ports(self, ws_path: WireSegmentPath) -> Set[PortSegment]:
+    def get_wire_ports(self, ws_path: WireSegmentPath) -> List[PortSegment]:
         """
         Retrieves the connected port segments of a given wire segment.
 
@@ -955,26 +1057,26 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             ws_path (WireSegmentPath): The path of the wire segment for which to retrieve connected port segments.
 
         Returns:
-            Set[PortSegment]: A set of port segments connected to the wire segment associated with the given path.
+            List[PortSegment]: A list of port segments connected to the wire segment associated with the given path.
         """
         return self._get_connected_nodes(ws_path)
 
-    def get_driving_ports(self, ws_path: WireSegmentPath) -> Set[PortSegment]:
+    def get_driving_ports(self, ws_path: WireSegmentPath) -> List[PortSegment]:
         """
         Retrieves the driving port segments of a given wire segment (i.e. the instances driving this wire segment).
 
-        For each wire segment, the set of driving ports should contain exactly one entry,
+        For each wire segment, the list of driving ports should contain exactly one entry,
         otherwise driver conflicts will arise.
 
         Args:
             ws_path (WireSegmentPath): The path of the wire segment for which to retrieve driving ports.
 
         Returns:
-            Set[PortSegment]: A set of port segments driving the wire segment associated with the given path.
+            List[PortSegment]: A list of port segments driving the wire segment associated with the given path.
         """
         return self._get_connected_nodes(ws_path, ps_fc=lambda ps: ps.is_driver)
 
-    def get_load_ports(self, ws_path: WireSegmentPath) -> Set[PortSegment]:
+    def get_load_ports(self, ws_path: WireSegmentPath) -> List[PortSegment]:
         """
         Retrieves the load port segments of a given wire segment (i.e. the instances driven by this wire segment).
 
@@ -982,7 +1084,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             ws_path (WireSegmentPath): The path of the wire segment for which to retrieve load ports.
 
         Returns:
-            Set[PortSegment]: A set of port segments being load of the wire segment associated with the given path.
+            List[PortSegment]: A list of port segments being load of the wire segment associated with the given path.
         """
         return self._get_connected_nodes(ws_path, ps_fc=lambda ps: ps.is_load)
 
@@ -1077,6 +1179,167 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         return self._get_neighboring_instances_directed(instance_name, get_outgoing=False)
 
+    def split(self, instance: Union[str, Instance]) -> Dict[NonNegativeInt, Instance]:
+        """
+        Splits the given n-bit large instance into n 1-bit instances.
+
+        Replaces the n-bit large instances by calling their split method.
+        The given instance must support splitting. This is the case for all gates, where
+        the individual bits are independent of each other (e.g. AND gates, D-FF).
+        Instances that do not support splitting are e.g. reduction gates and arithmetic gates.
+
+        Args:
+            instance (Union[str, Instance]): The instance or the instance name (must exist in this module).
+
+        Raises:
+            ObjectNotFoundError: If no such instance exists in this module.
+
+        Returns:
+            Dict[NonNegativeInt, Instance]: A dictionary, where the key is the bit index
+                and the value is the corresponding 1-bit "instance slice" for this index.
+        """
+        if isinstance(instance, Instance):
+            instance = instance.name
+        if instance not in self.instances:
+            raise ObjectNotFoundError(f'No instance {instance} exists in module {self.name}!')
+        return self.instances[instance].split()
+
+    def split_all(self, type: str = '', fuzzy: bool = True) -> int:
+        """
+        Splits all n-bit instances with the given type into n 1-bit instances.
+
+        Each instance that matches the given type (supports fuzzy search, if `fuzzy` is True)
+        is split into n slices.
+        To split all AND gates, use `Module.split_all("§and")`.
+        To split all Flip-Flops, use `Module.split_all("dff", fuzzy=True)`.
+        This will split all DFF, ADFF, DFFE, and ADFFE.
+
+        Args:
+            type (str, optional): The instance type, where all instances should be split.
+                If set to '' and fuzzy is True, all instances inside this module are split. Defaults to ''.
+            fuzzy (bool, optional): Whether to perform fuzzy checks.
+                If True, the given type string must only be a substring of the instance type. Defaults to True.
+
+        Returns:
+            int: The number of original instances that were split.
+        """
+        from netlist_carpentry.utils._gate_lib_base import _PrimitiveGate
+
+        insts: List[_PrimitiveGate] = CustomList(
+            [self.instances_by_types[i_type] for i_type in self.instances_by_types if (type in i_type and fuzzy) or (type == i_type)]
+        ).flatten()
+        splits = 0
+        for inst in insts:
+            if inst.is_primitive and inst.splittable and inst.width > 1:
+                LOG.debug(
+                    f'Splitting {inst.width}-bit wide {inst.__class__.__name__} {inst.raw_path} into {inst.width} 1-bit wide {inst.__class__.__name__}...'
+                )
+                self.split(inst)
+                splits += 1
+        LOG.debug(f'Split {splits} instances in module {self.name}!')
+        return splits
+
+    def make_chain(self, instances: List[Instance], input_port: str, output_port: str) -> Tuple[Port[Instance], Port[Instance]]:
+        """Forms a chain by chaining the given instances together.
+
+        Each instance in the given list is connected to its successor, where the given
+        `output_port` string is the output port of the instance, that is connected
+        to the input port `input_port` of the succeeding instance.
+
+        The (unconnected) input port of the first instance and the (unconnected) output port
+        of the last instance are returned as a tuple, marking the ends of the chain.
+
+        Each instance must have a port with the given input and output names.
+
+        Args:
+            instances (List[Instance]): The instances to chain together.
+            input_port (str): The name of the input port that is connected to the predecessor's output port.
+            output_port (str): The name of the output port that is connected to the successor's input port.
+
+        Raises:
+            ValueError: If the given list is empty.
+
+        Returns:
+            Tuple[Port[Instance], Port[Instance]]: The input port of the first instance
+                and the output port of the last instance, i.e. the ends of the chain.
+        """
+        LOG.debug(f'Creating chain of {len(instances)} instances in module {self.name}, connecting port {output_port} to {input_port} each...')
+        for i, inst in enumerate(instances):
+            if i != 0:
+                self.connect(instances[i - 1].ports[output_port], inst.ports[input_port])
+        if instances:
+            return (instances[0].ports[input_port], instances[-1].ports[output_port])
+        else:
+            raise ValueError('Cannot make chain: Instance list is empty!')
+
+    def flatten(self, skip_name: Optional[List[str]] = None, skip_type: Optional[List[str]] = None, recursive: bool = False) -> None:
+        """
+        Flatten this module, by replacing all submodule instances by their module definition.
+
+        Each submodule instance is removed and the content of the module definition is added to this module.
+        The previous instance ports are thus connected directly to the instances inside the submodules.
+
+        Args:
+            skip_name (Optional[List[str]], optional): Names of submodules, which should not be flattened.
+                Defaults to None.
+            skip_type (Optional[List[str]], optional): Types of submodules (i.e. module names),
+                which should not be flattened. Defaults to None.
+            recursive (bool, optional): Whether to also flatten submodules inside the submodules
+                (i.e. make this module completely flat). Defaults to False.
+        """
+        if skip_name is None:
+            skip_name = []
+        if skip_type is None:
+            skip_type = []
+        for inst in self.submodules:
+            if inst.name not in skip_name and inst.instance_type not in skip_type:
+                self._flatten_inst(inst, skip_name, skip_type, recursive)
+
+    def _flatten_inst(self, inst: Instance, skip_name: List[str], skip_type: List[str], recursive: bool) -> None:
+        if inst.module_definition is None:
+            raise ObjectNotFoundError(f'No module definition found for instance {inst.raw_path}!')
+        self._flatten_add_content(inst.name, inst.module_definition)
+        self._flatten_connect_interface(inst.name, inst.module_definition, inst.all_connections(include_unconnected=True))
+        if recursive:
+            for sub_inst in self.instances.values():
+                if sub_inst.is_module_instance:
+                    sub_inst.module_definition.flatten(skip_name, skip_type, recursive)
+        self.remove_instance(inst)
+
+    def _flatten_add_content(
+        self,
+        inst_name: str,
+        m_inst: Module,
+    ) -> None:
+        w_paths: Dict[WirePath, WirePath] = {}
+        for wire in m_inst.wires.values():
+            new_wire = self.create_wire(inst_name + '_' + wire.name, width=wire.width, offset=wire.offset or 0)
+            w_paths[wire.path] = new_wire.path
+        for mi_inst in m_inst.instances.values():
+            new_inst = self.copy_instance(mi_inst, inst_name + '_' + mi_inst.name)
+            for pname, conns in mi_inst.connections.items():
+                for idx, ws_path in conns.items():
+                    if ws_path.raw in CONST_MAP_VAL2OBJ:
+                        new_inst.ports[pname][idx].tie_signal(ws_path.raw)  # type: ignore[call-overload]
+                    else:
+                        new_ws_path = WireSegmentPath(raw=w_paths[ws_path.parent].raw + '.' + str(idx))
+                        self.connect(new_ws_path, new_inst.ports[pname][idx])
+
+    def _flatten_connect_interface(self, inst_name: str, m_inst: Module, connections: Dict[str, Dict[int, WireSegmentPath]]) -> None:
+        for port in m_inst.ports.values():
+            for idx, ps in port:
+                if port.name in connections:
+                    old_port_ws = connections[port.name][idx]
+                    ws_ps = ps.ws.port_segments.copy()
+                    ws_ps.remove(ps)
+                    for ps in ws_ps:
+                        new_inst_name = inst_name + '_' + ps.parent.parent.name
+                        new_ps = self.instances[new_inst_name].ports[ps.parent.name][ps.index]
+                        new_ps.change_connection()
+                        self.connect(old_port_ws, new_ps)
+                else:
+                    LOG.warn(f'Cannot connect port after flattening: No connection found for port {port.name} of instance {inst_name}!')
+
     def optimize(self) -> bool:
         """
         Optimizes this module by removing unused wires and instances.
@@ -1086,7 +1349,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Returns:
             bool: True if any changes were made, False otherwise.
         """
-        from netlist_carpentry.core.opt.loadless_wires import opt_loadless
+        from netlist_carpentry.routines.opt.loadless_wires import opt_loadless
 
         return opt_loadless(self)
 
@@ -1142,9 +1405,9 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Returns:
             A networkx MultiDiGraph object representing the connectivity of the module.
         """
-        if self._prev_hash != hash(self):
+        if self._prev_state != (self.instances, self.ports, self.wires):
             LOG.info('No valid cached graph found, building module graph...')
-            self._prev_hash = hash(self)
+            self._prev_state = copy.deepcopy((self.instances, self.ports, self.wires))
             self._graph = self.build_graph()
         return self._graph
 
@@ -1179,17 +1442,6 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         with open(path, 'w', encoding='utf-8') as f:
             # ensure_ascii=False: special characters are displayed correctly
             f.write(json.dumps(md_dict, indent=2, ensure_ascii=False))
-
-    def __hash__(self) -> int:
-        return hash(
-            (
-                self.path,
-                tuple(hash(i) for i in self.instances.values()),
-                tuple(hash(p) for p in self.ports.values()),
-                tuple(hash(w) for w in self.wires.values()),
-                tuple(hash(p) for p in self.parameters.values()),
-            )
-        )
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__} "{self.name}"'

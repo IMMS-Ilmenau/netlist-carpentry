@@ -2,19 +2,27 @@
 import copy
 import json
 import os
+from pathlib import Path
 
 import networkx as nx
 import pytest
 
 from netlist_carpentry import WIRE_SEGMENT_X
+from netlist_carpentry.core.circuit import Circuit
+from netlist_carpentry.core.enums.direction import Direction as Dir
+from netlist_carpentry.core.enums.element_type import EType
+from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.exceptions import (
     AlreadyConnectedError,
     EvaluationError,
     IdentifierConflictError,
-    InvalidPortDirectionError,
+    InvalidDirectionError,
+    MultipleDriverError,
     ObjectLockedError,
     ObjectNotFoundError,
     PathResolutionError,
+    SingleOwnershipError,
+    StructureMismatchError,
     WidthMismatchError,
 )
 from netlist_carpentry.core.netlist_elements.element_path import (
@@ -25,31 +33,29 @@ from netlist_carpentry.core.netlist_elements.element_path import (
     WirePath,
     WireSegmentPath,
 )
-from netlist_carpentry.core.netlist_elements.element_type import EType
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.wire_segment import WIRE_SEGMENT_0
-from netlist_carpentry.core.port_direction import PortDirection as Dir
-from netlist_carpentry.core.signal import Signal
-from netlist_carpentry.utils.gate_lib import AndGate
+from netlist_carpentry.utils.gate_lib import ADFFE, AndGate
+from netlist_carpentry.utils.log import LOG
 
 
-@pytest.fixture
+@pytest.fixture()
 def empty_module() -> Module:
     from utils import empty_module as esm
 
     return esm()
 
 
-@pytest.fixture
+@pytest.fixture()
 def locked_module() -> Module:
     from utils import locked_module as im
 
     return im()
 
 
-@pytest.fixture
+@pytest.fixture()
 def standard_module() -> Module:
     from utils import empty_module as esm
 
@@ -61,11 +67,25 @@ def standard_module() -> Module:
     return m
 
 
-@pytest.fixture
+@pytest.fixture()
 def connected_module() -> Module:
     from utils import connected_module
 
     return connected_module()
+
+
+@pytest.fixture()
+def dff_module() -> Module:
+    from utils import dff_module
+
+    return dff_module()
+
+
+@pytest.fixture()
+def dff_circuit() -> Circuit:
+    from utils import dff_circuit
+
+    return dff_circuit()
 
 
 def test_module_creation(empty_module: Module) -> None:
@@ -79,10 +99,10 @@ def test_module_creation(empty_module: Module) -> None:
     assert empty_module.instances_by_types == {}
     assert empty_module.ports == {}
     assert empty_module.wires == {}
-    assert empty_module.instances_with_constant_inputs == {0} - {0}  # Funny eyes <=> empty set
-    assert empty_module.submodules == {0} - {0}  # Funny eyes <=> empty set
-    assert empty_module.primitives == {0} - {0}  # Funny eyes <=> empty set
-    assert empty_module.gatelib_primitives == {0} - {0}  # Funny eyes <=> empty set
+    assert empty_module.instances_with_constant_inputs == []
+    assert empty_module.submodules == []
+    assert empty_module.primitives == []
+    assert empty_module.gatelib_primitives == []
 
     assert not empty_module.can_carry_signal
 
@@ -99,33 +119,49 @@ def test_eq(empty_module: Module) -> None:
     assert empty_module.__eq__(n4) == NotImplemented
 
 
+def test_circuit(empty_module: Module) -> None:
+    assert not empty_module.has_circuit
+    with pytest.raises(ObjectNotFoundError):
+        empty_module.circuit
+
+    c = Circuit(name='c')
+    empty_module._circuit = c
+    assert empty_module.has_circuit
+    assert empty_module.circuit == c
+
+    c = Circuit(name='c')
+    m = c.create_module('m')
+    assert m.has_circuit
+    assert m.circuit == c
+
+
 def test_input_ports(connected_module: Module) -> None:
     input_ports = connected_module.input_ports
-    assert input_ports == {
+    assert input_ports == [
         connected_module.ports['in1'],
         connected_module.ports['in2'],
         connected_module.ports['in3'],
         connected_module.ports['in4'],
         connected_module.ports['clk'],
         connected_module.ports['rst'],
-    }
+    ]
 
 
 def test_output_ports(connected_module: Module) -> None:
     output_ports = connected_module.output_ports
-    assert output_ports == {connected_module.ports['out'], connected_module.ports['out_ff']}
+    assert output_ports == [connected_module.ports['out'], connected_module.ports['out_ff']]
 
 
 def test_instances_with_constant_inputs(connected_module: Module) -> None:
-    assert connected_module.instances_with_constant_inputs == {connected_module.instances['dff_inst']}
+    assert connected_module.instances_with_constant_inputs == [connected_module.instances['dff_inst']]
 
     connected_module.instances['and_inst'].ports['A'][0].set_ws_path(WIRE_SEGMENT_0.raw_path)
-    assert connected_module.instances_with_constant_inputs == {connected_module.instances['dff_inst'], connected_module.instances['and_inst']}
+    assert connected_module.instances_with_constant_inputs == [connected_module.instances['and_inst'], connected_module.instances['dff_inst']]
 
 
 def test_primitive_properties(connected_module: Module) -> None:
     c_insts = connected_module.instances
-    insts = {c_insts['dff_inst'], c_insts['and_inst'], c_insts['or_inst'], c_insts['not_inst'], c_insts['xor_inst']}
+    insts = [c_insts['and_inst'], c_insts['or_inst'], c_insts['xor_inst'], c_insts['not_inst'], c_insts['dff_inst']]
     assert connected_module.primitives == insts
     assert connected_module.gatelib_primitives == insts
 
@@ -197,15 +233,19 @@ def test_add_instance(empty_module: Module, locked_module: Module) -> None:
     from utils import standard_instance_with_ports
 
     assert empty_module.instances == {}
-    i = standard_instance_with_ports()
+    i = standard_instance_with_ports(init_module=False)
     added = empty_module.add_instance(i)
     assert added == i
     assert len(empty_module.instances) == 1
     assert empty_module.instances[i.name] == i
 
+    m2 = Module(raw_path='m2')
+    with pytest.raises(SingleOwnershipError):
+        m2.add_instance(i)
+
     # no two instances with same name can be added, so len should still be 1
     # i2 does not replace i, since this would probably not be intended
-    i2 = standard_instance_with_ports()
+    i2 = standard_instance_with_ports(init_module=False)
     i2.instance_type = 'foo'
     assert i2 is not i
     with pytest.raises(IdentifierConflictError):
@@ -213,20 +253,35 @@ def test_add_instance(empty_module: Module, locked_module: Module) -> None:
     assert len(empty_module.instances) == 1
     assert empty_module.instances[i.name] == i
 
+    i3 = standard_instance_with_ports()
+    empty_module.create_port('double')
+    i3.raw_path = 'test_module1.double'
+    with pytest.raises(IdentifierConflictError):
+        empty_module.add_wire(i3)
+
     assert len(locked_module.instances) == 1
+    i.module = None
     with pytest.raises(ObjectLockedError):
         locked_module.add_instance(i)
     assert len(locked_module.instances) == 1
 
 
 def test_create_instance(empty_module: Module, connected_module: Module) -> None:
+    c = Circuit(name='c')
+    connected_module.set_name('m2')
+    c.add_module(connected_module)
+    c.add_module(empty_module)
     inst = empty_module.create_instance(connected_module, 'test_inst')
     assert inst == empty_module.instances['test_inst']
     assert inst.instance_type == connected_module.name
     assert inst.ports.keys() == connected_module.ports.keys()
+    assert empty_module.circuit.module_instances['m2'] == [InstancePath(raw='test_module1.test_inst')]
     for p in inst.ports:
         assert inst.ports[p].direction == connected_module.ports[p].direction
         assert inst.ports[p].width == connected_module.ports[p].width
+
+    inst = empty_module.create_instance(connected_module, 'test_inst2')
+    assert empty_module.circuit.module_instances['m2'] == [InstancePath(raw='test_module1.test_inst'), InstancePath(raw='test_module1.test_inst2')]
 
     with pytest.raises(IdentifierConflictError):
         empty_module.create_instance(connected_module, 'test_inst')
@@ -248,7 +303,7 @@ def test_create_instance_gatelib(empty_module: Module) -> None:
     assert 'xor' in empty_module.instances
     assert isinstance(empty_module.instances['xor'], XorGate)
 
-    empty_module.create_instance(XorGate, 'xor2', params={'width': 8})
+    empty_module.create_instance(XorGate, 'xor2', params={'Y_WIDTH': 8})
     assert len(empty_module.instances) == 2
     assert 'xor2' in empty_module.instances
     assert empty_module.instances['xor2'].ports['A'].width == 8
@@ -262,6 +317,102 @@ def test_create_instance_gatelib(empty_module: Module) -> None:
     empty_module._inst_gen_i = 0
     inst = empty_module.create_instance(XorGate)
     assert inst.name == '_XorGate_2_'
+
+
+def test_copy_instance(standard_module: Module) -> None:
+    inst = standard_module.instances['test_instance']
+
+    inst2 = standard_module.copy_instance(inst, 'inst2')
+    assert 'inst2' in standard_module.instances
+    assert inst2 is standard_module.instances['inst2']
+    assert inst2.instance_type == inst.instance_type
+    for pname, p in inst.ports.items():
+        assert pname in inst2.ports
+        assert p.width == inst2.ports[pname].width
+        assert p.direction == inst2.ports[pname].direction
+        assert p.offset == inst2.ports[pname].offset
+        assert inst2.ports[pname].is_unconnected
+
+    inst3 = standard_module.copy_instance('test_instance', 'inst3')
+    assert 'inst3' in standard_module.instances
+    assert inst3 is standard_module.instances['inst3']
+    assert inst3.instance_type == inst.instance_type
+    for pname, p in inst.ports.items():
+        assert pname in inst3.ports
+        assert p.width == inst3.ports[pname].width
+        assert p.direction == inst3.ports[pname].direction
+        assert p.offset == inst3.ports[pname].offset
+        assert inst3.ports[pname].is_unconnected
+
+    with pytest.raises(IdentifierConflictError):
+        standard_module.copy_instance(inst, 'inst2')
+
+
+def test_copy_instance_keep_inputs(standard_module: Module) -> None:
+    inst = standard_module.instances['test_instance']
+    for pname in inst.ports:
+        standard_module.connect(standard_module.wires['test_wire'][0], inst.ports[pname][0])
+        assert inst.ports[pname].is_connected
+
+    inst2 = standard_module.copy_instance(inst, 'inst2', keep_inputs=True)
+    assert 'inst2' in standard_module.instances
+    assert inst2 is standard_module.instances['inst2']
+    assert inst2.instance_type == inst.instance_type
+    for pname, p in inst.ports.items():
+        assert pname in inst2.ports
+        assert p.width == inst2.ports[pname].width
+        assert p.direction == inst2.ports[pname].direction
+        assert p.offset == inst2.ports[pname].offset
+        if p.is_output:
+            assert inst2.ports[pname].is_unconnected
+        else:
+            assert inst2.ports[pname].is_connected
+            assert inst2.ports[pname][0].ws == standard_module.wires['test_wire'][0]
+
+
+def test_replace_instance(dff_module: Module) -> None:
+    adffe = ADFFE(raw_path=f'{dff_module.name}.adffe_inst')
+    with pytest.raises(ObjectNotFoundError):
+        dff_module.replace('lulz no instance', adffe)
+
+    dff = dff_module.instances_by_types['§dff'][0]
+    with pytest.raises(IdentifierConflictError):
+        dff_module.replace(dff, dff)
+    with pytest.raises(WidthMismatchError):
+        dff_module.replace(dff, adffe)
+
+    adffe = ADFFE(raw_path=f'{dff_module.name}.adffe_inst', parameters={'WIDTH': 4})
+    assert dff.name in dff_module.instances
+    assert adffe.name not in dff_module.instances
+    for p in dff.ports.values():
+        assert p.is_connected
+    for p in adffe.ports.values():
+        assert p.is_unconnected
+    dff_connections = dff.connections
+    warns = LOG.warns_quantity
+    dff_module.replace(dff, adffe)
+    assert LOG.warns_quantity == warns + 2
+    assert dff.name not in dff_module.instances
+    assert adffe.name in dff_module.instances
+    assert adffe.ports['D'].is_connected
+    assert adffe.ports['D'].connected_wire_segments == dff_connections['D']
+    assert adffe.ports['CLK'].is_connected
+    assert adffe.ports['CLK'].connected_wire_segments == dff_connections['CLK']
+    assert adffe.ports['RST'].is_unconnected
+    assert adffe.ports['EN'].is_unconnected
+    assert adffe.ports['Q'].is_connected
+    assert adffe.ports['Q'].connected_wire_segments == dff_connections['Q']
+
+    with pytest.raises(StructureMismatchError):
+        dff_module.replace(adffe, dff)
+
+
+def test_replace_instance_silent(dff_module: Module) -> None:
+    dff = dff_module.instances_by_types['§dff'][0]
+    adffe = ADFFE(raw_path=f'{dff_module.name}.adffe_inst', parameters={'WIDTH': 4})
+    warns = LOG.warns_quantity
+    dff_module.replace(dff, adffe, silent=True)
+    assert LOG.warns_quantity == warns
 
 
 def test_add_instance_multi_type(standard_module: Module) -> None:
@@ -279,15 +430,34 @@ def test_remove_instance(empty_module: Module, locked_module: Module, connected_
     from utils import standard_instance_with_ports, wire_4b
 
     assert len(empty_module.instances) == 0
+    c = Circuit(name='c')
+    c.add_module(empty_module)
 
-    i = standard_instance_with_ports()
-    w4 = wire_4b()
+    i = standard_instance_with_ports(init_module=False)
+    w4 = wire_4b(init_module=False)
     empty_module.add_instance(i)
+    assert i.module == empty_module
+    assert c.module_instances['test_module1'] == []
     empty_module.add_wire(w4)
     assert len(empty_module.instances) == 1
 
     empty_module.remove_instance(i)
     assert len(empty_module.instances) == 0
+    assert i.module is None
+
+    m2 = Module(raw_path='m2')
+    i = empty_module.create_instance(m2, 'inst2')
+    empty_module.remove_instance(i)
+    assert len(empty_module.instances) == 0
+    assert i.module is None
+
+    c.add_module(m2)
+    i = empty_module.create_instance(m2, 'inst2')
+    assert c.module_instances['m2'] == [i.path]
+    empty_module.remove_instance(i)
+    assert len(empty_module.instances) == 0
+    assert i.module is None
+    assert c.module_instances['m2'] == []
 
     with pytest.raises(ObjectNotFoundError):
         empty_module.remove_instance(i)
@@ -320,6 +490,8 @@ def test_get_instance(standard_module: Module) -> None:
 
 
 def test_get_instances(standard_module: Module) -> None:
+    c = Circuit(name='c')
+    c.add_module(standard_module)
     standard_module.add_instance(Instance(raw_path='test_module1.test_instance2', instance_type='$and', module=None))
 
     i1 = standard_module.get_instances(name='test_instance')
@@ -335,27 +507,53 @@ def test_get_instances(standard_module: Module) -> None:
     i6 = standard_module.get_instances(name='test_instance', type='$and')
     assert i6 == []
 
+    m2 = c.add_module(Module(raw_path='m2'))
+    inst3 = m2.create_instance(c.add_module(Module(raw_path='some_and')), instance_name='test_instance3')
+    standard_module.create_instance(m2, 'inst2')
+
+    i2 = standard_module.get_instances(name='test_instance', fuzzy=True)
+    assert i2 == [standard_module.instances['test_instance'], standard_module.instances['test_instance2']]
+    i2 = standard_module.get_instances(name='test_instance', fuzzy=True, recursive=True)
+    assert i2 == [standard_module.instances['test_instance'], standard_module.instances['test_instance2'], inst3]
+
+    i2 = standard_module.get_instances(type='and', fuzzy=True)
+    assert i2 == [standard_module.instances['test_instance'], standard_module.instances['test_instance2']]
+    i2 = standard_module.get_instances(type='and', fuzzy=True, recursive=True)
+    assert i2 == [standard_module.instances['test_instance'], standard_module.instances['test_instance2'], inst3]
+
 
 def test_add_port(empty_module: Module, locked_module: Module) -> None:
     from utils import standard_port_in, standard_port_out
 
     assert empty_module.ports == {}
-    p = standard_port_in()
+    p = standard_port_in(init_module=False)
     added = empty_module.add_port(p)
     assert added == p
     assert len(empty_module.ports) == 1
     assert empty_module.ports[p.name] == p
 
+    m2 = Module(raw_path='m2')
+    with pytest.raises(SingleOwnershipError):
+        m2.add_port(p)
+
     # no two ports with same name can be added, so len should still be 1
     # p2 does not replace p, since this would probably not be intended
     p2 = standard_port_out()
     p2.set_name(p.name)
+    p2.module_or_instance = None
     with pytest.raises(IdentifierConflictError):
         empty_module.add_port(p2)
     assert len(empty_module.ports) == 1
     assert empty_module.ports[p.name] == p
 
+    p3 = standard_port_out()
+    empty_module.create_instance(Module(raw_path='m2'), 'double')
+    p3.raw_path = 'test_module1.double'
+    with pytest.raises(IdentifierConflictError):
+        empty_module.add_port(p3)
+
     assert len(locked_module.ports) == 1
+    p.module_or_instance = None
     with pytest.raises(ObjectLockedError):
         locked_module.add_port(p)
     assert len(locked_module.ports) == 1
@@ -430,12 +628,14 @@ def test_remove_port(empty_module: Module, locked_module: Module) -> None:
 
     assert len(empty_module.ports) == 0
 
-    p = standard_port_in()
+    p = standard_port_in(init_module=False)
     empty_module.add_port(p)
+    assert p.module_or_instance is empty_module
     assert len(empty_module.ports) == 1
 
     empty_module.remove_port(p)
     assert len(empty_module.ports) == 0
+    assert p.module_or_instance is None
 
     with pytest.raises(ObjectNotFoundError):
         empty_module.remove_port(p)
@@ -458,8 +658,8 @@ def test_get_port(standard_module: Module) -> None:
 def test_get_ports(standard_module: Module) -> None:
     from utils import standard_port_in, standard_port_out
 
-    standard_module.add_port(standard_port_in())
-    standard_module.add_port(standard_port_out())
+    standard_module.add_port(standard_port_in(init_module=False))
+    standard_module.add_port(standard_port_out(init_module=False))
 
     p1 = standard_module.get_ports(name='test_port')
     assert p1 == [standard_module.ports['test_port']]
@@ -485,6 +685,10 @@ def test_add_wire(empty_module: Module, locked_module: Module) -> None:
     assert len(empty_module.wires) == 1
     assert empty_module.wires[w.name] == w
 
+    m2 = Module(raw_path='m2')
+    with pytest.raises(SingleOwnershipError):
+        m2.add_wire(w)
+
     # no two wires with same name can be added, so len should still be 1
     # w2 does not replace w, since this would probably not be intended
     w2 = standard_wire()
@@ -495,7 +699,14 @@ def test_add_wire(empty_module: Module, locked_module: Module) -> None:
     assert len(empty_module.wires) == 1
     assert empty_module.wires[w.name] == w
 
+    w3 = standard_wire()
+    empty_module.create_port('double')
+    w3.raw_path = 'test_module1.double'
+    with pytest.raises(IdentifierConflictError):
+        empty_module.add_wire(w3)
+
     assert len(locked_module.wires) == 1
+    w.module = None
     with pytest.raises(ObjectLockedError):
         locked_module.add_wire(w)
     assert len(locked_module.wires) == 1
@@ -506,7 +717,7 @@ def test_create_wire(empty_module: Module, locked_module: Module) -> None:
 
     assert empty_module.wires == {}
     w = standard_wire()
-    added = empty_module.create_wire(w.name, width=len(w), is_locked=True, index_offset=1)
+    added = empty_module.create_wire(w.name, width=len(w), is_locked=True, offset=1)
     assert added == empty_module.wires[w.name]
     assert len(empty_module.wires) == 1
     assert empty_module.wires[w.name].name == w.name
@@ -562,9 +773,11 @@ def test_remove_wire(empty_module: Module, locked_module: Module, connected_modu
     w[1].port_segments.clear()
     empty_module.add_wire(w)
     assert len(empty_module.wires) == 1
+    assert w.module is empty_module
 
     empty_module.remove_wire(w)
     assert len(empty_module.wires) == 0
+    assert w.module is None
 
     with pytest.raises(ObjectNotFoundError):
         empty_module.remove_wire(w)
@@ -609,6 +822,13 @@ def test_get_wires(standard_module: Module) -> None:
     assert p3 == []
 
 
+def test_name_occupied(standard_module: Module) -> None:
+    assert standard_module.name_occupied('test_wire')
+    assert standard_module.name_occupied('test_port')
+    assert standard_module.name_occupied('test_instance')
+    assert not standard_module.name_occupied('unoccupied_name')
+
+
 def test_connect(standard_module: Module) -> None:
     standard_module.create_wire('test_wire2')
     standard_module.create_port('test_port2', direction=Dir.IN)
@@ -623,6 +843,11 @@ def test_connect(standard_module: Module) -> None:
     standard_module.connect(w[0], p[0])
     assert w.ports == {0: [p[0]]}
     assert p[0].ws_path == w[0].path
+
+    standard_module.disconnect(p[0])
+    standard_module.connect(WIRE_SEGMENT_0, p[0])
+    assert WIRE_SEGMENT_0.port_segments == []
+    assert p[0].ws_path == WIRE_SEGMENT_0.path
 
     with pytest.raises(AlreadyConnectedError):
         standard_module.connect(w[0], p[0])
@@ -704,7 +929,7 @@ def test_connect_ports(standard_module: Module) -> None:
         assert p2[i].ws_path == p3[i + 1].ws_path
 
     p4 = standard_module.create_port('test_port4', direction=Dir.IN, width=8, offset=1)
-    with pytest.raises(InvalidPortDirectionError):
+    with pytest.raises(InvalidDirectionError):
         standard_module.connect(p2, p4)
 
     p5 = standard_module.create_port('test_port5', direction=Dir.OUT, width=1, offset=1)
@@ -750,7 +975,7 @@ def test_connect_cases(empty_module: Module) -> None:
     with pytest.raises(AlreadyConnectedError):
         empty_module.connect(D, L2)  # Forbidden case: second element may not be connected already!
 
-    with pytest.raises(InvalidPortDirectionError):
+    with pytest.raises(InvalidDirectionError):
         empty_module.connect(L, D)  # Forbidden case: second element may not be a driver!
 
 
@@ -801,6 +1026,45 @@ def test_disconnect_inst_port(connected_module: Module) -> None:
     assert pseg not in w.ports[0]
     assert pseg.ws_path == WIRE_SEGMENT_X.path
     assert inst.connections[p.name][0] == WIRE_SEGMENT_X.path
+
+
+def test_disconnect_inst_port_path(connected_module: Module) -> None:
+    w = connected_module.wires['in1']
+    inst = connected_module.instances['and_inst']
+    p = inst.ports['A']
+    pseg = p[0]
+
+    assert len(w.ports[0]) == 2
+    assert pseg in w.ports[0]
+    connected_module.disconnect(p.path)
+    assert len(w.ports[0]) == 1
+    assert pseg not in w.ports[0]
+    assert pseg.ws_path == WIRE_SEGMENT_X.path
+    assert inst.connections[p.name][0] == WIRE_SEGMENT_X.path
+
+
+def test_update_module_instances() -> None:
+    m = Module(raw_path='m')
+
+    with pytest.raises(ObjectNotFoundError):
+        m.update_module_instances()
+
+    c = Circuit(name='c')
+    m1 = c.create_module('m1')
+    m2 = c.create_module('m2')
+    assert c.module_instances == {'m1': [], 'm2': []}
+    inst_m2 = m1.create_instance(m2, 'inst')
+    assert c.module_instances == {'m1': [], 'm2': [InstancePath(raw='m1.inst')]}
+
+    p1 = m2.create_port('p1', offset=3, width=4)
+    assert inst_m2.ports == {}
+    m2.update_module_instances()
+    assert inst_m2.ports['p1'].name == p1.name
+
+    m2.remove_port('p1')
+    assert inst_m2.ports['p1'].name == p1.name
+    m2.update_module_instances()
+    assert inst_m2.ports == {}
 
 
 def test_get_edges(connected_module: Module) -> None:
@@ -990,11 +1254,8 @@ def test_get_preceeding_instances(connected_module: Module) -> None:
     pseg = inst_not.ports['Y'][0]
     connected_module.disconnect(pseg)
     connected_module.connect(wseg, pseg)
-    insts = connected_module.get_preceeding_instances(inst_xor.name)
-    assert len(insts) == 2
-    assert len(insts['A']) == 1
-    assert len(insts['B']) == 1
-    assert insts['A'][0] == [inst_and, inst_not]
+    with pytest.raises(MultipleDriverError):
+        connected_module.get_preceeding_instances(inst_xor.name)
 
     insts = connected_module.get_preceeding_instances(inst_not.name)
     assert len(insts) == 1
@@ -1193,6 +1454,102 @@ def test_dfs_paths_between_multipaths(connected_module: Module) -> None:
     }
     found_connection = connected_module.dfs_paths_between(in1.path, out.path, max_paths=-1)
     assert target_connection == found_connection
+
+
+def test_split_instance(dff_module: Module) -> None:
+    with pytest.raises(ObjectNotFoundError):
+        dff_module.split('abc')
+
+    assert len(dff_module.instances) == 1
+    assert len(dff_module.instances_by_types['§dff']) == 1
+    dff = dff_module.instances_by_types['§dff'][0]
+    connections = dff.connections
+    dffs = dff_module.split(dff)
+    assert dff.name not in dff_module.instances
+    assert len(dffs) == 4
+    for idx, inst in dffs.items():
+        assert inst.name in dff_module.instances
+        assert inst.width == 1
+        assert inst.ports['D'].width == 1
+        assert inst.ports['CLK'].width == 1
+        assert inst.ports['Q'].width == 1
+        assert inst.ports['D'][0].ws_path == connections['D'][idx]
+        assert inst.ports['CLK'][0].ws_path == connections['CLK'][0]
+        assert inst.ports['Q'][0].ws_path == connections['Q'][idx]
+
+
+def test_split_all(dff_module: Module) -> None:
+    splits = dff_module.split_all('abc')
+    assert splits == 0
+
+    splits = dff_module.split_all('dff', fuzzy=False)
+    assert splits == 0
+
+    splits = dff_module.split_all('dff')
+    assert splits == 1
+
+
+def test_split_all_empty(dff_module: Module) -> None:
+    splits = dff_module.split_all(fuzzy=False)
+    assert splits == 0
+
+    splits = dff_module.split_all()
+    assert splits == 1
+
+
+def test_make_chain(dff_module: Module) -> None:
+    with pytest.raises(ValueError):
+        dff_module.make_chain([], 'foo', 'bar')
+
+    dff_module.split_all('dff')
+    dffs = dff_module.get_instances('dff', fuzzy=True)
+    assert len(dffs) == 4
+
+    for dff in dffs:
+        dff.disconnect('D')
+        dff.disconnect('Q')
+    ports = dff_module.make_chain(dffs, 'D', 'Q')
+    assert ports[0] == dffs[0].ports['D']
+    assert ports[1] == dffs[-1].ports['Q']
+    for idx in range(len(dffs) - 1):
+        assert dffs[idx].ports['Q'].connected_wires == dffs[idx + 1].ports['D'].connected_wires
+
+
+def test_flatten(dff_circuit: Circuit) -> None:
+    from utils import save_results
+
+    from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
+
+    m2 = dff_circuit['M2']
+    m21 = dff_circuit['M21']
+    assert len(m2.submodules) == 2
+    assert m2.instances['m21'] in m2.submodules
+    assert m2.instances['m22'] in m2.submodules
+
+    dff = m21.instances_by_types['§dff'][0]
+    m21_inst = m2.instances['m21']
+    m21_conn = m21_inst.connections
+    m2.flatten(skip_name=['m22'])
+    save_results(P2V().module2v(m2), 'v')
+    assert len(m2.submodules) == 1
+    assert f'm21_{dff.name}' in m2.instances
+    dff_m2 = m2.instances[f'm21_{dff.name}']
+    assert dff_m2.ports['D'][0].raw_ws_path == m21_conn['A'][0].raw
+    assert dff_m2.ports['Q'][0].raw_ws_path == m21_conn['Y'][0].raw
+    assert dff_m2.ports['CLK'][0].raw_ws_path == m21_conn['CLK'][0].raw
+
+
+def test_flatten_recursive(dff_circuit: Circuit) -> None:
+    from utils import save_results
+
+    from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
+
+    top = dff_circuit.top
+    dffs = len(top.get_instances(type='dff', fuzzy=True, recursive=True))
+    top.flatten(recursive=True)
+    save_results(P2V().module2v(top), 'v')
+    assert len(top.submodules) == 0
+    assert len(top.get_instances(type='dff', fuzzy=True)) == dffs
 
 
 def test_optimize(connected_module: Module) -> None:
@@ -1435,7 +1792,7 @@ def test_build_graph(connected_module: Module) -> None:
     assert g.nodes['or_inst']['ntype_info'] == '§or'
     assert g.nodes['xor_inst']['ntype_info'] == '§xor'
     assert g.nodes['not_inst']['ntype_info'] == '§not'
-    assert g.nodes['dff_inst']['ntype_info'] == '§dff'
+    assert g.nodes['dff_inst']['ntype_info'] == '§adffe'
     # Port node types
     assert g.nodes['in1']['ntype_info'] == 'input'
     assert g.nodes['in2']['ntype_info'] == 'input'
@@ -1551,7 +1908,7 @@ def test_export_metadata(standard_module: Module) -> None:
         found_data2 = json.loads(f.read())
     assert found_data2 == target_data2
 
-    standard_module.export_metadata(path, sort_by='category')
+    standard_module.export_metadata(Path(path), sort_by='category')
     target_data3: METADATA_DICT = {
         'general': {
             'test_module1': {'foo': 'bar'},
@@ -1573,21 +1930,6 @@ def test_export_metadata(standard_module: Module) -> None:
         found_data4 = json.loads(f.read())
     assert found_data4 == target_data4
     os.remove(path)
-
-
-def test_module_hash(empty_module: Module, standard_module: Module) -> None:
-    esm2 = Module(raw_path='test_module1')
-    esm2_diff = Module(raw_path='other_module')
-    assert hash(empty_module) == hash(empty_module)
-    assert hash(empty_module) == hash(esm2)
-    assert hash(empty_module) != esm2_diff
-
-    assert hash(empty_module) != standard_module
-
-    sm2 = copy.deepcopy(standard_module)
-    assert hash(standard_module) == hash(sm2)
-    sm2.ports['test_port'].create_port_segment(1)
-    assert hash(standard_module) != hash(sm2)
 
 
 def test_module_str(empty_module: Module) -> None:

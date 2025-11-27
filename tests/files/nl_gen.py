@@ -1,6 +1,6 @@
 import os
 
-from netlist_carpentry.api.read.gen_nl import generate_json_netlist
+from netlist_carpentry.io.read.gen_nl import generate_json_netlist
 
 # Get the directory of the script
 script_dir = os.path.dirname(os.path.abspath(__file__))
