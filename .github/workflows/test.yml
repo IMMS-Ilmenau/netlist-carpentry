@@ -13,4 +13,5 @@ jobs:
       - run: sudo apt-get -y install curl git build-essential yosys yosys-dev iverilog
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: echo PATH=${GITHUB_WORKSPACE}/.local/bin:$PATH >> $GITHUB_ENV
+      - run: echo CI_SKIP_EQY=1 >> $GITHUB_ENV
       - run: uv run tox
