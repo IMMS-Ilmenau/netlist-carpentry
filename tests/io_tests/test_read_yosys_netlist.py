@@ -41,7 +41,6 @@ def escaped_identifier_reader() -> YNR:
 def test_reader_init(simple_reader: YNR) -> None:
     assert simple_reader.net_number_mapping == {}
     assert simple_reader.module_name_mapping == {}
-    assert simple_reader.port_name_mapping == {}
     assert simple_reader.module_definitions == {0} - {0}  # Funny eyes <=> empty set
     assert simple_reader.module_instantiations == {0} - {0}  # Funny eyes <=> empty set
     assert simple_reader.module_definitions_and_instances_match
@@ -74,11 +73,26 @@ def test_adder_netlist_dict(simple_reader: YNR) -> None:
 def test_preprocess_dict(simple_reader: YNR) -> None:
     given_dict = {
         'modules': {
-            'adder': {r"§paramod\simpleAdder\WIDTH=s32'00000100": {'some_key': r"§paramod\simpleAdder\WIDTH=s32'00000100"}},
+            'adder': {
+                r"§paramod\simpleAdder\WIDTH=s32'00000100": {
+                    'some_key': r"§paramod\simpleAdder\WIDTH=s32'00000100",
+                },
+                'cells': {'$some_cell$/path/to/src/file.v:420$69': {}},
+            },
             r"§paramod\simpleAdder\WIDTH=s32'00000100": {},
         }
     }
-    target_dict = {'modules': {'adder': {'§simpleAdder§WIDTH§4': {'some_key': '§simpleAdder§WIDTH§4'}}, '§simpleAdder§WIDTH§4': {}}}
+    target_dict = {
+        'modules': {
+            'adder': {
+                '§simpleAdder§WIDTH§4': {
+                    'some_key': '§simpleAdder§WIDTH§4',
+                },
+                'cells': {'some_cell§file§v§420§69': {}},
+            },
+            '§simpleAdder§WIDTH§4': {},
+        }
+    }
     found_dict = simple_reader._preprocess_dict(given_dict)
 
     assert target_dict == found_dict

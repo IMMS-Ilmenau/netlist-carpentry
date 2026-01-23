@@ -2,23 +2,25 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Dict, Literal
+from typing import TYPE_CHECKING, Callable, Literal
 
 from pydantic import BaseModel
 from typing_extensions import Self
 
-from netlist_carpentry import LOG
+from netlist_carpentry import CFG, LOG
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import VerilogSyntaxError
 from netlist_carpentry.core.netlist_elements.element_path import ElementPath
+from netlist_carpentry.core.netlist_elements.mixins.hooks import HooksMixin
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT, NESTED_DICT, MetadataMixin
+from netlist_carpentry.utils.gate_lib_dataclasses import TypedParams
 from netlist_carpentry.utils.verilog import VERILOG_KEYWORDS
 
 if TYPE_CHECKING:
     from netlist_carpentry.core.circuit import Circuit
 
 
-class NetlistElement(BaseModel):
+class NetlistElement(HooksMixin, BaseModel):
     """
     Represents a netlist element, such as an instance or a wire.
 
@@ -31,7 +33,7 @@ class NetlistElement(BaseModel):
     _locked: bool = False
     """Whether the element is structurally unchangeable (e.g. if set to True, connections cannot be changed). Defaults to False."""
 
-    parameters: Dict[str, object] = {}
+    parameters: TypedParams = {}
     """Attributes of a netlist element. Can be user-defined, or e. g. by Yosys (such as `WIDTH` for some instances)."""
 
     metadata: MetadataMixin = MetadataMixin()
@@ -167,8 +169,12 @@ class NetlistElement(BaseModel):
         Args:
             new_name (str): The new name to set to the object.
         """
+        from netlist_carpentry.core.netlist_elements.segment_base import _Segment
+
         if new_name in VERILOG_KEYWORDS:
             raise VerilogSyntaxError(f'Cannot set name {new_name}: Is a verilog keyword!')
+        if not new_name.replace(CFG.id_internal, CFG.id_external).isidentifier() and not isinstance(self, _Segment):
+            raise VerilogSyntaxError(f'Cannot set name {new_name}: Invalid Identifier (escaped identifiers are currently not supported)!')
         old_name = self.name
         if new_name != old_name:
             LOG.info(f'Changing instance name from object at {self.raw_path} from {self.name} to {new_name}!')

@@ -1,4 +1,5 @@
 # Importing pytest for testing purposes
+import logging
 import os
 
 import pytest
@@ -24,6 +25,17 @@ def log_setup():
 def test_log_init(log_setup: Log) -> None:
     # Test initialization of Log class
     assert log_setup is not None
+
+
+def test_set_log_level(log_setup: Log) -> None:
+    log_setup.set_log_level(1)
+    assert logging.getLogger().level == 10
+
+    log_setup.set_log_level('INFO')
+    assert logging.getLogger().level == 20
+
+    with pytest.raises(ValueError):
+        log_setup.set_log_level('foo')
 
 
 def test_log_info(log_setup: Log) -> None:

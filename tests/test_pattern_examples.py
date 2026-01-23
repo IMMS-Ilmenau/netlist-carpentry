@@ -9,7 +9,7 @@ from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.core.graph.constraint import CASCADING_OR_CONSTRAINT
 from netlist_carpentry.core.graph.pattern import Pattern
 from netlist_carpentry.core.graph.pattern_generator import PatternGenerator
-from netlist_carpentry.io.read.gen_nl import generate_json_netlist
+from netlist_carpentry.io.read.read_utils import generate_json_netlist
 from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
 from netlist_carpentry.routines.floodfill.cascading_or_replacement import cascading_or_replacement
 from netlist_carpentry.utils.gate_lib import OrGate

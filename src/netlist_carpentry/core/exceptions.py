@@ -117,3 +117,15 @@ class VerilogSyntaxError(SyntaxError):
     """Raised whenever a Syntax Error with Verilog code occurs."""
 
     pass
+
+
+class VcdLoadingError(Exception):
+    """Raised whenever a VCD file could not be loaded."""
+
+    pass
+
+
+class MaxRetriesExceededError(RuntimeError):
+    """Raised when the maximum number of retries has been exceeded."""
+
+    pass

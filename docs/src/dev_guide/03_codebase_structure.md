@@ -37,15 +37,14 @@ columns 1
     Core["Core of Netlist Carpentry"]
     arrow<["&nbsp;&nbsp;&nbsp;"]>(down)
     block:ID
-        G["Graph-related stuff"]
+        EN["Enums"]
+        G["Graph"]
         NE["Netlist Elements"]
-        P["Datastructure Protocols"]
+        P["Protocols"]
     end
     block:ID2
         C(["Circuit Base Class"])
         E(["Exceptions"])
-        D(["Direction"])
-        S(["Signal Handling"])
     end
 ```
 The core package is the Domain Model and Validation Engine of the framework.
@@ -56,7 +55,7 @@ This structure implements the [Hexagonal Architecture (or Ports and Adapters)](h
     The core has zero dependencies on the outside world (no file I/O, no CLI logic).
     This makes it easy to test.
 -   Type Safety:
-    By separating the actual netlist element objects (`netlist_elements` package) from the graph logic, the system e.g. ensures that you can't accidentally connect two components directly without a net (a physical impossibility in netlists).
+    By separating the actual netlist element objects (`netlist_elements` package) from the graph logic, the system e.g. ensures that you can't accidentally do stuff on the graph (where only shallow nodes and edges are present) that should only be available for the actual object.
 -   Scalability:
     If you want to add a new feature (e.g. "Calculate Power Consumption"), you can write a function that iterates over the Circuit object in core and collects the consumption data of every instance (if annotated accordingly) without needing to know if the original file was Verilog, a JSON netlist, or something entirely else.
 

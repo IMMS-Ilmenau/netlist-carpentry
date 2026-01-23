@@ -10,10 +10,6 @@ from netlist_carpentry.core.netlist_elements.module import Module
 def test_not_implemented() -> None:
     em = EvaluationMixin(raw_path='a.b.c')
     with pytest.raises(NotImplementedError):
-        em.instances_with_constant_inputs
-    with pytest.raises(NotImplementedError):
-        em.input_ports
-    with pytest.raises(NotImplementedError):
         em.get_outgoing_edges('some_inst')
     with pytest.raises(NotImplementedError):
         em.get_load_ports(WireSegmentPath(raw='a.b.c.0'))

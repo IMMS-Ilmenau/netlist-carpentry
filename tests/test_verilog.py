@@ -9,12 +9,13 @@ import pytest
 
 import netlist_carpentry
 from netlist_carpentry import Circuit
+from netlist_carpentry.routines.dft.scan_chain_insertion import implement_scan_chain
 
 
 def _run_sim(tempdir: Path, vfiles: List[str]) -> None:
     """Run simulation with verilog."""
     # Execute icarus verilog
-    command = ['iverilog', '-g2005-sv', *vfiles, '../tb.sv']
+    command = ['iverilog', *vfiles, '../tb.sv']
     result = subprocess.run(command, cwd=tempdir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
 
     if result.returncode != 0:
@@ -87,6 +88,12 @@ def test_verilog_init_signed_example() -> None:
 def test_verilog_init_thermo_enc() -> None:
     c = netlist_carpentry.read('tests/files/thermo_enc.v')
     _setup_run_circuit('thermo_enc', c)
+
+
+def test_scan_chains() -> None:
+    c = netlist_carpentry.read('tests/files/dff_circuit.v', top='Top')
+    implement_scan_chain(c.top)
+    _setup_run_circuit('scan_chains', c)
 
 
 if __name__ == '__main__':

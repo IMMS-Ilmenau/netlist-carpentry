@@ -2,27 +2,27 @@ import os
 
 import pytest
 import utils
-from networkx import MultiDiGraph
 
 from netlist_carpentry.core.graph.match import Match
+from netlist_carpentry.core.graph.module_graph import ModuleGraph
 from netlist_carpentry.core.graph.pattern import Pattern
 from netlist_carpentry.core.netlist_elements.module import Module
 
 
-@pytest.fixture
+@pytest.fixture()
 def empty_match() -> Match:
-    g = MultiDiGraph()
-    return Match(g, set())
+    g = ModuleGraph()
+    return Match(g, [])
 
 
 def standard_pattern() -> Pattern:
     module = utils.connected_module()
-    g = MultiDiGraph()
+    g = ModuleGraph()
     xor_inst = module.get_instance('xor_inst')
     not_inst = module.get_instance('not_inst')
 
-    g.add_node(xor_inst.name, ntype=xor_inst.type.name, ntype_info=xor_inst.instance_type, ndata=xor_inst)
-    g.add_node(not_inst.name, ntype=not_inst.type.name, ntype_info=not_inst.instance_type, ndata=not_inst)
+    g.add_node(xor_inst.name, ntype=xor_inst.type.name, nsubtype=xor_inst.instance_type, ndata=xor_inst)
+    g.add_node(not_inst.name, ntype=not_inst.type.name, nsubtype=not_inst.instance_type, ndata=not_inst)
     g.add_edge(xor_inst.name, not_inst.name, key='Y§A', ename='wire_xor')
 
     return Pattern(graph=g, ignore_boundary_conditions=True)
@@ -40,7 +40,7 @@ def mod_module() -> Module:
 
 def test_match_init(empty_match: Match) -> None:
     assert len(empty_match.pattern_graph.nodes) == 0
-    assert empty_match.matches == {0} - {0}  # Funny eyes <=> empty set
+    assert empty_match.matches == []
     assert empty_match.count == 0
 
 

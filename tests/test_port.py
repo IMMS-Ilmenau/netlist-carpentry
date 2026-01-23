@@ -5,6 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from netlist_carpentry import WIRE_SEGMENT_X
+from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import (
@@ -23,6 +24,7 @@ from netlist_carpentry.core.netlist_elements.netlist_element import NetlistEleme
 from netlist_carpentry.core.netlist_elements.port import Port
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.wire import Signal, Wire
+from netlist_carpentry.utils.gate_factory import dffe
 
 
 @pytest.fixture
@@ -559,6 +561,13 @@ def test_driver() -> None:
     assert out2.driver() == {0: in2[0], 1: in2[1]}
     with pytest.raises(WidthMismatchError):
         out2.driver(single=True)
+
+    circuit = Circuit(name='test')
+    module = circuit.create_module('test')
+    port = module.create_port('input', Direction.IN)
+    dff = dffe(module, 'I_dffe', EN=port)
+    module.disconnect(port)
+    assert dff.en_port.driver() == {0: None}
 
 
 def test_loads() -> None:

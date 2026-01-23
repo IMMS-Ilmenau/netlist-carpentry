@@ -11,8 +11,19 @@ from typing import Dict, List
 
 from pydantic import NonNegativeInt
 
-from netlist_carpentry import CFG, CONST_MAP_VAL2OBJ, CONST_MAP_VAL2VERILOG, LOG, Circuit, Instance, Module, Port, Wire
-from netlist_carpentry.core.exceptions import InvalidDirectionError, NetTypeError, VerilogSyntaxError
+from netlist_carpentry import (
+    CFG,
+    CONST_MAP_VAL2OBJ,
+    CONST_MAP_VAL2VERILOG,
+    LOG,
+    Circuit,
+    Direction,
+    Instance,
+    Module,
+    Port,
+    Wire,
+)
+from netlist_carpentry.core.exceptions import InvalidDirectionError, VerilogSyntaxError
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
 
@@ -75,12 +86,14 @@ class P2VTransformer:
         if max_wname_length:
             self._shorten_wire_names(module, max_wname_length)
 
+        module.pre_py2v_hook()
         params = self._module_params2v(module)
         ports = self._module_ports2v(module)
         wires = self._module_wires2v(module)
         instances = self._module_instances2v(module)
         constant_wires = self._constant_wires2v(module)
         port_wires = self._port2wire_wires2v(module)
+        module.post_py2v_hook()
         module_str = f'module {module.name}{params}{ports};\n{wires}\n{instances}{constant_wires}{port_wires}endmodule'
         return module_str.replace(CFG.id_internal, CFG.id_external)
 
@@ -270,10 +283,17 @@ class P2VTransformer:
                 if pname != wname:
                     # Port is connected to internal wire and not explicitely connected beforehand
                     # Otherwise this would lead to 'assign PortName = PortName;'
-                    if p.direction.name == 'OUT':
+                    if p.direction is Direction.OUT:
                         port_wire_strs.append(f'\t\tassign {pname}\t= {wname};')
-                    elif p.direction.name == 'IN':
-                        port_wire_strs.append(f'\t\tassign {wname}\t= {pname};')
+                    elif p.direction is Direction.IN:
+                        if not s.ws.is_constant:
+                            port_wire_strs.append(f'\t\tassign {wname}\t= {pname};')
+                        elif s.ws.is_defined_constant:
+                            raise VerilogSyntaxError(
+                                f'Input Port {p.raw_path} tries to "drive onto a constant value": {wname}. This would correspond to `assign {wname} = {pname};`!'
+                            )
+                        else:
+                            LOG.warn(f'Input Port {p.raw_path} is unconnected!')
                     else:
                         raise InvalidDirectionError(
                             'Unable to produce port-to-wire assignment to Verilog: '
@@ -352,6 +372,8 @@ class P2VTransformer:
         Returns:
             str: Either 'reg ' or 'wire', depending on the driving instances of the wire.
         """
+        if 'net_type' in wire.metadata.general:
+            return str(wire.metadata.general['net_type'])
         for s in wire.segments.values():
             if not s.is_constant:
                 for dr in module.get_driving_ports(s.path):
@@ -384,17 +406,11 @@ class P2VTransformer:
         """
         if port.name in module.wires:
             w = module.wires[port.name]
-            if w.width != port.width or any(port[idx] not in w[idx].port_segments for idx, _ in port):
+            if any(ws.path not in port.connected_wire_segments.values() for ws in w.segments.values()):
                 raise VerilogSyntaxError(
                     f'Encountered a wire {w.raw_path} that has the same name as a module port, but is not connected fully to said port!'
                 )
-        if port.name not in module.wires:
-            wires = [module.wires[p.name] for p in port.connected_wires]
-            if any(self._net_type(module, w) != self._net_type(module, wires[0]) for w in wires):
-                raise NetTypeError(f'Connected nets of port {port.raw_path} are partly wire, partly reg.')
-            net_type = self._net_type(module, wires[0]) if wires else 'wire'
-        else:
-            net_type = self._net_type(module, module.wires[port.name])
+        net_type = 'wire' if port.name not in module.wires else self._net_type(module, module.wires[port.name])
         offset = min(port.segments.keys())
         correct_indexing = f'[{port.width + offset - 1}:{offset}]' if port.msb_first else f'[{offset}:{port.width + offset - 1}]'
         width_str = correct_indexing if port.width > 1 else '\t'

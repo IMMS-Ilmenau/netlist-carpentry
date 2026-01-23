@@ -5,13 +5,12 @@ from __future__ import annotations
 import time
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
-from networkx import MultiDiGraph as MDG
 from pydantic import PositiveInt
 
 from netlist_carpentry import CFG, EMPTY_GRAPH, LOG, Direction, Instance, Module
 from netlist_carpentry.core.graph.constraint import Constraint
 from netlist_carpentry.core.graph.match import Match
-from netlist_carpentry.core.graph.utils import all_edges
+from netlist_carpentry.core.graph.module_graph import ModuleGraph
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
 from netlist_carpentry.utils.gate_lib import get
@@ -43,15 +42,7 @@ class Pattern:
     """
 
     @classmethod
-    def get_data(cls, graph: MDG[str], node_name: str, key: str) -> str:
-        return graph.nodes[node_name][key]  # type: ignore
-
-    @classmethod
-    def set_data(cls, graph: MDG[str], node_name: str, key: str, val: object) -> None:
-        graph.nodes[node_name][key] = val  # type: ignore
-
-    @classmethod
-    def _add_node_metadata(cls, graph: MDG[str]) -> None:
+    def _add_node_metadata(cls, graph: ModuleGraph) -> None:
         """
         Adds metadata to the nodes of a given graph.
 
@@ -65,24 +56,24 @@ class Pattern:
         optimization or modification.
 
         Args:
-            graph (MDG[str]): The graph to which metadata should be added.
+            graph (ModuleGraph): The graph to which metadata should be added.
         """
         for n in graph.nodes:
             graph.nodes[n].setdefault('n_input_inst', False)
             graph.nodes[n].setdefault('n_output_inst', False)
-        port_nodes = [n for n in graph.nodes if Pattern.get_data(graph, n, 'ntype') == 'PORT']
+        port_nodes = [n for n in graph.nodes if graph.get_data(n, 'ntype') == 'PORT']
         for p in port_nodes:
             neighbors = set(graph.successors(p)).union(set(graph.predecessors(p)))
-            direction = Pattern.get_data(graph, p, 'ntype_info')
+            direction = graph.get_data(p, 'nsubtype')
             for n in neighbors:
                 if direction == 'input':
-                    Pattern.set_data(graph, n, 'n_input_inst', True)
+                    graph.set_data(n, True, 'n_input_inst')
                 if direction == 'output':
-                    Pattern.set_data(graph, n, 'n_output_inst', True)
+                    graph.set_data(n, True, 'n_output_inst')
 
     @classmethod
-    def _remove_ports_from_pattern_graphs(cls, graph: MDG[str]) -> None:
-        nodes_to_remove = [n for n in graph.nodes if Pattern.get_data(graph, n, 'ntype') == 'PORT']
+    def _remove_ports_from_pattern_graphs(cls, graph: ModuleGraph) -> None:
+        nodes_to_remove = [n for n in graph.nodes if graph.get_data(n, 'ntype') == 'PORT']
         graph.remove_nodes_from(nodes_to_remove)
 
     @classmethod
@@ -188,8 +179,8 @@ class Pattern:
 
     def __init__(
         self,
-        graph: MDG[str],
-        replacement_graph: MDG[str] = EMPTY_GRAPH,
+        graph: ModuleGraph,
+        replacement_graph: ModuleGraph = EMPTY_GRAPH,
         ignore_port_names: bool = True,
         matching_constraints: List[Constraint] = [],
         mapping: Dict[Tuple[str, str, int], Tuple[str, str, int]] = {},
@@ -197,8 +188,8 @@ class Pattern:
     ):
         """
         Args:
-            graph (networkx.MultiDiGraph): The graph representing the pattern structure to find in the circuit.
-            replacement_graph (networkx.MultiDiGraph): The graph representing the replacement structure to replace pattern matches with.
+            graph (ModuleGraph): The graph representing the pattern structure to find in the circuit.
+            replacement_graph (ModuleGraph): The graph representing the replacement structure to replace pattern matches with.
             ignore_port_names (bool): Whether to check if the port names of the pattern match the port names of the circuit. Defaults to True.
             matching_constraints (List): A list of constraints for the matching algorithm. Currently unused.
             mapping (Dict[Tuple[str, str, int], Tuple[str, str, int]]): A dictionary that maps the original nodes and edges to their new counterparts.
@@ -215,7 +206,7 @@ class Pattern:
         self._add_node_metadata(self.replacement_graph)
 
     @property
-    def graph(self) -> MDG[str]:
+    def graph(self) -> ModuleGraph:
         """
         Returns the pattern graph.
 
@@ -224,12 +215,12 @@ class Pattern:
         pattern to be matched in the target graph.
 
         Returns:
-            networkx.MultiDiGraph: The pattern graph.
+            ModuleGraph: The pattern graph.
         """
         return self._graph
 
     @property
-    def replacement_graph(self) -> MDG[str]:
+    def replacement_graph(self) -> ModuleGraph:
         """
         Retrieves the replacement graph associated with this pattern.
 
@@ -238,7 +229,7 @@ class Pattern:
         This property allows for the inspection and modification of the replacement graph.
 
         Returns:
-            networkx.MultiDiGraph: The replacement graph.
+            ModuleGraph: The replacement graph.
         """
         return self._replacement_graph
 
@@ -251,25 +242,12 @@ class Pattern:
     def ignore_boundary_conditions(self) -> bool:
         return self._ignore_boundary_conditions
 
-    def _get_instance_type(self, graph: MDG[str], node_name: str) -> str:
-        """
-        Returns the instance type of a given node in the graph.
-
-        Args:
-            graph (networkx.MultiDiGraph): The input graph.
-            node_name (str): The name of the node.
-
-        Returns:
-            str: The instance type of the node.
-        """
-        return self.get_data(graph, node_name, 'ntype_info')
-
-    def find_matches(self, circuit_graph: MDG[str], max_match_count: Optional[PositiveInt] = None) -> Match:
+    def find_matches(self, circuit_graph: ModuleGraph, max_match_count: Optional[PositiveInt] = None) -> Match:
         """
         Attempts to find matches for this pattern in the given circuit graph.
 
         Args:
-            circuit_graph (networkx.MultiDiGraph): The circuit graph to search for matches.
+            circuit_graph (ModuleGraph): The circuit graph to search for matches.
             max_match_count (Optional[PositiveInt], optional): The maximum number of matches to find. If set to None, no limit is applied. Defaults to None.
 
         Returns:
@@ -292,7 +270,7 @@ class Pattern:
         LOG.info(f'Finished Pattern Matching algorithm on a graph with {len(circuit_graph.nodes)} nodes in {round(time.time() - start, 2)} s...')
         return m
 
-    def count_matches(self, circuit_graph: MDG[str]) -> int:
+    def count_matches(self, circuit_graph: ModuleGraph) -> int:
         """
         Counts the number of matches of this pattern in the given circuit graph.
 
@@ -302,14 +280,16 @@ class Pattern:
         the first node in the pattern.
 
         Args:
-            circuit_graph (networkx.MultiDiGraph): The graph to search for matches in.
+            circuit_graph (ModuleGraph): The graph to search for matches in.
 
         Returns:
             int: The number of matches found.
         """
         return self.find_matches(circuit_graph).count
 
-    def _find_matching_circuit_nodes(self, circuit_graph: MDG[str], pattern_start_node: str, max_match_count: Optional[PositiveInt] = None) -> Match:
+    def _find_matching_circuit_nodes(
+        self, circuit_graph: ModuleGraph, pattern_start_node: str, max_match_count: Optional[PositiveInt] = None
+    ) -> Match:
         """
         Finds the number of matching circuit nodes in the circuit graph that match the given pattern.
 
@@ -317,16 +297,16 @@ class Pattern:
         pattern's start node. It then attempts to match the rest of the pattern, incrementing a counter for each successful match.
 
         Args:
-            circuit_graph (networkx.MultiDiGraph): The input circuit graph.
+            circuit_graph (ModuleGraph): The input circuit graph.
             pattern_start_node (str): The name of the starting node in the pattern.
             max_match_count (Optional[PositiveInt], optional): The maximum number of matches to find. If set to None, no limit is applied. Defaults to None.
 
         Returns:
             Match: The match object containing all matching subgraphs found in the circuit graph.
         """
-        found_pattern_matches: List[MDG[str]] = []
-        circuit_nodes_with_types = circuit_graph.nodes.data('ntype_info')
-        node_type = self._get_instance_type(self.graph, pattern_start_node)
+        found_pattern_matches: List[ModuleGraph] = []
+        circuit_nodes_with_types = circuit_graph.nodes.data('nsubtype')
+        node_type = self.graph.node_subtype(pattern_start_node)
 
         # Iterate over all nodes in the circuit graph with their corresponding instance types
         LOG.debug(f'Searching for node with type {node_type}, which is the type of the start node from the pattern...')
@@ -343,7 +323,7 @@ class Pattern:
                     found_pattern_matches.append(new_subgraph)
         return Match(self.graph, found_pattern_matches)
 
-    def _is_pattern_match(self, circuit_graph: MDG[str], node_tuples_to_check: Set[Tuple[str, str]]) -> Optional[MDG[str]]:
+    def _is_pattern_match(self, circuit_graph: ModuleGraph, node_tuples_to_check: Set[Tuple[str, str]]) -> Optional[ModuleGraph]:
         """
         Checks if the given pattern matches a subgraph in the circuit graph.
 
@@ -352,17 +332,17 @@ class Pattern:
         have similar edges. If any discrepancies are found, it immediately returns False.
 
         Args:
-            circuit_graph (networkx.MultiDiGraph): The input circuit graph.
+            circuit_graph (ModuleGraph): The input circuit graph.
             node_tuples_to_check (Set[Tuple[str, str]]): A set of tuples containing pairs of nodes from the pattern and the circuit graph.
 
         Returns:
-            networkx.MultiDiGraph: The subgraph of the circuit if the pattern matches a subgraph in the circuit graph, None otherwise.
+            ModuleGraph: The subgraph of the circuit if the pattern matches a subgraph in the circuit graph, None otherwise.
         """
         # Keep track of the processed nodes to avoid infinite loops
         processed_circuit_nodes: List[str] = []
         processed_pattern_nodes: List[str] = []
 
-        subgraph: MDG[str] = MDG()
+        subgraph = ModuleGraph()
 
         # Continue processing until all node tuples have been checked
         while node_tuples_to_check:
@@ -382,7 +362,12 @@ class Pattern:
         return subgraph
 
     def _next_node_matches(
-        self, circuit: MDG[str], nodes_to_check: Set[Tuple[str, str]], subgraph: MDG[str], processed_cnodes: List[str], processed_pnodes: List[str]
+        self,
+        circuit: ModuleGraph,
+        nodes_to_check: Set[Tuple[str, str]],
+        subgraph: ModuleGraph,
+        processed_cnodes: List[str],
+        processed_pnodes: List[str],
     ) -> bool:
         """
         Checks if the next pair of circuit and pattern nodes match.
@@ -403,9 +388,9 @@ class Pattern:
         corresponding to the matched edges. It also marks the current nodes as processed and continues with the next pair of nodes.
 
         Args:
-            circuit (networkx.MultiDiGraph): The circuit graph.
+            circuit (ModuleGraph): The circuit graph.
             nodes_to_check (Set[Tuple[str, str]]): A set of tuples containing pairs of nodes from the pattern and the circuit graph.
-            subgraph (networkx.MultiDiGraph): The subgraph of the possible pattern match.
+            subgraph (ModuleGraph): The subgraph of the possible pattern match.
             processed_cnodes (List[str]): A list of processed circuit nodes, in processing order.
             processed_pnodes (List[str]): A list of processed pattern nodes, in processing order.
 
@@ -433,7 +418,7 @@ class Pattern:
         return self._circuit_edges_match_pattern(circuit, nodes_to_check, pattern_edges, circuit_edges, subgraph, pnode, cnode)
 
     def _match_occurrence_boundaries(
-        self, circuit_graph: MDG[str], subgraph: MDG[str], processed_circuit_nodes: List[str], processed_pattern_nodes: List[str]
+        self, circuit_graph: ModuleGraph, subgraph: ModuleGraph, processed_circuit_nodes: List[str], processed_pattern_nodes: List[str]
     ) -> bool:
         # Check whether the instances of the found pattern drive other signals, which are not included in this pattern
         # In such case, reject the found pattern occurrence, since this is not an exact match
@@ -441,7 +426,7 @@ class Pattern:
             corresponding_pattern_node = processed_pattern_nodes[processed_circuit_nodes.index(n)]
             # This condition only applies to non-output instances of the pattern
             # These are nodes that are not connected to pattern outputs
-            if not self.get_data(self.graph, corresponding_pattern_node, 'n_output_inst'):
+            if not self.graph.get_data(corresponding_pattern_node, 'n_output_inst'):
                 # Compare outgoing degrees of both the circuit node and the found pattern occurrence node
                 # If both outgoing degrees are equal, there are no instances inbetween and this is an exact match
                 circuit_degree = circuit_graph.out_degree(n)
@@ -454,26 +439,13 @@ class Pattern:
                     return False
         return True
 
-    def _get_node_type(self, graph: MDG[str], node: str) -> str:
-        """
-        Returns the type of a given node in the graph.
-
-        Args:
-            graph (networkx.MultiDiGraph): The input graph.
-            node (str): The name of the node.
-
-        Returns:
-            str: The type of the node.
-        """
-        return self.get_data(graph, node, 'ntype_info')
-
     def _circuit_edges_match_pattern(
         self,
-        circuit: MDG[str],
+        circuit: ModuleGraph,
         nodes_to_check_next: Set[Tuple[str, str]],
         pattern_node_edges: Set[Tuple[str, str, str]],
         circuit_node_edges: Set[Tuple[str, str, str]],
-        subgraph: MDG[str],
+        subgraph: ModuleGraph,
         pattern_node: str,
         circuit_node: str,
     ) -> bool:
@@ -488,11 +460,11 @@ class Pattern:
         Otherwise, the current circuit edge does not match with the pattern edge and the next circuit edge is tested.
 
         Args:
-            circuit (networkx.MultiDiGraph): The input circuit graph.
+            circuit (ModuleGraph): The input circuit graph.
             nodes_to_check_next (Set[Tuple[str, str]]): A set of tuples containing pairs of nodes from the pattern and the circuit that need to be checked for matching.
             pattern_node_edges (Set[Tuple[str, str, str]]): A set of edges in the pattern graph.
             circuit_node_edges (Set[Tuple[str, str, str]]): A set of edges in the circuit graph.
-            subgraph (networkx.MultiDiGraph): The subgraph representing the found match in the circuit.
+            subgraph (ModuleGraph): The subgraph representing the found match in the circuit.
             pattern_node (str): The pattern node currently being matched against the circuit.
             circuit_node (str): The circuit node currently being assumed to match the pattern node.
 
@@ -500,13 +472,13 @@ class Pattern:
             bool: True if a match is found and the node tuples have been updated, False otherwise.
         """
         for pu, pv, pkey in pattern_node_edges:
-            pv_type = self._get_node_type(self.graph, pv)
-            pu_type = self._get_node_type(self.graph, pu)
+            pv_type = self.graph.node_subtype(pv)
+            pu_type = self.graph.node_subtype(pu)
             for cu, cv, ckey in circuit_node_edges:
                 # TODO what if ports are switched, e. g. AND or OR gates? Should not matter
                 matching_port_names = self._ignore_port_names or pkey == ckey
-                v_types_equal = pv_type == self._get_node_type(circuit, cv)
-                u_types_equal = pu_type == self._get_node_type(circuit, cu)
+                v_types_equal = pv_type == circuit.node_subtype(cv)
+                u_types_equal = pu_type == circuit.node_subtype(cu)
                 symmetric_structure = (pu == pattern_node and cu == circuit_node) or (pv == pattern_node and cv == circuit_node)
 
                 if matching_port_names and v_types_equal and u_types_equal and symmetric_structure:
@@ -519,10 +491,10 @@ class Pattern:
                 return False
         return True
 
-    def matches_constraints(self, potential_match_graph: MDG[str], circuit_graph: MDG[str]) -> bool:
+    def matches_constraints(self, potential_match_graph: ModuleGraph, circuit_graph: ModuleGraph) -> bool:
         return all(constraint.check(potential_match_graph, circuit_graph) for constraint in self.matching_constraints)
 
-    def interesting_edges(self, graph: MDG[str], curr_node: str, processed_nodes: List[str]) -> Set[Tuple[str, str, str]]:
+    def interesting_edges(self, graph: ModuleGraph, curr_node: str, processed_nodes: List[str]) -> Set[Tuple[str, str, str]]:
         """
         Returns a set of edges connected to the given node that have not been processed yet.
 
@@ -530,7 +502,7 @@ class Pattern:
         If both end points are in the `processed_nodes` list, the edges is considered processed.
 
         Args:
-            graph (networkx.MultiDiGraph): The graph to process.
+            graph (ModuleGraph): The graph to process.
             curr_node (str): The current node to consider.
             processed_nodes (List[str]): A list of nodes that have already been processed, in processing order.
 
@@ -538,7 +510,7 @@ class Pattern:
             Set[Tuple[str, str, str]]: A set of edges connected to the given node that have not been processed yet.
             The first tuple element is the start of the edge, the second element is the end of the edge, and the third element is the key (for multi-edge connections).
         """
-        return {(u, v, k) for u, v, k in all_edges(graph, curr_node) if u not in processed_nodes or v not in processed_nodes}
+        return {(u, v, k) for u, v, k in graph.all_edges(curr_node) if u not in processed_nodes or v not in processed_nodes}
 
     def replace(self, module: Module, iterations: Optional[PositiveInt] = None, replace_all_parallel: bool = False) -> int:
         """
@@ -641,14 +613,14 @@ class Pattern:
             LOG.debug(f'Skipped {skips} pattern occurrences due to immutability.')
         return new_replacements_count
 
-    def _circuit_to_pattern_pairing(self, match_pairing: Dict[str, Dict[int, str]], match: MDG[str], i: int) -> Dict[str, str]:
+    def _circuit_to_pattern_pairing(self, match_pairing: Dict[str, Dict[int, str]], match: ModuleGraph, i: int) -> Dict[str, str]:
         """
         Creates a dictionary that maps circuit nodes to their corresponding pattern nodes
         based on the given match pairing and iteration index.
 
         Args:
             match_pairing (Dict[str, Dict[int, str]]): The pairing between circuit and pattern nodes across multiple matches.
-            match (networkx.MultiDiGraph): The current match being processed.
+            match (ModuleGraph): The current match being processed.
             i (int): The iteration index of the current match.
 
         Returns:
@@ -695,7 +667,7 @@ class Pattern:
         for new_inst_node in self.replacement_graph.nodes:
             # Create and add Instance for current instance node from the replacement graph
             inst_name = f'{new_inst_node}{CFG.id_external}replaced{replacement_counter}'
-            inst_type = dict(self.replacement_graph.nodes.data())[new_inst_node]['ntype_info']
+            inst_type = dict(self.replacement_graph.nodes.data())[new_inst_node]['nsubtype']
             LOG.debug(f'\tAdding pattern node {inst_name} (type {inst_type})...')
             pattern_inst: Instance = self.replacement_graph.nodes[new_inst_node]['ndata']
             width = max(p.width for p in pattern_inst.ports.values())
@@ -753,7 +725,7 @@ class Pattern:
         processed_connections: List[Tuple[str, str, str]] = []
         wire_counter2 = 0
         for pattern_node in self.replacement_graph.nodes:
-            for pattern_u, pattern_v, port_key in all_edges(self.replacement_graph, pattern_node):
+            for pattern_u, pattern_v, port_key in self.replacement_graph.all_edges(pattern_node):
                 base_u_name = next((k for k, v in pattern2instance_mapping.items() if v == pattern_u), pattern_u)
                 base_v_name = next((k for k, v in pattern2instance_mapping.items() if v == pattern_v), pattern_v)
                 origin_inst = module.instances[instance_renaming_mapping[base_u_name]]

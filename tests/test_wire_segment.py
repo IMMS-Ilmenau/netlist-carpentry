@@ -341,7 +341,7 @@ def test_wire_segment_str(wire_segment: WireSegment) -> None:
 
 
 def test_wire_segment_repr(wire_segment: WireSegment) -> None:
-    assert repr(wire_segment) == 'WireSegment(a.b.c.0, Signal:x)'
+    assert repr(wire_segment) == 'WireSegment(a.b.c.0, Signal:x, 3 port(s))'
 
     assert repr(WIRE_SEGMENT_0) == 'Constant WireSegment "0" WireSeg(0)'
     assert repr(WIRE_SEGMENT_1) == 'Constant WireSegment "1" WireSeg(1)'

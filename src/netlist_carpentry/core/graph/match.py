@@ -10,28 +10,28 @@ import networkx as nx
 from pydantic import NonNegativeInt
 
 from netlist_carpentry import CFG, LOG
-from netlist_carpentry.core.graph.utils import all_edges
+from netlist_carpentry.core.graph.module_graph import ModuleGraph
 
 
 class Match:
-    def __init__(self, pattern_graph: nx.MultiDiGraph[str], matches: List[nx.MultiDiGraph[str]]):
+    def __init__(self, pattern_graph: ModuleGraph, matches: List[ModuleGraph]):
         self._pattern_graph = pattern_graph
         self._matches = matches
 
     @property
-    def pattern_graph(self) -> nx.MultiDiGraph[str]:
+    def pattern_graph(self) -> ModuleGraph:
         """
         Returns a deep copy of the pattern graph.
 
         The returned graph is a **copy of the actual pattern graph** to prevent external modifications.
 
         Returns:
-            networkx.MultiDiGraph: A deep copy of the pattern graph.
+            ModuleGraph: A deep copy of the pattern graph.
         """
         return deepcopy(self._pattern_graph)
 
     @property
-    def matches(self) -> List[nx.MultiDiGraph[str]]:
+    def matches(self) -> List[ModuleGraph]:
         """
         Returns a deep copy of the list of matched subgraphs found in the original circuit.
 
@@ -97,7 +97,7 @@ class Match:
         LOG.debug(f'Collected pairings in {round(time.time() - start, 2)} s!')
         return iso_dict
 
-    def get_interfaces(self, circuit_graph: nx.MultiDiGraph[str]) -> Dict[int, Dict[Tuple[str, str, int], Set[Tuple[str, str, int]]]]:
+    def get_interfaces(self, circuit_graph: ModuleGraph) -> Dict[int, Dict[Tuple[str, str, int], Set[Tuple[str, str, int]]]]:
         """
         Returns a dictionary of interfaces for each matched subgraph in the original circuit.
 
@@ -152,7 +152,7 @@ class Match:
         original circuit.
 
         Args:
-            circuit_graph (networkx.MultiDiGraph[str]): The original circuit graph.
+            circuit_graph (ModuleGraph): The original circuit graph.
 
         Returns:
             Dict[int, Dict[Tuple[str, str, int], Set[Tuple[str, str, int]]]]: A dictionary of interfaces for each matched subgraph.
@@ -167,10 +167,10 @@ class Match:
 
     def _build_interface_match(
         self,
-        circuit_graph: nx.MultiDiGraph[str],
+        circuit_graph: ModuleGraph,
         interface: Dict[int, Dict[Tuple[str, str, int], Set[Tuple[str, str, int]]]],
         match_idx: NonNegativeInt,
-        match_graph: nx.MultiDiGraph[str],
+        match_graph: ModuleGraph,
     ) -> None:
         """
         Builds an interface for a matched subgraph in the original circuit.
@@ -180,16 +180,16 @@ class Match:
         the matched subgraph, and then constructing a nested dictionary structure to represent these connections.
 
         Args:
-            circuit_graph (networkx.MultiDiGraph[str]): The original circuit graph.
+            circuit_graph (ModuleGraph): The original circuit graph.
             interface (Dict[int, Dict[Tuple[str, str, int], Set[Tuple[str, str, int]]]]): A dictionary to store the interfaces for each match.
             match_idx (NonNegativeInt): The index of the current match in the list of matches.
-            match_graph (networkx.MultiDiGraph[str]): The matched subgraph.
+            match_graph (ModuleGraph): The matched subgraph.
         """
         interface[match_idx] = {}
         for n in match_graph.nodes:
             LOG.debug(f'\tProcessing node {n} (of match nr. {match_idx})...')
             # For each node in the matched subgraph, initialize an empty dictionary to store its interfaces
-            edges = all_edges(circuit_graph, n)
+            edges = circuit_graph.all_edges(n)
             for start, end, pnames in edges:
                 dr_seg = circuit_graph.edges[start, end, pnames]['dr_seg']
                 ld_seg = circuit_graph.edges[start, end, pnames]['ld_seg']

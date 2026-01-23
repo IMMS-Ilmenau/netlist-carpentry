@@ -128,6 +128,19 @@ def test_const_wire_assigns(writer: P2VTransformer) -> None:
     assert target_str == found_str
 
 
+def test_port2wire_wires2v(writer: P2VTransformer) -> None:
+    m = Module(raw_path='testModule1')
+    p = m.create_port('in', Direction.IN)
+    warns = LOG.warns_quantity
+    vstr = writer._port2wire_wires2v(m)
+    assert vstr == ''
+    assert LOG.warns_quantity == warns + 1
+
+    p[0].tie_signal(0)
+    with pytest.raises(VerilogSyntaxError):
+        writer._port2wire_wires2v(m)
+
+
 def test_port2v(writer: P2VTransformer) -> None:
     from tests.utils import empty_module
 

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from netlist_carpentry.io.read.gen_nl import generate_json_netlist
+from netlist_carpentry.io.read.read_utils import generate_json_netlist
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 

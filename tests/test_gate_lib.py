@@ -15,46 +15,46 @@ from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.port import Port
 from netlist_carpentry.core.netlist_elements.wire_segment import WIRE_SEGMENT_1
-from netlist_carpentry.utils._gate_lib_base import LibUtils
 from netlist_carpentry.utils.gate_lib import (
     ADFF,
     ADFFE,
     DFF,
     DFFE,
+    BinaryGate,
+    BinaryNto1Gate,
     Demultiplexer,
     DLatch,
     Multiplexer,
+    PrimitiveGate,
+    ReduceGate,
     ScanADFF,
     ScanADFFE,
     ScanDFF,
     ScanDFFE,
-    _BinaryGate,
-    _BinaryNto1Gate,
-    _PrimitiveGate,
-    _ReduceGate,
-    _UnaryGate,
+    UnaryGate,
 )
+from netlist_carpentry.utils.gate_lib_base_classes import LibUtils
 from netlist_carpentry.utils.log import LOG
 
 
 @pytest.fixture
 def primitive_gate() -> Instance:
-    return _PrimitiveGate(raw_path='a.b.primitive_gate_inst', instance_type='primitive_gate', module=None)
+    return PrimitiveGate(raw_path='a.b.primitive_gate_inst', instance_type='primitive_gate', module=None)
 
 
 @pytest.fixture
 def unary_gate() -> Instance:
-    return _UnaryGate(raw_path='a.b.unary_gate_inst', instance_type='unary_gate', module=None)
+    return UnaryGate(raw_path='a.b.unary_gate_inst', instance_type='unary_gate', module=None)
 
 
 @pytest.fixture
 def reduce_gate() -> Instance:
-    return _ReduceGate(raw_path='a.b.reduce_gate_inst', instance_type='reduce_gate', parameters={'A_WIDTH': 4}, module=None)
+    return ReduceGate(raw_path='a.b.reduce_gate_inst', instance_type='reduce_gate', parameters={'A_WIDTH': 4}, module=None)
 
 
 @pytest.fixture
 def binary_gate() -> Instance:
-    return _BinaryGate(raw_path='a.b.binary_gate_inst', instance_type='binary_gate', module=None)
+    return BinaryGate(raw_path='a.b.binary_gate_inst', instance_type='binary_gate', module=None)
 
 
 @pytest.fixture()
@@ -103,7 +103,7 @@ def test_ws2v(simple_module: Module) -> None:
     assert ps_str2 == 'w4[0]'
 
 
-def test_primitive_gate(primitive_gate: _PrimitiveGate) -> None:
+def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
     assert primitive_gate.name == 'primitive_gate_inst'
     assert primitive_gate.type is EType.INSTANCE
     assert primitive_gate.instance_type == 'primitive_gate'
@@ -112,12 +112,14 @@ def test_primitive_gate(primitive_gate: _PrimitiveGate) -> None:
     assert not primitive_gate.is_blackbox
     assert not primitive_gate.is_module_instance
     assert primitive_gate.is_primitive
-    assert primitive_gate.is_combinatorial
+    assert primitive_gate.is_combinational
     assert not primitive_gate.is_sequential
     assert primitive_gate.verilog_template == 'assign {out} = {in1};'
+    with pytest.raises(NotImplementedError):
+        primitive_gate.verilog_net_map
 
 
-def test_unary_gate(unary_gate: _UnaryGate) -> None:
+def test_unary_gate(unary_gate: UnaryGate) -> None:
     assert unary_gate.name == 'unary_gate_inst'
     assert unary_gate.type is EType.INSTANCE
     assert unary_gate.instance_type == 'unary_gate'
@@ -138,7 +140,7 @@ def test_unary_gate(unary_gate: _UnaryGate) -> None:
     unary_gate.sync_parameters()
     assert unary_gate.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 1, 'Y_WIDTH': 1}
 
-    unary_gate.parameters['A_SIGNED'] = True
+    unary_gate.ports['A'].parameters['signed'] = True
     warns = LOG.warns_quantity
     assert unary_gate.a_signed is False
     assert unary_gate.parameters['A_SIGNED'] is False
@@ -146,7 +148,7 @@ def test_unary_gate(unary_gate: _UnaryGate) -> None:
 
 
 def test_unary_gate_8bit(simple_module: Module) -> None:
-    g = _UnaryGate(raw_path='a.b.unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
+    g = UnaryGate(raw_path='a.b.unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
     assert len(g.connections) == 2
     assert len(g.connections['A']) == 8
     assert len(g.connections['Y']) == 8
@@ -161,7 +163,7 @@ def test_unary_gate_8bit(simple_module: Module) -> None:
 
 
 def test_unary_gate_split(simple_module: Module) -> None:
-    g = _UnaryGate(raw_path='a.b.unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
+    g = UnaryGate(raw_path='a.b.unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
     simple_module.add_instance(g)
     a = simple_module.create_port('A', Direction.IN, width=8)
     y = simple_module.create_port('Y', Direction.OUT, width=8)
@@ -182,7 +184,7 @@ def test_unary_gate_split(simple_module: Module) -> None:
         assert inst.ports['Y'][0].ws_path == connections['Y'][idx]
 
 
-def test_unary_gate_eval(unary_gate: _UnaryGate) -> None:
+def test_unary_gate_eval(unary_gate: UnaryGate) -> None:
     assert unary_gate.output_port.signal is Signal.UNDEFINED
     unary_gate._set_output({0: Signal.HIGH})
     assert unary_gate.output_port.signal is Signal.HIGH
@@ -191,7 +193,7 @@ def test_unary_gate_eval(unary_gate: _UnaryGate) -> None:
         unary_gate._calc_output()
 
 
-def _test_signal_conf1(gate: _UnaryGate, sin: Signal, sout_prev: Signal, sout_new: Signal, idx: int = 0) -> None:
+def _test_signal_conf1(gate: UnaryGate, sin: Signal, sout_prev: Signal, sout_new: Signal, idx: int = 0) -> None:
     assert gate.signal_out(idx) == sout_prev
     gate.input_port.set_signal(sin, index=idx)
     assert gate.signal_in(idx) == sin
@@ -200,7 +202,7 @@ def _test_signal_conf1(gate: _UnaryGate, sin: Signal, sout_prev: Signal, sout_ne
     assert gate.signal_out(idx) == sout_new
 
 
-def _test_signal_conf1_n(gate: _UnaryGate, sin: Signal, sout_prev: Signal, sout_new: Signal) -> None:
+def _test_signal_conf1_n(gate: UnaryGate, sin: Signal, sout_prev: Signal, sout_new: Signal) -> None:
     for i in range(gate.width):
         if i == 1:
             assert gate.signal_in(i) is Signal.HIGH
@@ -235,6 +237,7 @@ def test_buffer(simple_module: Module) -> None:
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]};"
+    assert g.verilog_net_map == {'Y': '{wire[3], wire[1:0]}', 'A': "{wireA2, 1'b1, wireA1[0]}"}
 
     _test_signal_conf1_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
     _test_signal_conf1_n(g, Signal.LOW, Signal.UNDEFINED, Signal.LOW)
@@ -302,7 +305,7 @@ def test_neg_gate(simple_module: Module) -> None:
     assert g.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW, 4: Signal.HIGH}
 
 
-def _test_signal_confr_n(gate: _UnaryGate, sin: Signal, sout_prev: Signal, sout_new: Signal) -> None:
+def _test_signal_confr_n(gate: UnaryGate, sin: Signal, sout_prev: Signal, sout_new: Signal) -> None:
     assert gate.signal_out() == sout_prev
     for i in range(gate.width):
         gate.input_port.set_signal(sin, index=i)
@@ -325,7 +328,7 @@ def _test_signal_confr_n(gate: _UnaryGate, sin: Signal, sout_prev: Signal, sout_
     gate.modify_connection('A', WIRE_SEGMENT_X.path, index=2)
 
 
-def test_reducer(reduce_gate: _ReduceGate) -> None:
+def test_reducer(reduce_gate: ReduceGate) -> None:
     assert reduce_gate.name == 'reduce_gate_inst'
     assert reduce_gate.type is EType.INSTANCE
     assert reduce_gate.instance_type == 'reduce_gate'
@@ -358,6 +361,7 @@ def test_reduce_and(simple_module: Module) -> None:
 
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
     assert r.verilog == "assign wire[0] = &{wireA2, 1'b1, wireA1[0]};"
+    assert r.verilog_net_map == {'Y': 'wire[0]', 'A': "{wireA2, 1'b1, wireA1[0]}"}
 
     _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
     _test_signal_confr_n(r, Signal.FLOATING, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -556,7 +560,7 @@ def test_logic_not(simple_module: Module) -> None:
     assert ln.signal_out() == Signal.LOW
 
 
-def test_binary_gate(binary_gate: _BinaryGate) -> None:
+def test_binary_gate(binary_gate: BinaryGate) -> None:
     assert binary_gate.name == 'binary_gate_inst'
     assert binary_gate.type is EType.INSTANCE
     assert binary_gate.instance_type == 'binary_gate'
@@ -581,8 +585,8 @@ def test_binary_gate(binary_gate: _BinaryGate) -> None:
     assert binary_gate.sync_parameters() == {'A_WIDTH': 1, 'A_SIGNED': False, 'B_SIGNED': True, 'B_WIDTH': 1, 'Y_WIDTH': 1}
     assert binary_gate.splittable
 
-    binary_gate.parameters['A_SIGNED'] = True
-    binary_gate.parameters['B_SIGNED'] = False
+    binary_gate.ports['A'].parameters['signed'] = True
+    binary_gate.ports['B'].parameters['signed'] = False
     warns = LOG.warns_quantity
     assert binary_gate.a_signed is False
     assert binary_gate.b_signed is True
@@ -592,7 +596,7 @@ def test_binary_gate(binary_gate: _BinaryGate) -> None:
 
 
 def test_binary_gate_8bit(simple_module: Module) -> None:
-    g = _BinaryGate(raw_path='a.b.binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
+    g = BinaryGate(raw_path='a.b.binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
     assert len(g.connections) == 3
     assert len(g.connections['A']) == 8
     assert len(g.connections['B']) == 8
@@ -609,7 +613,7 @@ def test_binary_gate_8bit(simple_module: Module) -> None:
 
 
 def test_binary_gate_split(simple_module: Module) -> None:
-    g = _BinaryGate(raw_path='a.b.binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
+    g = BinaryGate(raw_path='a.b.binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
     simple_module.add_instance(g)
     a = simple_module.create_port('A', Direction.IN, width=8)
     b = simple_module.create_port('B', Direction.IN, width=8)
@@ -634,7 +638,7 @@ def test_binary_gate_split(simple_module: Module) -> None:
         assert inst.ports['Y'][0].ws_path == connections['Y'][idx]
 
 
-def test_binary_gate_eval(binary_gate: _BinaryGate) -> None:
+def test_binary_gate_eval(binary_gate: BinaryGate) -> None:
     assert binary_gate.output_port.signal is Signal.UNDEFINED
     binary_gate._set_output({0: Signal.HIGH})
     assert binary_gate.output_port.signal is Signal.HIGH
@@ -643,7 +647,7 @@ def test_binary_gate_eval(binary_gate: _BinaryGate) -> None:
         binary_gate._calc_output()
 
 
-def _test_signal_conf2(gate: _BinaryGate, sin1: Signal, sin2: Signal, sout_prev: Signal, sout_new: Signal, idx: int = 0) -> None:
+def _test_signal_conf2(gate: BinaryGate, sin1: Signal, sin2: Signal, sout_prev: Signal, sout_new: Signal, idx: int = 0) -> None:
     if idx == 1:
         assert gate.signals_in(idx)[0] == Signal.HIGH
         gate.input_ports[0].set_signal(sin1, index=idx)
@@ -664,7 +668,7 @@ def _test_signal_conf2(gate: _BinaryGate, sin1: Signal, sin2: Signal, sout_prev:
         assert gate.signal_out(idx) == sout_new
 
 
-def _test_signal_conf2_n(gate: _BinaryGate, sin1: Signal, sin2: Signal, sout_prev: Signal, sout_new: Signal) -> None:
+def _test_signal_conf2_n(gate: BinaryGate, sin1: Signal, sin2: Signal, sout_prev: Signal, sout_new: Signal) -> None:
     for i in range(gate.width):
         _test_signal_conf2(gate, sin1, sin2, sout_prev, sout_new, i)
 
@@ -691,6 +695,7 @@ def test_and_gate(simple_module: Module) -> None:
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} & {wireB[3], wireB[1:0]};"
+    assert g.verilog_net_map == {'Y': '{wire[3], wire[1:0]}', 'A': "{wireA2, 1'b1, wireA1[0]}", 'B': '{wireB[3], wireB[1:0]}'}
 
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.LOW, Signal.UNDEFINED, Signal.LOW)
@@ -722,9 +727,10 @@ def test_and_gate_signed(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    g.ports['A'].set_signed(True)
-    g.ports['B'].set_signed(True)
+    g.parameters['A_SIGNED'] = True
+    g.parameters['B_SIGNED'] = True
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) & $signed({wireB[3], wireB[1:0]});"
+    assert g.verilog_net_map == {'Y': '{wire[3], wire[1:0]}', 'A': "{wireA2, 1'b1, wireA1[0]}", 'B': '{wireB[3], wireB[1:0]}'}
 
 
 def test_or_gate(simple_module: Module) -> None:
@@ -910,7 +916,7 @@ def test_shift_signed_gate(simple_module: Module) -> None:
     assert g.instance_type == '§shift'
     assert not g.splittable
     assert g.verilog_template == 'assign {out} = {in1} >> {in2};'
-    g.ports['B'].set_signed(True)
+    g.parameters['B_SIGNED'] = True
     assert g.b_signed is True
     assert g.verilog_template == 'assign {out} = {in1} << -{in2};'
     assert g.verilog == ''
@@ -929,11 +935,11 @@ def test_shift_signed_gate(simple_module: Module) -> None:
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} << -{wireB[3], wireB[1:0]};"
-    g.ports['B'].set_signed(False)
+    g.parameters['B_SIGNED'] = False
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} >> {wireB[3], wireB[1:0]};"
-    g.ports['A'].set_signed(True)
+    g.parameters['A_SIGNED'] = True
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
-    g.ports['B'].set_signed(True)
+    g.parameters['B_SIGNED'] = True
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << -{wireB[3], wireB[1:0]};"
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
@@ -947,36 +953,36 @@ def test_shift_signed_gate(simple_module: Module) -> None:
     assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.HIGH}
 
     # A signed, B unsigned: right shift, but A is signed
-    g.ports['A'].set_signed(True)
+    g.parameters['A_SIGNED'] = True
     g.ports['A'].set_signals('0110')
     g.ports['B'].set_signals('0001')
     g.evaluate()
     assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.HIGH}
-    g.ports['A'].set_signed(True)
+    g.parameters['A_SIGNED'] = True
     g.ports['A'].set_signals('1011')  # -5
     g.ports['B'].set_signals('0010')
     g.evaluate()
     assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
 
     # A signed, B signed: left shift, but A is signed
-    g.ports['B'].set_signed(True)
+    g.parameters['B_SIGNED'] = True
     g.ports['A'].set_signals('1011')  # -5
     g.ports['B'].set_signals('0001')  # B == 1 > 0: Right Shift by 1: '1011' >> 1 = '1101' in signed context
     g.evaluate()
     assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.HIGH}
-    g.ports['A'].set_signed(True)
+    g.parameters['A_SIGNED'] = True
     g.ports['A'].set_signals('1011')  # -5
     g.ports['B'].set_signals('1111')  # B == -1 < 0: Left Shift by 1: '1011' << 1 = '0110'
     g.evaluate()
     assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
 
     # A unsigned, B signed: logical left shift
-    g.ports['A'].set_signed(False)
+    g.parameters['A_SIGNED'] = False
     g.ports['A'].set_signals('1011')  # 11
     g.ports['B'].set_signals('0001')  # B == 1 > 0: Right Shift by 1: '1011' >> 1 = '0101' since A is unsigned
     g.evaluate()
     assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.HIGH}
-    g.ports['A'].set_signed(True)
+    g.parameters['A_SIGNED'] = True
     g.ports['A'].set_signals('1011')  # -5
     g.ports['B'].set_signals('1111')  # B == -1 < 0: Left Shift by 1: '1011' << 1 = '0110'
     g.evaluate()
@@ -1010,9 +1016,9 @@ def test_shl_gate(simple_module: Module) -> None:
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} << {wireB[3], wireB[1:0]};"
-    g.ports['A'].set_signed(True)
+    g.parameters['A_SIGNED'] = True
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << {wireB[3], wireB[1:0]};"
-    g.ports['B'].set_signed(True)  # B_SIGNED == 1 should not change Verilog output
+    g.parameters['B_SIGNED'] = True  # B_SIGNED == 1 should not change Verilog output
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << {wireB[3], wireB[1:0]};"
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
@@ -1058,9 +1064,9 @@ def test_shr_gate(simple_module: Module) -> None:
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
     assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} >> {wireB[3], wireB[1:0]};"
-    g.ports['A'].set_signed(True)
+    g.parameters['A_SIGNED'] = True
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
-    g.ports['B'].set_signed(True)  # B_SIGNED == 1 should not change Verilog output
+    g.parameters['B_SIGNED'] = True  # B_SIGNED == 1 should not change Verilog output
     assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
@@ -1084,12 +1090,12 @@ def test_shr_gate(simple_module: Module) -> None:
 
 
 def test_comparison_gate(simple_module: Module) -> None:
-    g = _BinaryNto1Gate(raw_path='a.comp_inst', module=simple_module)
+    g = BinaryNto1Gate(raw_path='a.comp_inst', module=simple_module)
     assert g.verilog == ''
     assert not g.splittable
 
 
-def _test_signal_conf2_arith(gate: _BinaryGate, sins1: Dict[int, Signal], sins2: Dict[int, Signal], sout: Signal) -> None:
+def _test_signal_conf2_arith(gate: BinaryGate, sins1: Dict[int, Signal], sins2: Dict[int, Signal], sout: Signal) -> None:
     for i, s in sins1.items():
         gate.input_ports[0].set_signal(s, i)
         if i == 1:
@@ -1122,6 +1128,7 @@ def test_logic_and_gate(simple_module: Module) -> None:
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
     assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} && wireB[1:0];"
+    assert g.verilog_net_map == {'Y': 'wire[0]', 'A': "{1'b1, wireA1[0]}", 'B': 'wireB[1:0]'}
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
     _test_signal_conf2_arith(g, {1: Signal.FLOATING, 0: Signal.FLOATING}, {1: Signal.FLOATING, 0: Signal.FLOATING}, Signal.UNDEFINED)
@@ -1348,6 +1355,18 @@ def test_mux_structure(simple_module: Module) -> None:
     target_str = 'always @(*) begin\n\tcase (wmuxS)\n' + case_str + '\tendcase\nend'
     save_results(target_str + '\n\n\n' + m.verilog, 'txt')
     assert m.verilog == target_str
+    assert m.verilog_net_map == {
+        'Y': '{wmuxY_1[3:2], wmuxY_1[0]}',
+        'S': 'wmuxS',
+        'D0': '{wmuxD_0[3:2], wmuxD_0[0]}',
+        'D1': '{wmuxD_1[3:2], wmuxD_1[0]}',
+        'D2': '{wmuxD_2[3:2], wmuxD_2[0]}',
+        'D3': '{wmuxD_3[3:2], wmuxD_3[0]}',
+        'D4': '{wmuxD_4[3:2], wmuxD_4[0]}',
+        'D5': '{wmuxD_5[3:2], wmuxD_5[0]}',
+        'D6': '{wmuxD_6[3:2], wmuxD_6[0]}',
+        'D7': '{wmuxD_7[3:2], wmuxD_7[0]}',
+    }
 
 
 def test_mux_split(simple_module: Module) -> None:
@@ -1484,6 +1503,18 @@ def test_demux_structure(simple_module: Module) -> None:
     target_str = 'always @(*) begin\n\tcase (wmuxS)\n' + case_str + '\tendcase\nend'
     save_results(target_str + '\n\n\n' + d.verilog, 'txt')
     assert d.verilog == target_str
+    assert d.verilog_net_map == {
+        'D': '{wmuxD_1[3:2], wmuxD_1[0]}',
+        'S': 'wmuxS',
+        'Y0': '{wmuxY_0[3:2], wmuxY_0[0]}',
+        'Y1': '{wmuxY_1[3:2], wmuxY_1[0]}',
+        'Y2': '{wmuxY_2[3:2], wmuxY_2[0]}',
+        'Y3': '{wmuxY_3[3:2], wmuxY_3[0]}',
+        'Y4': '{wmuxY_4[3:2], wmuxY_4[0]}',
+        'Y5': '{wmuxY_5[3:2], wmuxY_5[0]}',
+        'Y6': '{wmuxY_6[3:2], wmuxY_6[0]}',
+        'Y7': '{wmuxY_7[3:2], wmuxY_7[0]}',
+    }
 
 
 def test_demux_split(simple_module: Module) -> None:
@@ -1616,6 +1647,11 @@ def test_adder_structure(simple_module: Module) -> None:
     assert a.sync_parameters() == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 5}
     assert not a.splittable
 
+    a.disconnect('Y', 4)
+    a.disconnect('Y', 3)
+    assert a.verilog == "assign wire[2:0] = {2'bx1, wireA1[0]} + $signed({1'bx, wireB[1:0]});"
+    assert a.verilog_net_map == {'Y': 'wire[2:0]', 'A': "{2'bx1, wireA1[0]}", 'B': "{1'bx, wireB[1:0]}"}
+
 
 def test_adder_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Adder
@@ -1644,7 +1680,7 @@ def test_adder_behavior(simple_module: Module) -> None:
     a.evaluate()  # 12 + 6 = 18
     assert a.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.LOW, 4: Signal.HIGH}
 
-    a.ports['B'].set_signed(True)
+    a.parameters['B_SIGNED'] = True
     a.tie_port('B', 0, '0')
     a.tie_port('B', 1, '1')
     a.tie_port('B', 2, '0')
@@ -1716,7 +1752,7 @@ def test_subtractor_behavior(simple_module: Module) -> None:
     s.modify_connection('Y', WireSegmentPath(raw='a.carry.0'), index=4)
     s.evaluate()
     assert s.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH, 4: Signal.HIGH}
-    s.ports['B'].set_signed(True)
+    s.parameters['B_SIGNED'] = True
     s.tie_port('B', 0, '1')
     s.tie_port('B', 1, '0')
     s.tie_port('B', 2, '1')
@@ -1803,9 +1839,9 @@ def test_multiplier_behavior(simple_module: Module) -> None:
 
 
 def test_clocked_gate(simple_module: Module) -> None:
-    from netlist_carpentry.utils.gate_lib import _ClkMixin
+    from netlist_carpentry.utils.gate_lib import ClkMixin
 
-    g = _ClkMixin(
+    g = ClkMixin(
         instance_type='clocked_gate',
         raw_path='a.clocked_gate_inst',
         parameters={'CLK_POLARITY': Signal.LOW, 'RST_POLARITY': Signal.LOW},
@@ -1820,7 +1856,7 @@ def test_clocked_gate(simple_module: Module) -> None:
     assert g.ports['CLK'] is g.clk_port
     assert g.clk_port.width == 1
     assert g.clk_port.signal is Signal.FLOATING
-    assert not g.is_combinatorial
+    assert not g.is_combinational
     assert g.is_sequential
     assert g.splittable
 
@@ -1924,6 +1960,7 @@ def test_dff_structure(simple_module: Module) -> None:
     target_v = "always @(posedge clk) begin\n\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\nend"
     save_results(ff.verilog, 'txt')
     assert ff.verilog == target_v
+    assert ff.verilog_net_map == {'D': "{wireA2, 2'bx1, wireA1[0]}", 'Q': 'wire', 'CLK': 'clk'}
 
 
 def test_dff_behaviour(simple_module: Module) -> None:
@@ -1980,6 +2017,7 @@ def test_adff_structure(simple_module: Module) -> None:
     target_v = "always @(posedge clk or negedge rst) begin\n\tif (~rst) begin\n\t\twire\t<=\t4'b0000;\n\tend else begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
     save_results(ff.verilog, 'txt')
     assert ff.verilog == target_v
+    assert ff.verilog_net_map == {'D': "{wireA2, 2'bx1, wireA1[0]}", 'Q': 'wire', 'CLK': 'clk', 'RST': 'rst'}
 
 
 def test_adff_behaviour(simple_module: Module) -> None:
@@ -2098,6 +2136,7 @@ def test_adffe_structure(simple_module: Module) -> None:
     )
     target_v = "always @(posedge clk or negedge rst) begin\n\tif (~rst) begin\n\t\twire\t<=\t4'b0000;\n\tend else if (en) begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
     assert ff.verilog == target_v
+    assert ff.verilog_net_map == {'D': "{wireA2, 2'bx1, wireA1[0]}", 'Q': 'wire', 'CLK': 'clk', 'RST': 'rst', 'EN': 'en'}
 
 
 def test_adffe_behavior_init(simple_module: Module) -> None:
@@ -2271,13 +2310,14 @@ def test_scandff_structure(simple_module: Module) -> None:
     assert list(range(4)) == list(ff.input_port.segments.keys())
     assert list(range(4)) == list(ff.output_port.segments.keys())
     assert ff.scan_ff_equivalent == DFF
-    assert ff.verilog_template == 'always @({header}) begin\n\t{so}\n\tif ({se}) begin\n\t\t{si}\n\tend else begin\n\t\t{set_out}\n\tend\nend'
+    assert ff.verilog_template == '{so}\nalways @({header}) begin\n\tif ({se}) begin\n\t\t{si}\n\tend else begin\n\t\t{set_out}\n\tend\nend'
 
     _init_dff_structure(ff)
     _init_scan_structure(ff)
-    target_v = "always @(posedge clk) begin\n\tso_wire\t<=\twire;\n\tif (se_wire) begin\n\t\twire\t<=\tsi_wire;\n\tend else begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
+    target_v = "assign\tso_wire\t=\twire;\nalways @(posedge clk) begin\n\tif (se_wire) begin\n\t\twire\t<=\tsi_wire;\n\tend else begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
     save_results(ff.verilog, 'txt')
     assert ff.verilog == target_v
+    assert ff.verilog_net_map == {'D': "{wireA2, 2'bx1, wireA1[0]}", 'Q': 'wire', 'CLK': 'clk', 'SE': 'se_wire', 'SI': 'si_wire', 'SO': 'so_wire'}
 
 
 def test_scandff_behaviour(simple_module: Module) -> None:
@@ -2346,13 +2386,13 @@ def test_scanadff_structure(simple_module: Module) -> None:
     assert ff.scan_ff_equivalent == ADFF
     assert (
         ff.verilog_template
-        == 'always @({header}) begin\n\t{so}\n\tif ({is_rst}) begin\n\t\t{rst_out}\n\tend else if ({se}) begin\n\t\t{si}\n\tend else begin\n\t\t{set_out}\n\tend\nend'
+        == '{so}\nalways @({header}) begin\n\tif ({is_rst}) begin\n\t\t{rst_out}\n\tend else if ({se}) begin\n\t\t{si}\n\tend else begin\n\t\t{set_out}\n\tend\nend'
     )
 
     _init_dff_structure(ff)
     _init_scan_structure(ff)
     ff.modify_connection('RST', WireSegmentPath(raw='a.rst.0'))
-    target_v = "always @(posedge clk or negedge rst) begin\n\tso_wire\t<=\twire;\n\tif (~rst) begin\n\t\twire\t<=\t4'b0000;\n\tend else if (se_wire) begin\n\t\twire\t<=\tsi_wire;\n\tend else begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
+    target_v = "assign\tso_wire\t=\twire;\nalways @(posedge clk or negedge rst) begin\n\tif (~rst) begin\n\t\twire\t<=\t4'b0000;\n\tend else if (se_wire) begin\n\t\twire\t<=\tsi_wire;\n\tend else begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
     save_results(ff.verilog, 'txt')
     assert ff.verilog == target_v
 
@@ -2429,14 +2469,12 @@ def test_scandffe_structure(simple_module: Module) -> None:
     assert list(range(4)) == list(ff.input_port.segments.keys())
     assert list(range(4)) == list(ff.output_port.segments.keys())
     assert ff.scan_ff_equivalent == DFFE
-    assert (
-        ff.verilog_template == 'always @({header}) begin\n\t{so}\n\tif ({se}) begin\n\t\t{si}\n\tend else if ({en}) begin\n\t\t{set_out}\n\tend\nend'
-    )
+    assert ff.verilog_template == '{so}\nalways @({header}) begin\n\tif ({se}) begin\n\t\t{si}\n\tend else if ({en}) begin\n\t\t{set_out}\n\tend\nend'
 
     _init_dff_structure(ff)
     _init_scan_structure(ff)
     ff.modify_connection('EN', WireSegmentPath(raw='a.en.0'))
-    target_v = "always @(posedge clk) begin\n\tso_wire\t<=\twire;\n\tif (se_wire) begin\n\t\twire\t<=\tsi_wire;\n\tend else if (en) begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
+    target_v = "assign\tso_wire\t=\twire;\nalways @(posedge clk) begin\n\tif (se_wire) begin\n\t\twire\t<=\tsi_wire;\n\tend else if (en) begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
     save_results(ff.verilog, 'txt')
     assert ff.verilog == target_v
 
@@ -2517,12 +2555,12 @@ def test_scanadffe_structure(simple_module: Module) -> None:
     assert ff.scan_ff_equivalent == ADFFE
     assert (
         ff.verilog_template
-        == 'always @({header}) begin\n\t{so}\n\tif ({is_rst}) begin\n\t\t{rst_out}\n\tend else if ({se}) begin\n\t\t{si}\n\tend else if ({en}) begin\n\t\t{set_out}\n\tend\nend'
+        == '{so}\nalways @({header}) begin\n\tif ({is_rst}) begin\n\t\t{rst_out}\n\tend else if ({se}) begin\n\t\t{si}\n\tend else if ({en}) begin\n\t\t{set_out}\n\tend\nend'
     )
 
     _init_dff_structure(ff, init_rst_en=True)
     _init_scan_structure(ff)
-    target_v = "always @(posedge clk or negedge rst) begin\n\tso_wire\t<=\twire;\n\tif (~rst) begin\n\t\twire\t<=\t4'b0000;\n\tend else if (se_wire) begin\n\t\twire\t<=\tsi_wire;\n\tend else if (en) begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
+    target_v = "assign\tso_wire\t=\twire;\nalways @(posedge clk or negedge rst) begin\n\tif (~rst) begin\n\t\twire\t<=\t4'b0000;\n\tend else if (se_wire) begin\n\t\twire\t<=\tsi_wire;\n\tend else if (en) begin\n\t\twire\t<=\t{wireA2, 2'bx1, wireA1[0]};\n\tend\nend"
     save_results(ff.verilog, 'txt')
     assert ff.verilog == target_v
 
@@ -2611,6 +2649,7 @@ def test_dlatch_structure(simple_module: Module) -> None:
     target_v = "always @(*) begin\n\tif (~clk) begin\n\t\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]};\n\tend\nend"
     save_results(dl.verilog, 'txt')
     assert dl.verilog == target_v
+    assert dl.verilog_net_map == {'D': "{wireA2, 2'bx1, wireA1[0]}", 'Q': "{wire[3], 1'bx, wire[1:0]}", 'EN': 'clk'}
 
 
 def test_dlatch_behavior(simple_module: Module) -> None:

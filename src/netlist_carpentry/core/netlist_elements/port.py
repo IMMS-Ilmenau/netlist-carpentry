@@ -89,16 +89,6 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
     def __iter__(self) -> Generator[Tuple[int, PortSegment], None, None]:  # type: ignore[override]
         return iter(s for s in self.segments.items())
 
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
-        from netlist_carpentry.core.netlist_elements.instance import Instance
-        from netlist_carpentry.core.netlist_elements.module import Module
-
-        if self.module_or_instance is None or isinstance(self.module_or_instance, Module) or isinstance(self.module_or_instance, Instance):
-            return super().model_post_init(__context)
-        raise TypeError(
-            f'Port.module_or_instance {self.raw_path} should be either a module or an instance, but is a {type(self.module_or_instance).__name__}!'
-        )
-
     @property
     def path(self) -> PortPath:
         """
@@ -118,8 +108,6 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
     @property
     def parent(self) -> T_PARENT:
-        if not hasattr(self, 'module_or_instance'):
-            LOG.warn('ATTR MISS')
         if self.module_or_instance is not None:
             return self.module_or_instance
         raise ParentNotFoundError(
@@ -136,13 +124,11 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         For an instance port, it returns the module to which the instance belongs
         (i.e. the parent of the instance, or the grandparent of this port).
         """
-        from netlist_carpentry import Instance, Module
+        from netlist_carpentry import Module
 
         if isinstance(self.parent, Module):
             return self.parent
-        elif isinstance(self.module_or_instance, Instance) and isinstance(self.parent.parent, Module):
-            return self.parent.parent
-        raise ParentNotFoundError(f'No parent module can be determined for port {self.raw_path}!')
+        return self.parent.parent
 
     @property
     def segments(self) -> CustomDict[int, PortSegment]:
@@ -659,7 +645,9 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         drivers: Dict[NonNegativeInt, Optional[PortSegment]] = {}
         for idx, ps in self:
             if not ps.is_tied:
-                drivers[idx] = self.module.wires[ps.ws_path.parent.name][int(ps.ws_path.name)].driver()[0]
+                dr_wire = self.module.wires[ps.ws_path.parent.name]
+                dr_ws = dr_wire[int(ps.ws_path.name)]
+                drivers[idx] = dr_ws.driver()[0] if dr_ws.driver() else None
             else:
                 drivers[idx] = None
         if single:

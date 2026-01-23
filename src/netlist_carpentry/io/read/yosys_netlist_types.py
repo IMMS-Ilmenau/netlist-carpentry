@@ -2,9 +2,11 @@
 
 from typing import Dict, List, Literal, TypedDict, Union
 
+from pydantic import PositiveInt
 from typing_extensions import NotRequired
 
 from netlist_carpentry.core.enums.signal import T_SIGNAL_STATES
+from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 
 BitAlias = Union[int, T_SIGNAL_STATES]
 
@@ -17,13 +19,16 @@ class PortAttributes(TypedDict):
     signed: NotRequired[int]
 
 
+YosysPortDirections = Dict[str, Literal['input', 'output', 'inout']]
+
+
 class YosysCell(TypedDict):
     hide_name: Literal[0, 1]
     type: str
     parameters: Dict[str, str]
     parameter_default_values: NotRequired[Dict[str, str]]
     attributes: Dict[str, str]
-    port_directions: NotRequired[Dict[str, str]]
+    port_directions: NotRequired[YosysPortDirections]
     connections: Dict[str, List[BitAlias]]
 
 
@@ -51,3 +56,11 @@ class YosysData(TypedDict):
 
 
 AllYosysTypes = Union[YosysData, YosysCell, YosysModule, Netnames, PortAttributes]
+
+ModuleName = str
+NetNumber = PositiveInt
+NewModuleName = str
+OldModuleName = str
+
+NetNumberMappingDict = Dict[ModuleName, Dict[PositiveInt, WireSegmentPath]]
+ModuleNameMapping = Dict[NewModuleName, OldModuleName]

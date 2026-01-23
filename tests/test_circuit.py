@@ -14,12 +14,14 @@ from netlist_carpentry.core.exceptions import (
 )
 from netlist_carpentry.core.netlist_elements.element_path import (
     InstancePath,
+    ModulePath,
     PortPath,
     PortSegmentPath,
     WirePath,
     WireSegmentPath,
 )
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT
+from netlist_carpentry.utils.gate_lib import AndGate
 
 
 @pytest.fixture
@@ -41,7 +43,7 @@ def test_circuit_creation(empty_circuit: Circuit) -> None:
     assert len(empty_circuit) == 0
     assert empty_circuit.creator == ''
     assert len(empty_circuit) == 0
-    assert empty_circuit.module_instances == {}
+    assert empty_circuit.instances == {}
     with pytest.raises(IndexError):
         empty_circuit.first
 
@@ -53,12 +55,13 @@ def test_add_module(empty_circuit: Circuit) -> None:
     assert added == m
     assert empty_circuit.module_count == 1
     assert len(empty_circuit) == 1
+    assert 'testModule' in empty_circuit
     assert empty_circuit['testModule'] == m
     assert empty_circuit.modules['testModule'] == m
     assert empty_circuit.first == m
     assert m.has_circuit
     assert m.circuit == empty_circuit
-    assert empty_circuit.module_instances == {'testModule': []}
+    assert empty_circuit.instances == {}
 
     m2 = Module(raw_path='testModule', parameters={'foo': 'bar'})
     with pytest.raises(IdentifierConflictError):
@@ -71,7 +74,7 @@ def test_add_module(empty_circuit: Circuit) -> None:
     m3 = Module(raw_path='m3')
     m3.create_instance(m2, 'm2_inst')
     empty_circuit.add_module(m3)
-    assert empty_circuit.module_instances['m2'] == [InstancePath(raw='m3.m2_inst')]
+    assert empty_circuit.instances['m2'] == [InstancePath(raw='m3.m2_inst')]
 
 
 def test_add_from_circuit(empty_circuit: Circuit, connected_circuit: Circuit) -> None:
@@ -83,7 +86,14 @@ def test_add_from_circuit(empty_circuit: Circuit, connected_circuit: Circuit) ->
     assert empty_circuit.module_count == 2
     assert added['test_module1'].circuit == empty_circuit
     assert added['wrapper'].circuit == empty_circuit
-    assert empty_circuit.module_instances == {'test_module1': [InstancePath(raw='wrapper.I_cm')], 'wrapper': []}
+    assert empty_circuit.instances == {
+        'test_module1': [InstancePath(raw='wrapper.I_cm')],
+        '§adffe': [InstancePath(raw='test_module1.dff_inst')],
+        '§and': [InstancePath(raw='test_module1.and_inst')],
+        '§not': [InstancePath(raw='test_module1.not_inst')],
+        '§or': [InstancePath(raw='test_module1.or_inst')],
+        '§xor': [InstancePath(raw='test_module1.xor_inst')],
+    }
     for m in connected_circuit:
         assert id(m) == id(empty_circuit[m.name])
         m.create_wire('ABC')
@@ -100,7 +110,7 @@ def test_create_module(empty_circuit: Circuit) -> None:
     assert empty_circuit.module_count == 1
     assert len(empty_circuit) == 1
     assert created.circuit == empty_circuit
-    assert empty_circuit.module_instances == {'testModule': []}
+    assert empty_circuit.instances == {}
 
     with pytest.raises(IdentifierConflictError):
         empty_circuit.create_module('testModule')
@@ -150,6 +160,7 @@ def test_copy_module(empty_circuit: Circuit) -> None:
 
 def test_remove_module(empty_circuit: Circuit) -> None:
     m = Module(raw_path='testModule')
+    m.create_instance(AndGate, 'and_inst')
     empty_circuit.add_module(m)
     empty_circuit.set_top(m)
     assert empty_circuit.module_count == 1
@@ -157,13 +168,13 @@ def test_remove_module(empty_circuit: Circuit) -> None:
     assert empty_circuit['testModule'] == m
     assert empty_circuit.modules['testModule'] == m
     assert empty_circuit.top_name == 'testModule'
-    assert empty_circuit.module_instances == {'testModule': []}
+    assert empty_circuit.instances == {'§and': [InstancePath(raw='testModule.and_inst')]}
 
-    empty_circuit.remove_module(m.name)
+    empty_circuit.remove_module(m)
     assert empty_circuit.module_count == 0
     assert len(empty_circuit) == 0
     assert empty_circuit.top_name == ''
-    assert empty_circuit.module_instances == {}
+    assert empty_circuit.instances == {'§and': []}
 
     with pytest.raises(ObjectNotFoundError):
         empty_circuit.remove_module(m.name)
@@ -173,7 +184,7 @@ def test_remove_module(empty_circuit: Circuit) -> None:
     m2 = Module(raw_path='m2')
     empty_circuit.modules['m3'] = Module(raw_path='m3')
     empty_circuit.modules['m3'].create_instance(m2, 'm2_inst')
-    empty_circuit.module_instances['m2'] = [InstancePath(raw='m3.m2_inst')]
+    empty_circuit.instances['m2'] = [InstancePath(raw='m3.m2_inst')]
 
     empty_circuit.remove_module('m3')
 
@@ -228,6 +239,12 @@ def test_set_top_module(connected_circuit: Circuit) -> None:
     assert connected_circuit.top == connected_circuit['wrapper']
     assert connected_circuit.has_top
 
+    connected_circuit.set_top(None)
+    assert connected_circuit.top_name == ''
+    with pytest.raises(ObjectNotFoundError):
+        assert connected_circuit.top
+    assert not connected_circuit.has_top
+
     connected_circuit.set_top('test_module1')
     assert connected_circuit.top_name == 'test_module1'
     assert connected_circuit.top == connected_circuit['test_module1']
@@ -248,6 +265,18 @@ def test_get_from_path(connected_circuit: Circuit) -> None:
     path_inst = None
     with pytest.raises(PathResolutionError):
         inst = connected_circuit.get_from_path(path_inst)
+
+    path_inst = ModulePath(raw='wrapper.lool')
+    with pytest.raises(PathResolutionError):
+        inst = connected_circuit.get_from_path(path_inst)
+
+    path_inst = ModulePath(raw='nonexistent_module')
+    with pytest.raises(ObjectNotFoundError):
+        inst = connected_circuit.get_from_path(path_inst)
+
+    path_inst = ModulePath(raw='wrapper')
+    inst = connected_circuit.get_from_path(path_inst)
+    assert inst == connected_circuit['wrapper']
 
     path_inst = PortPath(raw='wrapper.in1')
     inst = connected_circuit.get_from_path(path_inst)
@@ -281,6 +310,10 @@ def test_get_from_path(connected_circuit: Circuit) -> None:
 def test_get_from_path_overload(connected_circuit: Circuit) -> None:
     with pytest.raises(PathResolutionError):
         connected_circuit.get_from_path('')
+
+    raw_path = 'wrapper'
+    inst = connected_circuit.get_from_path(raw_path)
+    assert inst == connected_circuit['wrapper']
 
     raw_path = 'wrapper.in1'
     inst = connected_circuit.get_from_path(raw_path)
@@ -381,6 +414,37 @@ def test_get_path_from_str(connected_circuit: Circuit) -> None:
     assert inst == WireSegmentPath(raw='wrapper.I_cm.wire_and.0')
 
 
+def test_uniquify() -> None:
+    c = Circuit(name='c')
+    m1 = c.create_module('m1')
+    m2 = c.create_module('m2')
+
+    i0 = m2.create_instance(m1, 'inst1')
+    i1 = m2.create_instance(m1, 'inst2')
+    i2 = m2.create_instance(m1, 'inst3')
+
+    with pytest.raises(ObjectNotFoundError):
+        c.uniquify('nonexistent')
+
+    assert len(c.instances) == 1  # m2 has no instances, thus total length is only 1
+    assert len(c.instances['m1']) == 3
+    assert c.instances['m1'] == [InstancePath(raw='m2.inst1'), InstancePath(raw='m2.inst2'), InstancePath(raw='m2.inst3')]
+    c.uniquify(m1)
+    assert len(c.instances) == 3
+    assert c.instances['m1_0'] == [i0.path]
+    assert c.instances['m1_1'] == [i1.path]
+    assert c.instances['m1_2'] == [i2.path]
+    assert i0.instance_type == 'm1_0'
+    assert i1.instance_type == 'm1_1'
+    assert i2.instance_type == 'm1_2'
+
+    c.uniquify()  # Nothing changed
+    assert len(c.instances) == 3
+    assert c.instances['m1_0'] == [i0.path]
+    assert c.instances['m1_1'] == [i1.path]
+    assert c.instances['m1_2'] == [i2.path]
+
+
 def test_connected_circuit(connected_circuit: Circuit) -> None:
     assert connected_circuit.creator == 'SomeCreator'
     assert connected_circuit.module_count == 2
@@ -445,6 +509,12 @@ def test_prove_equivalence(connected_circuit: Circuit) -> None:
 
     assert return_code == 0
 
+    return_code = connected_circuit.prove_equivalence([vpath], 'tests/files/gen/eqy_out', 'invalid_path')
+    assert return_code == 2
+
+    return_code = connected_circuit.prove_equivalence([vpath], 'tests/files/gen/eqy_out', gold_top_module='nonexisting_module')
+    assert return_code == 1
+
 
 @pytest.mark.skipif(os.environ.get('CI_SKIP_EQY') == 'true', reason='EQY missing in CI')
 def test_prove_equivalence_other_circuit(connected_circuit: Circuit) -> None:
@@ -481,6 +551,23 @@ def test_optimize(connected_circuit: Circuit) -> None:
     assert any_removed
     assert len(connected_module.wires) == 0
     assert len(connected_module.instances) == 0
+
+
+def test_optimize_circuit(connected_circuit: Circuit) -> None:
+    m1 = connected_circuit.create_module('m1')
+    m2 = connected_circuit.create_module('m2')
+    m3 = connected_circuit.create_module('m3')
+    m1.create_instance(m2, 'I_m2')
+    m2.create_instance(m3, 'I_m3')
+
+    has_changed = connected_circuit.optimize()
+    assert has_changed
+    assert m1 not in connected_circuit
+    assert m2 not in connected_circuit
+    assert m3 not in connected_circuit
+
+    has_changed = connected_circuit.optimize()
+    assert not has_changed
 
 
 def test_evaluate(connected_circuit: Circuit) -> None:

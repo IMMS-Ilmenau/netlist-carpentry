@@ -15,14 +15,6 @@ if TYPE_CHECKING:
 
 
 class EvaluationMixin(ModuleBaseMixin):
-    @property
-    def instances_with_constant_inputs(self) -> List[Instance]:
-        raise NotImplementedError(f'Not implemented for mixin {self.__class__.__name__}. Any class using this mixin must implement this property.')
-
-    @property
-    def input_ports(self) -> List[Port['Module']]:
-        raise NotImplementedError(f'Not implemented for mixin {self.__class__.__name__}. Any class using this mixin must implement this property.')
-
     def get_outgoing_edges(self, instance_name: str) -> Dict[str, Dict[int, WireSegment]]:
         raise NotImplementedError(f'Not implemented for mixin {self.__class__.__name__}. Any class using this mixin must implement this method.')
 

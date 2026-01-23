@@ -79,6 +79,12 @@ class MetadataMixin(METADATA_DICT):
     def is_empty(self) -> bool:
         return not any(val for _, val in self.items())
 
+    @property
+    def general(self) -> Dict[str, NESTED_DICT]:
+        """General-purpose metadata category."""
+        self.add_category('general')
+        return self['general']
+
     def has_category(self, category: str) -> bool:
         """
         Check if a category exists in the metadata.

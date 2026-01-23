@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Literal, Optional, Union, overload
+from typing import Callable, DefaultDict, Dict, Iterator, List, Literal, Optional, Union, overload
 
 from pydantic import BaseModel, NonNegativeInt
 
@@ -57,7 +58,7 @@ class Circuit(BaseModel):
     _creator: str = ''
     """The name of the circuit's creator."""
 
-    _module_instances = CustomDict[str, List[InstancePath]]()
+    _instances: DefaultDict[str, List[InstancePath]] = defaultdict(list)
 
     @property
     def modules(self) -> CustomDict[str, Module]:
@@ -102,15 +103,23 @@ class Circuit(BaseModel):
         self._creator = new_creator
 
     @property
-    def module_instances(self) -> CustomDict[str, List[InstancePath]]:
-        """A dictionary containing the names of all modules as keys,
+    def instances(self) -> DefaultDict[str, List[InstancePath]]:
+        """A dictionary containing the names of all modules (and primitive gates) as keys,
         and a list of paths to corresponding module instances throughout the circuit.
+
+        This dictionary maps instance types to instance paths (i.e. to instances with the given type) throughout the circuit.
         """
-        return self._module_instances
+        return self._instances
 
     def __getitem__(self, key: str) -> Module:
         """Returns a module from the circuit that has the given name."""
-        return self.modules[key]
+        if key in self.modules:
+            return self.modules[key]
+        raise ObjectNotFoundError(f'No module {key} exists in this circui!')
+
+    def __contains__(self, key: Union[str, Module]) -> bool:
+        """Implements `module_name in circuit`."""
+        return key in self.modules if isinstance(key, str) else key.name in self.modules
 
     def __len__(self) -> int:
         """The size of the circuit, which is the number of modules in the circuit."""
@@ -150,11 +159,8 @@ class Circuit(BaseModel):
         return self.modules.add(module.name, module)
 
     def _add_module_instances(self, module: Module) -> None:
-        if module.name not in self.module_instances:
-            self.module_instances[module.name] = []
         for instance in module.instances.values():
-            if instance.instance_type in self.module_instances:
-                self.module_instances[instance.instance_type].append(instance.path)
+            self.instances[instance.instance_type].append(instance.path)
 
     def add_from_circuit(self, other_circuit: Circuit) -> Dict[str, Module]:
         """
@@ -213,31 +219,33 @@ class Circuit(BaseModel):
         new_module.set_name(new_name)
         return self.add_module(new_module)
 
-    def remove_module(self, module_name: str) -> None:
+    def remove_module(self, module: Union[str, Module]) -> None:
         """
         Removes a module from the circuit.
 
         Args:
-            module_name (str): The name of the module to remove.
+            module (Union[str, Module]): The name of the module (or the module object) to remove.
 
         Raises:
-            Exception: If the module name is the same as the top module name and no new top module is set.
+            ObjectNotFoundError: If no such module exists in this circuit.
         """
-        if module_name == self.top_name:
-            LOG.warn(f"Removing top module '{module_name}'! Set a new top module using Circuit.set_top(), otherwise hierarchy cannot be determined!")
-            self._top_name = ''
-        if module_name not in self.modules:
-            raise ObjectNotFoundError(f'Unable to remove module {module_name}: No such module found!')
-        self._remove_module_instances(module_name)
-        self.modules.remove(module_name)
+        if isinstance(module, Module):
+            module = module.name
+        if module == self.top_name:
+            LOG.warn(f"Removing top module '{module}'! Set a new top module using Circuit.set_top(), otherwise hierarchy cannot be determined!")
+            self.set_top(None)
+        if module not in self.modules:
+            raise ObjectNotFoundError(f'Unable to remove module {module}: No such module found!')
+        self._remove_module_instances(module)
+        self.modules.remove(module)
 
     def _remove_module_instances(self, module_name: str) -> None:
-        if module_name in self.module_instances:
-            self.module_instances.pop(module_name)
+        if module_name in self.instances:
+            self.instances.pop(module_name)
         module = self[module_name]
         for instance in module.instances.values():
-            if instance.instance_type in self.module_instances:
-                self.module_instances[instance.instance_type].remove(instance.path)
+            if instance.instance_type in self.instances:
+                self.instances[instance.instance_type].remove(instance.path)
 
     def get_module(self, module_name: str) -> Optional[Module]:
         """
@@ -268,19 +276,24 @@ class Circuit(BaseModel):
         """
         return next((m for i, m in enumerate(self) if i == index), None)
 
-    def set_top(self, module: Union[str, Module]) -> None:
+    def set_top(self, module: Union[str, Module, None]) -> None:
         """
         Sets the name of the top-level module in the circuit.
 
+        Set `module=None` to remove the current top module selection, and no module will be top module.
+
         Args:
-            module (Union[str, Module]): The name of the new top-level module in the circuit, or the Module object itself.
+            module (Union[str, Module, None]): The name of the new top-level module in the circuit, or the Module object itself.
+                Passing `None` will just remove the current top module selection, and no module will be top module.
 
         Raises:
             ObjectNotFoundError: If no module exists with the given name.
         """
         if isinstance(module, Module):
             module = module.name
-        if module in self.modules:
+        if module is None:
+            self._top_name = ''
+        elif module in self.modules:
             self._top_name = module
         else:
             raise ObjectNotFoundError(f'Cannot set top module: No module with name "{module}" exists in the circuit!')
@@ -345,8 +358,11 @@ class Circuit(BaseModel):
             EType.WIRE: WirePath,
             EType.WIRE_SEGMENT: WireSegmentPath,
         }
-        module_name = mapping[0][0]
-        module = self[module_name]
+        if isinstance(path, ModulePath):
+            if len(path) != 1:
+                raise PathResolutionError(f'Cannot resolve ModulePath {path.raw}: Module paths may only contain a single element!')
+            return self[path.name]
+        module = self[mapping[0][0]]
         instance_nr = sum(etype == EType.INSTANCE for _, etype in mapping)
         if instance_nr > 1:
             nxt_inst = mapping[1][0]
@@ -356,7 +372,7 @@ class Circuit(BaseModel):
                 new_path_str = f'{inst.instance_type}.{raw_curr_path}'
                 path_type = path_mapping[mapping[-1][1]]
                 return self.get_from_path(path_type(raw=new_path_str))
-        return self[module_name].get_from_path(path)
+        return module.get_from_path(path)
 
     def get_path_from_str(self, path_str: str, sep: str = '.') -> ElementPath:
         """
@@ -386,6 +402,8 @@ class Circuit(BaseModel):
         path_str = '.'.join(elements)  # Replace original separator with dot for conformity
         if elements[0] not in self.modules:
             raise PathResolutionError(f'Cannot resolve path {path_str}: No module found with name {elements[0]} in circuit {self.name}!')
+        if len(elements) == 1:
+            return ModulePath(raw=elements[0])
         while len(elements) > 1:
             module_name = elements.pop(0)
             module = self[module_name]
@@ -432,6 +450,48 @@ class Circuit(BaseModel):
         elif len(processed_elements) == 2 and processed_elements[1].isnumeric() and int(processed_elements[1]) in wire.segments.keys():
             return WireSegmentPath(raw=path_str)
         raise PathResolutionError(f'Cannot resolve path {path_str}: The last resolved object is a wire with path {path_str}!')
+
+    def uniquify(self, module: Optional[Union[str, Module]] = None) -> None:
+        """Ensure that every module instance in the circuit has its own unique definition.
+
+        When a module is instantiated many times, all instances share the same
+        definition. Any modification to that definition is reflected in every
+        instance, which is often undesirable.  This method creates a separate
+        copy of the original module for each instance, updates the instance to
+        refer to its copy, and removes the original definition if it is no
+        longer used.
+
+        Each new module definition is named ``<orig_name>_<index>``, where ``<index>`` starts at ``0`` and increments for each instance.
+        The original module is removed from the circuit once it is no longer referenced by any instance.
+        If ``module`` is a name that does not exist, ``ObjectNotFoundError`` is raised.
+
+        Args:
+            module (Optional[Union[str, Module]], optional): The module to uniquify.
+                If a string is supplied it is treated as the module name and looked up in the circuit.
+                If ``None`` the method identifies **all** modules that appear more than once in ``self.instances`` and uniquifies them.
+                Defaults to ``None``.
+        """
+        if isinstance(module, str):
+            module = self[module]
+        modules = [module] if module is not None else [self[mname] for mname in self.instances if len(self.instances[mname]) > 1 and mname in self]
+        self._uniquify(modules)
+
+    def _uniquify(self, modules: List[Module]) -> None:
+        for m in modules:
+            idx = 0
+            mapping = {}
+            for m_instpath in self.instances[m.name]:
+                m_i = deepcopy(m)
+                while f'{m_i.name}_{idx}' in self:
+                    idx += 1
+                new_inst_type = f'{m_i.name}_{idx}'
+                m_i.set_name(new_inst_type)
+                self.add_module(m_i)
+                self.get_from_path(m_instpath).instance_type = new_inst_type
+                mapping[new_inst_type] = [m_instpath]
+            self.instances.update(mapping)
+            self.instances.pop(m.name)
+            self.remove_module(m)
 
     @overload
     def set_signal(self, path: str, signal_value: LogicLevel) -> None: ...
@@ -527,13 +587,18 @@ class Circuit(BaseModel):
         """
         Optimizes the circuit by applying optimizations to each module.
 
+        Also removes modules that are never instantiated and thus considered unused.
+
         Returns:
             bool: True if at least one optimization was applied to at least one module. False otherwise.
         """
+        from netlist_carpentry.routines.opt import clean_circuit
+
         any_optimized = False
         for mname, m in self.modules.items():
             LOG.info(f'Optimizing module {mname}...')
             any_optimized |= m.optimize()
+        any_optimized |= clean_circuit(self)
         return any_optimized
 
     def evaluate(self) -> None:

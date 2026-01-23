@@ -6,41 +6,6 @@ from netlist_carpentry.core.exceptions import IdentifierConflictError, ObjectLoc
 from netlist_carpentry.utils.custom_dict import CustomDict
 
 
-def test_append_or_create() -> None:
-    test_dict = CustomDict({'A': ['lol'], 'B': []})
-    test_dict.append_or_create('A', 'lol2')
-    assert test_dict['A'] == ['lol', 'lol2']
-
-    test_dict.append_or_create('B', 'lol3')
-    assert test_dict['B'] == ['lol3']
-
-    test_dict.append_or_create('C', 'lol4')
-    assert test_dict['C'] == ['lol4']
-
-    test_dict['D'] = 'foo'
-    with pytest.raises(ValueError):
-        test_dict.append_or_create('D', 'lol5')
-
-
-def test_update_or_create() -> None:
-    test_dict = CustomDict({'A': {1: 'lol'}, 'B': {}})
-    test_dict.update_or_create('A', {2: 'lol2'})
-    assert test_dict['A'] == {1: 'lol', 2: 'lol2'}
-
-    test_dict.update_or_create('A', {2: 'lol3'})
-    assert test_dict['A'] == {1: 'lol', 2: 'lol3'}
-
-    test_dict.update_or_create('B', {1: 'lol3'})
-    assert test_dict['B'] == {1: 'lol3'}
-
-    test_dict.update_or_create('C', {1: 'lol4'})
-    assert test_dict['C'] == {1: 'lol4'}
-
-    test_dict['D'] = 'foo'
-    with pytest.raises(ValueError):
-        test_dict.update_or_create('D', {1: 'lol5'})
-
-
 def test_add() -> None:
     test_dict = CustomDict()
     added = test_dict.add('A', 'foo')

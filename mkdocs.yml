@@ -21,12 +21,30 @@ nav:
     - 09. Executing Equivalence Checks: user_guide/09_equivalence_checking.ipynb
     - 10. Implementing Custom Search & Replace Algorithms: user_guide/10_custom_search_and_replace.ipynb
     - 11. Advanced Techniques for Custom Search & Replace Algorithms: user_guide/11_custom_search_and_replace_advanced.ipynb
-    - 12. Scan Chain Insertion: user_guide/12_scan_chain_insertion.ipynb
+    - Graph Visualization:
+      - 01. Plotting Graphs: user_guide/visualization/01_plotting.ipynb
+      - 02. Handling Graph Formats: user_guide/visualization/02_formatting.ipynb
+      - 03. Exporting Graphs: user_guide/visualization/03_exporting_graphs.ipynb
+      - 04. Interactive Graphs: user_guide/visualization/04_interactive_graphs.ipynb
+    - Routines:
+      - Optimizations:
+        - 01. Introduction to Circuit Optimization: user_guide/routines/optimization/01_optimization_basics.ipynb
+        - 02. Optimization of Loadless Wires and Instances: user_guide/routines/optimization/02_loadless.ipynb
+        - 03. Optimization of Driverless Wires and Instances: user_guide/routines/optimization/03_driverless.ipynb
+        - 04. Constant Propagation: user_guide/routines/optimization/04_constant_propagation.ipynb
+      - Scan Chain Insertion:
+        - 01. Basic Scan Chain Insertion Implementation: user_guide/routines/scan_chain_insertion/01_scan_chain_insertion.ipynb
+        - 02. Extraction of the Scan Chain Insertion in Design Exchange Format (DEF): user_guide/routines/scan_chain_insertion/02_DEF_output.ipynb
+    - Handling VCD Data:
+      - 01. Basics of VCD: user_guide/vcd/01_basics.ipynb
+      - 02. Mapping Scopes and Signals: user_guide/vcd/02_mapping.ipynb
+      - 03. Finding Signal Groups: user_guide/vcd/03_signal_grouping.ipynb
   - Code Reference: reference/
   - Development Guide:
     - Prerequisites and Notes: dev_guide/01_getting_started.md
     - Development Introduction: dev_guide/02_dev_introduction.md
     - Codebase Structure Overview: dev_guide/03_codebase_structure.md
+    - Core Components: dev_guide/04_core_components.md
   # TODO Add new sections to the documentation here
 
 # Project information

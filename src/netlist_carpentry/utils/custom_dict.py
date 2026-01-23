@@ -11,44 +11,6 @@ GENERIC_DICT = Dict[Union[str, int], GENERIC_VAL[str, int]]
 
 
 class CustomDict(Dict[K, V]):
-    def append_or_create(self, key: K, element: V) -> None:
-        """
-        Appends an element to a list in the dictionary or creates a new list if the key does not exist.
-
-        Args:
-            key (K): The key under which elements will be appended or created.
-            element (V): The element to append or create in the dictionary.
-
-        Raises:
-            ValueError: If the provided key already exists but its associated value is not a list.
-        """
-        if key not in self:
-            self[key] = [element]  # type: ignore[assignment]
-        else:
-            dict_entry = self[key]
-            if isinstance(dict_entry, list):
-                dict_entry.append(element)
-            else:
-                raise ValueError(f'Key {key} already exists but is not a list.')
-
-    def update_or_create(self, key: K, element: Dict[K, V]) -> None:
-        """
-        Updates an existing dictionary inside this dictionary or creates a new one if the key does not exist.
-
-        Args:
-            key (K): The key under which dictionaries will be updated or created.
-            element (dict): The dictionary to update or create inside this dictionary.
-
-        """
-        if key in self:
-            sub_dict = self[key]
-            if isinstance(sub_dict, dict):
-                sub_dict.update(element)
-            else:
-                raise ValueError(f'Key {key} already exists but is not a dictionary.')
-        else:
-            self[key] = element  # type: ignore[assignment]
-
     def add(self, key: K, element: V, locked: bool = False) -> V:
         """
         Adds an element to this dictionary if the key does not already exist.

@@ -5,7 +5,7 @@ reg clk;
 reg rst_n;
 reg [7:0] in1;
 reg [7:0] in2;
-reg [8:0] out;
+wire [8:0] out;
 
 simpleAdder adder(
     .rst (rst_n),
@@ -19,7 +19,7 @@ localparam CLK_PERIOD = 10;
 always #(CLK_PERIOD/2) clk=~clk;
 
 initial begin
-    $dumpfile("tb_adder_basics.vcd");
+    $dumpfile("../tb_adder_basics.vcd");
     $dumpvars(0, tb_adder_basics);
 end
 
@@ -30,6 +30,15 @@ initial begin
     repeat(5) @(posedge clk);
     rst_n<=1;
     @(posedge clk);
+    repeat(2) @(posedge clk);
+    in1=8'b10100101;
+    in2=8'b00001111;
+    repeat(2) @(posedge clk);
+    in1=8'b01101111;
+    in2=8'b11000101;
+    repeat(2) @(posedge clk);
+    in1=8'b10101111;
+    in2=8'b11001111;
     repeat(2) @(posedge clk);
     $finish(2);
 end

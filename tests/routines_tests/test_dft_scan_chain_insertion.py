@@ -123,7 +123,3 @@ def test_implement_scan_chain_corner_case(dff_circuit: Circuit) -> None:
 if __name__ == '__main__':
     file_name = os.path.basename(__file__)
     pytest.main(args=['-k', file_name])
-
-if __name__ == '__main__':
-    file_name = os.path.basename(__file__)
-    pytest.main(args=['-k', file_name])

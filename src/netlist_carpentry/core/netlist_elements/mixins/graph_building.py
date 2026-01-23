@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import List
 
-import networkx as nx
 from tqdm import tqdm
 
+from netlist_carpentry.core.graph.module_graph import ModuleGraph
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.core.netlist_elements.mixins.module_base import ModuleBaseMixin
 from netlist_carpentry.core.protocols.netlist_elements import PortSegmentLike
@@ -20,40 +20,40 @@ class GraphBuildingMixin(ModuleBaseMixin):
     def get_load_ports(self, ws_path: WireSegmentPath) -> List[PortSegmentLike]:
         raise NotImplementedError(f'Not implemented for mixin {self.__class__.__name__}. Any class using this mixin must implement this property.')
 
-    def build_graph(self) -> nx.MultiDiGraph[str]:
+    def graph(self) -> ModuleGraph:
         """
-        Builds a graph from the module by representing instances and ports as nodes,
-        and connections between them as edges.
+        Builds a graph from the module by representing instances and ports as nodes, and connections between them as edges.
 
+        The module graph represents the connectivity between instances and ports within a module.
         The method iterates over all instances and ports in the module. For each instance or port,
         it adds a node to the graph with relevant information (e.g., name, type). Then, for each wire segment,
         it adds an edge between the corresponding nodes representing the driver and load of that wire segment.
 
         Returns:
-            A networkx MultiDiGraph object representing the connectivity of the module.
+            ModuleGraph: A graph object representing the connectivity of the module.
         """
-        g: nx.MultiDiGraph[str] = nx.MultiDiGraph()
+        g: ModuleGraph = ModuleGraph()
         self._build_nodes(g)
         self._build_edges(g)
         return g
 
-    def _build_nodes(self, g: nx.MultiDiGraph[str]) -> None:
+    def _build_nodes(self, g: ModuleGraph) -> None:
         """
         Adds nodes to the graph based on the instances and ports of this module.
 
         For each instance and port, this method adds a node to the graph with relevant information (e.g., name, type).
 
         Args:
-            g (networkx.MultiDiGraph): The current state of the module graph.
+            g (ModuleGraph): The current state of the module graph.
         """
         if self.instances:  # Suppresses tqdm output if empty
             for inst in tqdm(self.instances.values(), desc='Building Instance Nodes', leave=False):
-                g.add_node(inst.name, ntype=inst.type.name, ntype_info=inst.instance_type, ndata=inst)
+                g.add_node(inst.name, ntype=inst.type.name, nsubtype=inst.instance_type, ndata=inst)
         if self.ports:  # Suppresses tqdm output if empty
             for port in tqdm(self.ports.values(), desc='Building Port Nodes', leave=False):
-                g.add_node(port.name, ntype=port.type.name, ntype_info=port.direction.value, ndata=port)
+                g.add_node(port.name, ntype=port.type.name, nsubtype=port.direction.value, ndata=port)
 
-    def _build_edges(self, g: nx.MultiDiGraph[str]) -> None:
+    def _build_edges(self, g: ModuleGraph) -> None:
         """
         Adds edges to the graph based on the wires of this module.
 
@@ -62,7 +62,7 @@ class GraphBuildingMixin(ModuleBaseMixin):
         of the corresponding wire segment.
 
         Args:
-            g (networkx.MultiDiGraph): The current state of the module graph.
+            g (ModuleGraph): The current state of the module graph.
         """
         if self.wires:  # Suppresses tqdm output if empty
             for wire in tqdm(self.wires.values(), desc='Building Edges', leave=False):

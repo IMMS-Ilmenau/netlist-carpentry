@@ -11,6 +11,7 @@ from netlist_carpentry import CFG, Circuit, Direction, Instance, Module, Port, W
 from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.netlist_elements.element_path import WirePath, WireSegmentPath
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
+from netlist_carpentry.utils.gate_factory import not_gate
 from netlist_carpentry.utils.gate_lib import ADFFE, NotGate, XorGate
 
 StrOrBytesPath: TypeAlias = Union[str, bytes, os.PathLike[str], os.PathLike[bytes]]
@@ -240,7 +241,7 @@ def modified_module() -> Module:
 
 
 def dff_module() -> Module:
-    from netlist_carpentry.utils.gate_lib_factory import dff
+    from netlist_carpentry.utils.gate_factory import dff
 
     m = empty_module()
     d = m.create_port('D', Direction.IN, width=4)
@@ -272,11 +273,33 @@ def simple_circuit() -> Circuit:
 
 
 def connected_circuit() -> Circuit:
+    cm = connected_module()
+    return _wrap_module(cm)
+
+
+def _wrap_module(cm: Module) -> Circuit:
     c = Circuit(name='test_circuit')
     c.creator = 'SomeCreator'
-    cm = connected_module()
     c.add_module(cm)
 
+    cm_wrapper = _cm_wrapper()
+    cm_wrapper.create_instance(cm, 'I_cm')
+    i_cm = cm_wrapper.instances['I_cm']
+
+    cm_wrapper.connect(cm_wrapper.wires['in1'][0], i_cm.ports['in1'][0])
+    cm_wrapper.connect(cm_wrapper.wires['in2'][0], i_cm.ports['in2'][0])
+    cm_wrapper.connect(cm_wrapper.wires['in3'][0], i_cm.ports['in3'][0])
+    cm_wrapper.connect(cm_wrapper.wires['in4'][0], i_cm.ports['in4'][0])
+    cm_wrapper.connect(cm_wrapper.wires['clk'][0], i_cm.ports['clk'][0])
+    cm_wrapper.connect(cm_wrapper.wires['rst'][0], i_cm.ports['rst'][0])
+    cm_wrapper.connect(cm_wrapper.wires['out'][0], i_cm.ports['out'][0])
+    cm_wrapper.connect(cm_wrapper.wires['out_ff'][0], i_cm.ports['out_ff'][0])
+    c.add_module(cm_wrapper)
+    c.set_top(cm_wrapper)
+    return c
+
+
+def _cm_wrapper() -> Module:
     cm_wrapper = Module(raw_path='wrapper')
 
     cm_wrapper.create_wire('in1')
@@ -296,22 +319,23 @@ def connected_circuit() -> Circuit:
     cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.rst'), cm_wrapper.create_port('rst', Direction.IN))
     cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.out'), cm_wrapper.create_port('out', Direction.OUT))
     cm_wrapper.connect(WirePath(raw=f'{cm_wrapper.name}.out_ff'), cm_wrapper.create_port('out_ff', Direction.OUT))
-
-    cm_wrapper.create_instance(cm, 'I_cm')
-    i_cm = cm_wrapper.instances['I_cm']
-
-    cm_wrapper.connect(cm_wrapper.wires['in1'][0], i_cm.ports['in1'][0])
-    cm_wrapper.connect(cm_wrapper.wires['in2'][0], i_cm.ports['in2'][0])
-    cm_wrapper.connect(cm_wrapper.wires['in3'][0], i_cm.ports['in3'][0])
-    cm_wrapper.connect(cm_wrapper.wires['in4'][0], i_cm.ports['in4'][0])
-    cm_wrapper.connect(cm_wrapper.wires['clk'][0], i_cm.ports['clk'][0])
-    cm_wrapper.connect(cm_wrapper.wires['rst'][0], i_cm.ports['rst'][0])
-    cm_wrapper.connect(cm_wrapper.wires['out'][0], i_cm.ports['out'][0])
-    cm_wrapper.connect(cm_wrapper.wires['out_ff'][0], i_cm.ports['out_ff'][0])
-    c.add_module(cm_wrapper)
-    c.set_top(cm_wrapper)
-    return c
+    return cm_wrapper
 
 
 def dff_circuit() -> Circuit:
     return read('tests/files/dff_circuit.v', top='Top', circuit_name='dff_circuit')
+
+
+def comb_loop_module() -> Module:
+    m = connected_module()
+    m.disconnect(m.instances['or_inst'].ports['B'])
+    ng = not_gate(m, 'not_inst0', A=m.instances['xor_inst'].ports['Y'])
+    for i in range(1, 10):
+        ng = not_gate(m, f'not_inst{i}', A=ng.ports['Y'])
+    m.connect(ng.ports['Y'], m.instances['or_inst'].ports['B'])
+    return m
+
+
+def comb_loop_circuit() -> Circuit:
+    cm = comb_loop_module()
+    return _wrap_module(cm)

@@ -1,5 +1,7 @@
 """Module for simple access of read methods to transform circuits from a text file into Python objects."""
 
+import subprocess
+import tempfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import time
@@ -72,3 +74,38 @@ def read(
             stdout = gen_process.stdout.decode() if gen_process.stdout else ''
             raise RuntimeError(f'Failed to generate JSON netlist:\n{stdout}\n{gen_process.stderr.decode()}')
         return read_json(json_path, circuit_name)
+
+
+def generate_json_netlist(
+    input_file_path: Union[str, Path],
+    output_file_path: Union[str, Path],
+    top_module_name: str = '',
+    verbose: bool = False,
+    yosys_script_path: Union[str, Path] = '',
+) -> subprocess.CompletedProcess[bytes]:
+    """Generate a JSON netlist from the given input file using Yosys.
+
+    Args:
+        input_file_path (Union[str, Path]): Path to the input Verilog file.
+        output_file_path (Union[str, Path]): Path where the output JSON netlist should be saved.
+        top_module_name (str, optional): The name of the top module. Defaults to ''.
+        verbose (bool, optional): Whether to print Yosys log to the console. Defaults to False.
+        yosys_script_path (Union[str, Path], optional): Path to a custom Yosys synthesis script.
+            If empty, an appropriate script is generated with common synthesis settings. Defaults to ''.
+
+    Returns:
+        subprocess.CompletedProcess[bytes]: The return object of the subprocess that executed Yosys.
+    """
+    from netlist_carpentry import NC_SCRIPTS_DIR
+
+    pmux2mux_path = Path(NC_SCRIPTS_DIR + '/hdl/pmux2mux.v')
+    if isinstance(input_file_path, str):
+        input_file_path = Path(input_file_path)
+    if isinstance(output_file_path, str):
+        output_file_path = Path(output_file_path)
+    output_dir = output_file_path.parent
+    output_dir.mkdir(exist_ok=True)
+    with tempfile.NamedTemporaryFile('w', delete_on_close=False) as tmp:  # type: ignore[call-overload, misc]
+        path = Path(tmp.name) if not yosys_script_path else Path(yosys_script_path)  # type: ignore[misc]
+        tmp.close()  # type: ignore[misc]
+        return build_and_execute(path, [input_file_path], output_file_path, verbose=verbose, top=top_module_name, techmap_paths=[pmux2mux_path])  # type: ignore[misc]

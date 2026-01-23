@@ -19,25 +19,25 @@ from typing_extensions import Self
 
 from netlist_carpentry import CFG, Direction, Instance, Port, Signal
 from netlist_carpentry.core.exceptions import EvaluationError
-from netlist_carpentry.utils._gate_lib_base import (
+from netlist_carpentry.utils.gate_lib_base_classes import (
+    ArithmeticGate,
+    BinaryGate,
+    BinaryNto1Gate,
+    ClkMixin,
+    EnMixin,
     LibUtils,
-    _ArithmeticGate,
-    _BinaryGate,
-    _BinaryNto1Gate,
-    _ClkMixin,
-    _EnMixin,
-    _PrimitiveGate,
-    _ReduceGate,
-    _RstMixin,
-    _ScanMixin,
-    _ShiftGate,
-    _StorageGate,
-    _UnaryGate,
+    PrimitiveGate,
+    ReduceGate,
+    RstMixin,
+    ScanMixin,
+    ShiftGate,
+    StorageGate,
+    UnaryGate,
 )
 from netlist_carpentry.utils.gate_lib_dataclasses import DLatchParams, MuxParams
 from netlist_carpentry.utils.safe_format_dict import SafeFormatDict
 
-_gate_lib_map: Dict[str, Type[_PrimitiveGate]] = {}
+_gate_lib_map: Dict[str, Type[PrimitiveGate]] = {}
 """
 A dictionary mapping instance types to their corresponding primitive gate classes.
 
@@ -46,7 +46,7 @@ It provides an efficient way to access the different types of gates in the libra
 """
 
 
-class Buffer(_UnaryGate, BaseModel):
+class Buffer(UnaryGate, BaseModel):
     """
     A buffer gate.
 
@@ -73,7 +73,7 @@ class Buffer(_UnaryGate, BaseModel):
         return {idx: self.signal_in(idx) if self.signal_in(idx).is_defined else Signal.UNDEFINED}
 
 
-class NotGate(_UnaryGate, BaseModel):
+class NotGate(UnaryGate, BaseModel):
     """
     An inverter gate.
 
@@ -102,7 +102,7 @@ class NotGate(_UnaryGate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class NegGate(_UnaryGate, BaseModel):
+class NegGate(UnaryGate, BaseModel):
     """
     An arithmetic negator gate.
 
@@ -132,7 +132,7 @@ class NegGate(_UnaryGate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class ReduceAnd(_ReduceGate, BaseModel):
+class ReduceAnd(ReduceGate, BaseModel):
     """
     A reduction AND gate.
 
@@ -162,7 +162,7 @@ class ReduceAnd(_ReduceGate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class ReduceOr(_ReduceGate, BaseModel):
+class ReduceOr(ReduceGate, BaseModel):
     """
     A reduction OR gate.
 
@@ -193,7 +193,7 @@ class ReduceOr(_ReduceGate, BaseModel):
         return {idx: Signal.UNDEFINED if any(self.signal_in(i).is_undefined for i in self.input_port.segments) else Signal.LOW}
 
 
-class ReduceBool(_ReduceGate, BaseModel):
+class ReduceBool(ReduceGate, BaseModel):
     """
     A reduction Boolean gate.
 
@@ -225,7 +225,7 @@ class ReduceBool(_ReduceGate, BaseModel):
         return {idx: Signal.UNDEFINED if any(self.signal_in(i).is_undefined for i in self.input_port.segments) else Signal.LOW}
 
 
-class ReduceXor(_ReduceGate, BaseModel):
+class ReduceXor(ReduceGate, BaseModel):
     """
     A reduction XOR gate.
 
@@ -255,7 +255,7 @@ class ReduceXor(_ReduceGate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class ReduceXnor(_ReduceGate, BaseModel):
+class ReduceXnor(ReduceGate, BaseModel):
     """
     A reduction XNOR gate.
 
@@ -285,7 +285,7 @@ class ReduceXnor(_ReduceGate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class LogicNot(_ReduceGate, BaseModel):
+class LogicNot(ReduceGate, BaseModel):
     """
     A logic not gate.
 
@@ -316,7 +316,7 @@ class LogicNot(_ReduceGate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class AndGate(_BinaryGate, BaseModel):
+class AndGate(BinaryGate, BaseModel):
     """
     An AND gate.
 
@@ -347,7 +347,7 @@ class AndGate(_BinaryGate, BaseModel):
         return {idx: Signal.HIGH}
 
 
-class OrGate(_BinaryGate, BaseModel):
+class OrGate(BinaryGate, BaseModel):
     """
     An OR gate.
 
@@ -378,7 +378,7 @@ class OrGate(_BinaryGate, BaseModel):
         return {idx: Signal.LOW}
 
 
-class XorGate(_BinaryGate, BaseModel):
+class XorGate(BinaryGate, BaseModel):
     """
     An XOR gate.
 
@@ -407,7 +407,7 @@ class XorGate(_BinaryGate, BaseModel):
         return {idx: Signal.LOW if self.signals_in(idx)[0] is self.signals_in(idx)[1] else Signal.HIGH}
 
 
-class XnorGate(_BinaryGate, BaseModel):
+class XnorGate(BinaryGate, BaseModel):
     """
     An XNOR gate.
 
@@ -436,7 +436,7 @@ class XnorGate(_BinaryGate, BaseModel):
         return {idx: Signal.HIGH if self.signals_in(idx)[0] is self.signals_in(idx)[1] else Signal.LOW}
 
 
-class NorGate(_BinaryGate, BaseModel):
+class NorGate(BinaryGate, BaseModel):
     """
     A NOR gate.
 
@@ -467,7 +467,7 @@ class NorGate(_BinaryGate, BaseModel):
         return {idx: Signal.HIGH}
 
 
-class NandGate(_BinaryGate, BaseModel):
+class NandGate(BinaryGate, BaseModel):
     """
     A NAND gate.
 
@@ -498,7 +498,7 @@ class NandGate(_BinaryGate, BaseModel):
         return {idx: Signal.LOW}
 
 
-class ShiftSigned(_ShiftGate, BaseModel):
+class ShiftSigned(ShiftGate, BaseModel):
     """
     A signed SHIFT gate.
 
@@ -524,14 +524,14 @@ class ShiftSigned(_ShiftGate, BaseModel):
         For a signed SHIFT gate, returns its left input shifted right by the number on the right side
         if it is positive or unsigned, and shifted left by the number on the right side if it is negative.
         """
-        val_a = Signal.dict_to_int(self.ports['A'].signal_array, msb_first=self.ports['A'].msb_first, signed=self.ports['A'].signed)
-        val_b = Signal.dict_to_int(self.ports['B'].signal_array, msb_first=self.ports['B'].msb_first, signed=self.ports['B'].signed)
+        val_a = Signal.dict_to_int(self.ports['A'].signal_array, msb_first=self.ports['A'].msb_first, signed=self.a_signed)
+        val_b = Signal.dict_to_int(self.ports['B'].signal_array, msb_first=self.ports['B'].msb_first, signed=self.b_signed)
         shift_left = self.b_signed and self.ports['B'].signal_int is not None and self.ports['B'].signal_int < 0
         out_val = val_a << -val_b if shift_left else val_a >> val_b
         return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
 
 
-class ShiftLeft(_ShiftGate, BaseModel):
+class ShiftLeft(ShiftGate, BaseModel):
     """
     A SHIFT-LEFT gate.
 
@@ -560,7 +560,7 @@ class ShiftLeft(_ShiftGate, BaseModel):
         return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
 
 
-class ShiftRight(_ShiftGate, BaseModel):
+class ShiftRight(ShiftGate, BaseModel):
     """
     A SHIFT-RIGHT gate.
 
@@ -589,7 +589,7 @@ class ShiftRight(_ShiftGate, BaseModel):
         return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
 
 
-class LogicAnd(_BinaryNto1Gate, BaseModel):
+class LogicAnd(BinaryNto1Gate, BaseModel):
     """
     A LOGIC-AND gate.
 
@@ -621,7 +621,7 @@ class LogicAnd(_BinaryNto1Gate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class LogicOr(_BinaryNto1Gate, BaseModel):
+class LogicOr(BinaryNto1Gate, BaseModel):
     """
     A LOGIC-OR gate.
 
@@ -653,7 +653,7 @@ class LogicOr(_BinaryNto1Gate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class LessThan(_BinaryNto1Gate, BaseModel):
+class LessThan(BinaryNto1Gate, BaseModel):
     """
     A LESS-THAN gate.
 
@@ -684,7 +684,7 @@ class LessThan(_BinaryNto1Gate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class LessEqual(_BinaryNto1Gate, BaseModel):
+class LessEqual(BinaryNto1Gate, BaseModel):
     """
     A LESS-OR-EQUAL gate.
 
@@ -715,7 +715,7 @@ class LessEqual(_BinaryNto1Gate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class Equal(_BinaryNto1Gate, BaseModel):
+class Equal(BinaryNto1Gate, BaseModel):
     """
     An EQUAL gate.
 
@@ -746,7 +746,7 @@ class Equal(_BinaryNto1Gate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class NotEqual(_BinaryNto1Gate, BaseModel):
+class NotEqual(BinaryNto1Gate, BaseModel):
     """
     A NOT-EQUAL gate.
 
@@ -777,7 +777,7 @@ class NotEqual(_BinaryNto1Gate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class GreaterThan(_BinaryNto1Gate, BaseModel):
+class GreaterThan(BinaryNto1Gate, BaseModel):
     """
     A GREATER-THAN gate.
 
@@ -808,7 +808,7 @@ class GreaterThan(_BinaryNto1Gate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class GreaterEqual(_BinaryNto1Gate, BaseModel):
+class GreaterEqual(BinaryNto1Gate, BaseModel):
     """
     A GREATER-OR-EQUAL gate.
 
@@ -839,7 +839,7 @@ class GreaterEqual(_BinaryNto1Gate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
-class Multiplexer(_PrimitiveGate, BaseModel):
+class Multiplexer(PrimitiveGate, BaseModel):
     """
     A multiplexer.
 
@@ -861,7 +861,7 @@ class Multiplexer(_PrimitiveGate, BaseModel):
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        for i in range(2**self.bit_width):
+        for i in range(1 << self.bit_width):
             self.connect(f'D{i}', None, direction=Direction.IN, width=self.width)
         self.connect('S', None, direction=Direction.IN, width=self.bit_width)
         self.connect('Y', None, direction=Direction.OUT, width=self.width)
@@ -894,7 +894,7 @@ class Multiplexer(_PrimitiveGate, BaseModel):
         self.parameters['BIT_WIDTH'] = new_bit_width
 
     @property
-    def output_port(self) -> Port:
+    def output_port(self) -> Port[Instance]:
         """
         The output port of the multiplexer.
 
@@ -904,7 +904,7 @@ class Multiplexer(_PrimitiveGate, BaseModel):
         return self.ports['Y']
 
     @property
-    def d_ports(self) -> List[Port]:
+    def d_ports(self) -> List[Port[Instance]]:
         """
         The data ports of the multiplexer.
 
@@ -914,7 +914,7 @@ class Multiplexer(_PrimitiveGate, BaseModel):
         return list(filter(self.is_d_port, self.ports.values()))
 
     @property
-    def s_port(self) -> Port:
+    def s_port(self) -> Port[Instance]:
         """
         The select port of the multiplexer.
 
@@ -950,7 +950,7 @@ class Multiplexer(_PrimitiveGate, BaseModel):
         return -1
 
     @property
-    def active_input(self) -> Optional[Port]:
+    def active_input(self) -> Optional[Port[Instance]]:
         """
         The active input port of the gate.
 
@@ -968,6 +968,16 @@ class Multiplexer(_PrimitiveGate, BaseModel):
     @property
     def verilog_template(self) -> str:
         return 'always @(*) begin\n\tcase ({sel})\n{cases}\n\tendcase\nend'
+
+    @property
+    def verilog_net_map(self) -> Dict[str, str]:
+        exclude_indices = LibUtils.get_unconnected_idx(self.ports['Y'])
+        out_str = LibUtils.p2ws2v(self.ports['Y'], exclude_indices)
+        s_str = LibUtils.p2ws2v(self.ports['S'])
+        vnet_dict = {'Y': out_str, 'S': s_str}
+        for i in range(1 << self.bit_width):
+            vnet_dict[f'D{i}'] = LibUtils.p2ws2v(self.ports[f'D{i}'], exclude_indices)
+        return vnet_dict
 
     @property
     def verilog(self) -> str:
@@ -989,7 +999,7 @@ class Multiplexer(_PrimitiveGate, BaseModel):
         cases = ''
         exclude_indices = LibUtils.get_unconnected_idx(self.output_port)
         if self.bit_width > 1:
-            for i in range(2**self.bit_width):
+            for i in range(1 << self.bit_width):
                 d_port = self.ports[f'D{i}']
                 out_signals = LibUtils.p2ws2v(self.output_port, exclude_indices)
                 in_signals = LibUtils.p2ws2v(d_port, exclude_indices)
@@ -1021,7 +1031,7 @@ class Multiplexer(_PrimitiveGate, BaseModel):
         self.parameters['BIT_WIDTH'] = self.bit_width
         return self.parameters
 
-    def is_d_port(self, port: Port) -> bool:
+    def is_d_port(self, port: Port[Instance]) -> bool:
         """
         Whether a port is a data port.
 
@@ -1062,7 +1072,7 @@ class Multiplexer(_PrimitiveGate, BaseModel):
         return {idx: self.active_input.signal_array[idx] if self.active_input.signal_array[idx].is_defined else Signal.UNDEFINED}
 
 
-class Demultiplexer(_PrimitiveGate, BaseModel):
+class Demultiplexer(PrimitiveGate, BaseModel):
     """
     A demultiplexer.
 
@@ -1087,7 +1097,7 @@ class Demultiplexer(_PrimitiveGate, BaseModel):
         """
         self.connect('D', None, direction=Direction.IN, width=self.width)
         self.connect('S', None, direction=Direction.IN, width=self.bit_width)
-        for i in range(2**self.bit_width):
+        for i in range(1 << self.bit_width):
             self.connect(f'Y{i}', None, direction=Direction.OUT, width=self.width)
         return super().model_post_init(__context)
 
@@ -1101,7 +1111,7 @@ class Demultiplexer(_PrimitiveGate, BaseModel):
         self.parameters['WIDTH'] = new_width
 
     @property
-    def bit_width(self) -> int:
+    def bit_width(self) -> PositiveInt:
         """
         The width of the demultiplexer's control signal.
 
@@ -1118,7 +1128,7 @@ class Demultiplexer(_PrimitiveGate, BaseModel):
         self.parameters['BIT_WIDTH'] = new_bit_width
 
     @property
-    def input_port(self) -> Port:
+    def input_port(self) -> Port[Instance]:
         """
         The input port of the gate.
 
@@ -1128,7 +1138,7 @@ class Demultiplexer(_PrimitiveGate, BaseModel):
         return self.ports['D']
 
     @property
-    def y_ports(self) -> List[Port]:
+    def y_ports(self) -> List[Port[Instance]]:
         """
         The output ports of the gate.
 
@@ -1138,7 +1148,7 @@ class Demultiplexer(_PrimitiveGate, BaseModel):
         return list(filter(self.is_y_port, self.ports.values()))
 
     @property
-    def s_port(self) -> Port:
+    def s_port(self) -> Port[Instance]:
         """
         The select ports of the gate.
 
@@ -1173,7 +1183,7 @@ class Demultiplexer(_PrimitiveGate, BaseModel):
         return -1
 
     @property
-    def active_output(self) -> Optional[Port]:
+    def active_output(self) -> Optional[Port[Instance]]:
         """
         The active output port of the gate.
 
@@ -1197,6 +1207,16 @@ class Demultiplexer(_PrimitiveGate, BaseModel):
         return 'always @(*) begin\n\tcase ({sel})\n{cases}\n\tendcase\nend'
 
     @property
+    def verilog_net_map(self) -> Dict[str, str]:
+        exclude_indices = LibUtils.get_unconnected_idx(self.ports['D'])
+        in_str = LibUtils.p2ws2v(self.ports['D'], exclude_indices)
+        s_str = LibUtils.p2ws2v(self.ports['S'])
+        vnet_dict = {'D': in_str, 'S': s_str}
+        for i in range(1 << self.bit_width):
+            vnet_dict[f'Y{i}'] = LibUtils.p2ws2v(self.ports[f'Y{i}'], exclude_indices)
+        return vnet_dict
+
+    @property
     def verilog(self) -> str:
         """
         Creates a Verilog demultiplexer from the Python object.
@@ -1214,7 +1234,7 @@ class Demultiplexer(_PrimitiveGate, BaseModel):
             str: The Verilog code for the demultiplexer gate.
         """
         cases = ''
-        for i in range(2**self.bit_width):
+        for i in range(1 << self.bit_width):
             y_port = self.ports[f'Y{i}']
             exclude_indices = LibUtils.get_unconnected_idx(y_port)
             out_signals = LibUtils.p2ws2v(y_port, exclude_indices)
@@ -1228,7 +1248,7 @@ class Demultiplexer(_PrimitiveGate, BaseModel):
         self.parameters['BIT_WIDTH'] = self.bit_width
         return self.parameters
 
-    def is_y_port(self, port: Port) -> bool:
+    def is_y_port(self, port: Port[Instance]) -> bool:
         """
         Whether a port is an output port.
 
@@ -1286,11 +1306,11 @@ class Demultiplexer(_PrimitiveGate, BaseModel):
         return new_insts
 
 
-class Adder(_ArithmeticGate, BaseModel):
+class Adder(ArithmeticGate, BaseModel):
     instance_type: str = f'{CFG.id_internal}add'
 
     @property
-    def input_ports(self) -> Tuple[Port, Port]:
+    def input_ports(self) -> Tuple[Port[Instance], Port[Instance]]:
         """
         The input ports of the gate.
 
@@ -1300,7 +1320,7 @@ class Adder(_ArithmeticGate, BaseModel):
         return (self.ports['A'], self.ports['B'])
 
     @property
-    def output_port(self) -> Port:
+    def output_port(self) -> Port[Instance]:
         """
         The output port of the gate.
 
@@ -1329,11 +1349,11 @@ class Adder(_ArithmeticGate, BaseModel):
         return sig_sum
 
 
-class Subtractor(_ArithmeticGate, BaseModel):
+class Subtractor(ArithmeticGate, BaseModel):
     instance_type: str = f'{CFG.id_internal}sub'
 
     @property
-    def input_ports(self) -> Tuple[Port, Port]:
+    def input_ports(self) -> Tuple[Port[Instance], Port[Instance]]:
         """
         The input ports of the gate.
 
@@ -1343,7 +1363,7 @@ class Subtractor(_ArithmeticGate, BaseModel):
         return (self.ports['A'], self.ports['B'])
 
     @property
-    def output_port(self) -> Port:
+    def output_port(self) -> Port[Instance]:
         """
         The output port of the gate.
 
@@ -1372,11 +1392,11 @@ class Subtractor(_ArithmeticGate, BaseModel):
         return sig_sum
 
 
-class Multiplier(_ArithmeticGate, BaseModel):
+class Multiplier(ArithmeticGate, BaseModel):
     instance_type: str = f'{CFG.id_internal}mul'
 
     @property
-    def input_ports(self) -> Tuple[Port, Port]:
+    def input_ports(self) -> Tuple[Port[Instance], Port[Instance]]:
         """
         The input ports of the gate.
 
@@ -1386,7 +1406,7 @@ class Multiplier(_ArithmeticGate, BaseModel):
         return (self.ports['A'], self.ports['B'])
 
     @property
-    def output_port(self) -> Port:
+    def output_port(self) -> Port[Instance]:
         """
         The output port of the gate.
 
@@ -1415,7 +1435,7 @@ class Multiplier(_ArithmeticGate, BaseModel):
         return sig_sum
 
 
-class DFF(_ClkMixin, BaseModel):
+class DFF(ClkMixin, BaseModel):
     """
     A D flip-flop (DFF) is a clocked gate that stores a value on its input port and outputs it on its output port.
     The value is stored when the clock signal has a rising edge.
@@ -1509,7 +1529,7 @@ class DFF(_ClkMixin, BaseModel):
         return {idx: self.input_port[idx].signal if self.input_port[idx].signal.is_defined else Signal.UNDEFINED}
 
 
-class ADFF(_RstMixin, DFF):  # type: ignore[misc] # MRO is fine. Silence, MyPy!
+class ADFF(RstMixin, DFF):
     instance_type: str = f'{CFG.id_internal}adff'
 
     @property
@@ -1522,11 +1542,11 @@ class ADFF(_RstMixin, DFF):  # type: ignore[misc] # MRO is fine. Silence, MyPy!
         return should_update_super or should_update_rst
 
 
-class DFFE(_EnMixin, DFF):  # type: ignore[misc] # MRO is fine. Silence, MyPy!
+class DFFE(EnMixin, DFF):
     instance_type: str = f'{CFG.id_internal}dffe'
 
 
-class ADFFE(DFFE, ADFF):  # type: ignore[misc] # MRO is fine. Silence, MyPy!
+class ADFFE(DFFE, ADFF):
     instance_type: str = f'{CFG.id_internal}adffe'
 
     @property
@@ -1539,23 +1559,23 @@ class ADFFE(DFFE, ADFF):  # type: ignore[misc] # MRO is fine. Silence, MyPy!
         return super()._calc_output(idx)
 
 
-class ScanDFF(_ScanMixin, DFF):  # type: ignore[misc] # MRO is fine. Silence, MyPy!
+class ScanDFF(ScanMixin, DFF):  # type: ignore[misc] # MRO is fine. Silence, MyPy!
     instance_type: str = f'{CFG.id_internal}scan_dff'
 
 
-class ScanADFF(_ScanMixin, ADFF):  # type: ignore[misc] # MRO is fine. Silence, MyPy!
+class ScanADFF(ScanMixin, ADFF):  # type: ignore[misc] # MRO is fine. Silence, MyPy!
     instance_type: str = f'{CFG.id_internal}scan_adff'
 
 
-class ScanDFFE(_ScanMixin, DFFE):  # type: ignore[misc] # MRO is fine. Silence, MyPy!
+class ScanDFFE(ScanMixin, DFFE):  # type: ignore[misc] # MRO is fine. Silence, MyPy!
     instance_type: str = f'{CFG.id_internal}scan_dffe'
 
 
-class ScanADFFE(_ScanMixin, ADFFE):  # type: ignore[misc] # MRO is fine. Silence, MyPy!
+class ScanADFFE(ScanMixin, ADFFE):  # type: ignore[misc] # MRO is fine. Silence, MyPy!
     instance_type: str = f'{CFG.id_internal}scan_adffe'
 
 
-class DLatch(_EnMixin, _StorageGate, BaseModel):
+class DLatch(EnMixin, StorageGate, BaseModel):
     instance_type: str = f'{CFG.id_internal}dlatch'
 
     parameters: DLatchParams = {}
@@ -1588,7 +1608,7 @@ class DLatch(_EnMixin, _StorageGate, BaseModel):
         return {idx: self.output_port.signal_array[idx]}
 
 
-def get(instance_type: str) -> Union[type[_PrimitiveGate], None]:
+def get(instance_type: str) -> Union[type[PrimitiveGate], None]:
     """
     Retrieves the class of a primitive gate based on its instance type.
 

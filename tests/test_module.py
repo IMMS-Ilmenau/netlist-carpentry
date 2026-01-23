@@ -4,7 +4,6 @@ import json
 import os
 from pathlib import Path
 
-import networkx as nx
 import pytest
 
 from netlist_carpentry import WIRE_SEGMENT_X
@@ -23,8 +22,10 @@ from netlist_carpentry.core.exceptions import (
     PathResolutionError,
     SingleOwnershipError,
     StructureMismatchError,
+    UnsupportedOperationError,
     WidthMismatchError,
 )
+from netlist_carpentry.core.graph.module_graph import ModuleGraph
 from netlist_carpentry.core.netlist_elements.element_path import (
     ElementPath,
     InstancePath,
@@ -37,6 +38,7 @@ from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.wire_segment import WIRE_SEGMENT_0
+from netlist_carpentry.utils.gate_factory import adff
 from netlist_carpentry.utils.gate_lib import ADFFE, AndGate
 from netlist_carpentry.utils.log import LOG
 
@@ -275,13 +277,13 @@ def test_create_instance(empty_module: Module, connected_module: Module) -> None
     assert inst == empty_module.instances['test_inst']
     assert inst.instance_type == connected_module.name
     assert inst.ports.keys() == connected_module.ports.keys()
-    assert empty_module.circuit.module_instances['m2'] == [InstancePath(raw='test_module1.test_inst')]
+    assert empty_module.circuit.instances['m2'] == [InstancePath(raw='test_module1.test_inst')]
     for p in inst.ports:
         assert inst.ports[p].direction == connected_module.ports[p].direction
         assert inst.ports[p].width == connected_module.ports[p].width
 
     inst = empty_module.create_instance(connected_module, 'test_inst2')
-    assert empty_module.circuit.module_instances['m2'] == [InstancePath(raw='test_module1.test_inst'), InstancePath(raw='test_module1.test_inst2')]
+    assert empty_module.circuit.instances['m2'] == [InstancePath(raw='test_module1.test_inst'), InstancePath(raw='test_module1.test_inst2')]
 
     with pytest.raises(IdentifierConflictError):
         empty_module.create_instance(connected_module, 'test_inst')
@@ -404,7 +406,13 @@ def test_replace_instance(dff_module: Module) -> None:
     assert adffe.ports['Q'].connected_wire_segments == dff_connections['Q']
 
     with pytest.raises(StructureMismatchError):
+        dff_module.connect(dff_module.ports['CLK'], adffe.ports['RST'])
         dff_module.replace(adffe, dff)
+
+    adffe.disconnect('RST')
+    dff_module.replace(adffe, dff)
+    assert '§adffe' not in dff_module.instances_by_types
+    assert '§dff' in dff_module.instances_by_types
 
 
 def test_replace_instance_silent(dff_module: Module) -> None:
@@ -437,7 +445,7 @@ def test_remove_instance(empty_module: Module, locked_module: Module, connected_
     w4 = wire_4b(init_module=False)
     empty_module.add_instance(i)
     assert i.module == empty_module
-    assert c.module_instances['test_module1'] == []
+    assert c.instances['test_module1'] == []
     empty_module.add_wire(w4)
     assert len(empty_module.instances) == 1
 
@@ -453,11 +461,11 @@ def test_remove_instance(empty_module: Module, locked_module: Module, connected_
 
     c.add_module(m2)
     i = empty_module.create_instance(m2, 'inst2')
-    assert c.module_instances['m2'] == [i.path]
+    assert c.instances['m2'] == [i.path]
     empty_module.remove_instance(i)
     assert len(empty_module.instances) == 0
     assert i.module is None
-    assert c.module_instances['m2'] == []
+    assert c.instances['m2'] == []
 
     with pytest.raises(ObjectNotFoundError):
         empty_module.remove_instance(i)
@@ -853,6 +861,10 @@ def test_connect(standard_module: Module) -> None:
         standard_module.connect(w[0], p[0])
 
     standard_module.disconnect(p)
+    with pytest.raises(UnsupportedOperationError):
+        standard_module.connect(p, p[0])
+
+    standard_module.disconnect(p)
     standard_module.change_mutability(is_now_locked=True)
     standard_module.connect(w[0], p[0])
     assert p.is_unconnected
@@ -1052,9 +1064,9 @@ def test_update_module_instances() -> None:
     c = Circuit(name='c')
     m1 = c.create_module('m1')
     m2 = c.create_module('m2')
-    assert c.module_instances == {'m1': [], 'm2': []}
+    assert c.instances == {}
     inst_m2 = m1.create_instance(m2, 'inst')
-    assert c.module_instances == {'m1': [], 'm2': [InstancePath(raw='m1.inst')]}
+    assert c.instances == {'m2': [InstancePath(raw='m1.inst')]}
 
     p1 = m2.create_port('p1', offset=3, width=4)
     assert inst_m2.ports == {}
@@ -1488,6 +1500,19 @@ def test_split_all(dff_module: Module) -> None:
     splits = dff_module.split_all('dff')
     assert splits == 1
 
+    c = Circuit(name='c')
+    c.add_module(dff_module)
+    subm = c.create_module('sub')
+    D = subm.create_port('D', Dir.IN, width=8)
+    adff(subm, 'dff_inst', D=D)
+    dff_module.create_instance(subm, 'subm_inst')
+    splits = dff_module.split_all('dff')
+    assert splits == 0
+    assert len(subm.instances) == 1
+    splits = dff_module.split_all('dff', recursive=True)
+    assert splits == 1
+    assert len(subm.instances) == 8
+
 
 def test_split_all_empty(dff_module: Module) -> None:
     splits = dff_module.split_all(fuzzy=False)
@@ -1502,7 +1527,7 @@ def test_make_chain(dff_module: Module) -> None:
         dff_module.make_chain([], 'foo', 'bar')
 
     dff_module.split_all('dff')
-    dffs = dff_module.get_instances('dff', fuzzy=True)
+    dffs = dff_module.get_instances(type='dff', fuzzy=True)
     assert len(dffs) == 4
 
     for dff in dffs:
@@ -1715,10 +1740,10 @@ def test_evaluate_corner_cases(standard_module: Module) -> None:
 
 
 def test_build_graph(connected_module: Module) -> None:
-    g = connected_module.build_graph()
+    g = connected_module.graph()
 
-    assert isinstance(g, nx.MultiDiGraph)
-    assert len(g.edges) == 4 + 8  # 4 FF-related edges (in/out) and 8 combinatorial edges (in/out)
+    assert isinstance(g, ModuleGraph)
+    assert len(g.edges) == 4 + 8  # 4 FF-related edges (in/out) and 8 combinational edges (in/out)
     # Module Ports - number of outgoing edges
     assert len(g.edges('in1')) == 1
     assert len(g.edges('in2')) == 1
@@ -1753,7 +1778,7 @@ def test_build_graph(connected_module: Module) -> None:
     assert len(g.in_edges('not_inst')) == 1
     assert len(g.in_edges('dff_inst')) == 3
 
-    # Edge connections - combinatorial
+    # Edge connections - combinational
     assert g.edges['in1', 'and_inst', 'in1§A'] == {'ename': 'in1', 'dr_seg': 0, 'ld_seg': 0}
     assert g.edges['in2', 'and_inst', 'in2§B'] == {'ename': 'in2', 'dr_seg': 0, 'ld_seg': 0}
     assert g.edges['in3', 'or_inst', 'in3§A'] == {'ename': 'in3', 'dr_seg': 0, 'ld_seg': 0}
@@ -1788,20 +1813,20 @@ def test_build_graph(connected_module: Module) -> None:
     assert g.nodes['out_ff']['ndata'] == connected_module.get_port('out_ff')
 
     # Instance node types
-    assert g.nodes['and_inst']['ntype_info'] == '§and'
-    assert g.nodes['or_inst']['ntype_info'] == '§or'
-    assert g.nodes['xor_inst']['ntype_info'] == '§xor'
-    assert g.nodes['not_inst']['ntype_info'] == '§not'
-    assert g.nodes['dff_inst']['ntype_info'] == '§adffe'
+    assert g.nodes['and_inst']['nsubtype'] == '§and'
+    assert g.nodes['or_inst']['nsubtype'] == '§or'
+    assert g.nodes['xor_inst']['nsubtype'] == '§xor'
+    assert g.nodes['not_inst']['nsubtype'] == '§not'
+    assert g.nodes['dff_inst']['nsubtype'] == '§adffe'
     # Port node types
-    assert g.nodes['in1']['ntype_info'] == 'input'
-    assert g.nodes['in2']['ntype_info'] == 'input'
-    assert g.nodes['in3']['ntype_info'] == 'input'
-    assert g.nodes['in4']['ntype_info'] == 'input'
-    assert g.nodes['clk']['ntype_info'] == 'input'
-    assert g.nodes['rst']['ntype_info'] == 'input'
-    assert g.nodes['out']['ntype_info'] == 'output'
-    assert g.nodes['out_ff']['ntype_info'] == 'output'
+    assert g.nodes['in1']['nsubtype'] == 'input'
+    assert g.nodes['in2']['nsubtype'] == 'input'
+    assert g.nodes['in3']['nsubtype'] == 'input'
+    assert g.nodes['in4']['nsubtype'] == 'input'
+    assert g.nodes['clk']['nsubtype'] == 'input'
+    assert g.nodes['rst']['nsubtype'] == 'input'
+    assert g.nodes['out']['nsubtype'] == 'output'
+    assert g.nodes['out_ff']['nsubtype'] == 'output'
 
 
 def test_graph_property(connected_module: Module) -> None:
@@ -1814,6 +1839,38 @@ def test_graph_property(connected_module: Module) -> None:
     g2 = copy.deepcopy(connected_module.graph())
     assert tuple(g1.nodes) != tuple(g2.nodes)
     assert tuple(g2.nodes) == tuple(connected_module.graph().nodes)
+
+
+def test_show_interactive(dff_module: Module) -> None:
+    dash = dff_module.show(interactive=True)
+    children = dash.layout.children
+    assert len(children) == 3
+    assert children[0].id == 'clicked-nodes-store'
+    assert children[1].id == 'clicked-edges-store'
+    assert children[2].children[0].id == 'circuit-graph'
+    assert children[2].children[0].elements == [
+        {'data': {'id': 'dff_inst', 'label': 'dff_inst', 'object_type': 'INSTANCE', 'object_subtype': '§dff'}},
+        {'data': {'id': 'D', 'label': 'D', 'object_type': 'PORT', 'object_subtype': 'input'}},
+        {'data': {'id': 'CLK', 'label': 'CLK', 'object_type': 'PORT', 'object_subtype': 'input'}},
+        {'data': {'id': 'Q', 'label': 'Q', 'object_type': 'PORT', 'object_subtype': 'output'}},
+        {'data': {'label': 'Q->Q', 'source': 'dff_inst', 'target': 'Q'}},
+        {'data': {'label': 'D->D', 'source': 'D', 'target': 'dff_inst'}},
+        {'data': {'label': 'CLK->CLK', 'source': 'CLK', 'target': 'dff_inst'}},
+    ]
+    assert children[2].children[0].layout == {'name': 'klay', 'directed': True}
+    assert children[2].children[0].style == {'width': '100%', 'height': '550px', 'background-color': 'black'}
+
+    dash = dff_module.show(interactive=True, style={'abc': 'def', 'foo': 'bar'})
+    assert dash.layout.children[2].children[0].style == {'abc': 'def', 'foo': 'bar'}
+    assert children[2].children[1].id == 'cytoscape-mouseoverNodeData-output'
+    assert children[2].children[2].id == 'cytoscape-mouseoverEdgeData-output'
+
+
+def test_show_static(dff_module: Module) -> None:
+    if os.path.exists('tests/files/gen/module_vis.svg'):
+        os.remove('tests/files/gen/module_vis.svg')
+    dff_module.show(figpath='tests/files/gen/module_vis.svg')
+    assert os.path.exists('tests/files/gen/module_vis.svg')
 
 
 def test_normalize_metadata(standard_module: Module) -> None:

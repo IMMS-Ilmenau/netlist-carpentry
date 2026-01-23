@@ -6,89 +6,89 @@ import pytest
 import utils
 
 from netlist_carpentry import EMPTY_GRAPH, EMPTY_PATTERN
+from netlist_carpentry.core.graph.module_graph import ModuleGraph
 from netlist_carpentry.core.graph.pattern import Pattern
 from netlist_carpentry.core.graph.pattern_generator import PatternGenerator
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.port import Port
-from netlist_carpentry.io.read.gen_nl import generate_json_netlist
-from netlist_carpentry.io.read.read_utils import read
+from netlist_carpentry.io.read.read_utils import generate_json_netlist, read
 from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
 from netlist_carpentry.utils.gate_lib import NandGate, XnorGate
 
 
-@pytest.fixture
+@pytest.fixture()
 def simple_pattern() -> Pattern:
     module = utils.connected_module()
     xor_inst = module.instances['xor_inst']
-    g: nx.MultiDiGraph[str] = nx.MultiDiGraph()
-    g.add_node(xor_inst.name, ntype=xor_inst.type.name, ntype_info=xor_inst.instance_type, ndata=xor_inst, n_input_inst=True, n_output_inst=True)
+    g = ModuleGraph()
+    g.add_node(xor_inst.name, ntype=xor_inst.type.name, nsubtype=xor_inst.instance_type, ndata=xor_inst, n_input_inst=True, n_output_inst=True)
 
     return Pattern(graph=g, ignore_boundary_conditions=True)
 
 
 def _pattern_graph() -> Pattern:
     module = utils.connected_module()
-    g: nx.MultiDiGraph[str] = nx.MultiDiGraph()
+    g = ModuleGraph()
     xor_inst = module.instances['xor_inst']
     not_inst = module.instances['not_inst']
 
-    g.add_node(xor_inst.name, ntype=xor_inst.type.name, ntype_info=xor_inst.instance_type, ndata=xor_inst, n_input_inst=True, n_output_inst=False)
-    g.add_node(not_inst.name, ntype=not_inst.type.name, ntype_info=not_inst.instance_type, ndata=not_inst, n_input_inst=False, n_output_inst=True)
+    g.add_node(xor_inst.name, ntype=xor_inst.type.name, nsubtype=xor_inst.instance_type, ndata=xor_inst, n_input_inst=True, n_output_inst=False)
+    g.add_node(not_inst.name, ntype=not_inst.type.name, nsubtype=not_inst.instance_type, ndata=not_inst, n_input_inst=False, n_output_inst=True)
     g.add_edge(xor_inst.name, not_inst.name, key='Y§A', ename='wire_xor')
     return g
 
 
-@pytest.fixture
+@pytest.fixture()
 def standard_pattern() -> Pattern:
     g = _pattern_graph()
 
     return Pattern(graph=g, ignore_boundary_conditions=True)
 
 
-@pytest.fixture
+@pytest.fixture()
 def standard_pattern_replacement() -> Pattern:
     g = _pattern_graph()
 
     xnor_inst = XnorGate(raw_path='a.b.c', module=None)
 
-    g_rep: nx.MultiDiGraph[str] = nx.MultiDiGraph()
-    g_rep.add_node('new_inst', ntype='INSTANCE', ntype_info='§xnor', ndata=xnor_inst, n_input_inst=True, n_output_inst=True)
+    g_rep = ModuleGraph()
+    g_rep.add_node('new_inst', ntype='INSTANCE', nsubtype='§xnor', ndata=xnor_inst, n_input_inst=True, n_output_inst=True)
 
     return Pattern(graph=g, replacement_graph=g_rep, ignore_boundary_conditions=True)
 
 
-@pytest.fixture
+@pytest.fixture()
 def not_found_pattern() -> Pattern:
     module = utils.connected_module()
-    g: nx.MultiDiGraph[str] = nx.MultiDiGraph()
+    g = ModuleGraph()
     xor_inst = module.instances['xor_inst']
     nand = NandGate(raw_path='a.b.c', module=module)
-    g.add_node(xor_inst.name, ntype=xor_inst.type.name, ntype_info=xor_inst.instance_type, ndata=xor_inst, n_input_inst=True, n_output_inst=False)
-    g.add_node(nand.name, ntype=nand.type.name, ntype_info=nand.instance_type, ndata=nand, n_input_inst=False, n_output_inst=True)
+    g.add_node(xor_inst.name, ntype=xor_inst.type.name, nsubtype=xor_inst.instance_type, ndata=xor_inst, n_input_inst=True, n_output_inst=False)
+    g.add_node(nand.name, ntype=nand.type.name, nsubtype=nand.instance_type, ndata=nand, n_input_inst=False, n_output_inst=True)
     g.add_edge(xor_inst.name, nand.name, key='Y§A', ename='wire_xor')
 
     return Pattern(graph=g, ignore_boundary_conditions=True)
 
 
-@pytest.fixture
+@pytest.fixture()
 def multi_in_pattern() -> Pattern:
     module = utils.connected_module()
-    g: nx.MultiDiGraph[str] = nx.MultiDiGraph()
+    g = ModuleGraph()
     and_inst = module.instances['and_inst']
     or_inst = module.instances['or_inst']
     xor_inst = module.instances['xor_inst']
 
-    g.add_node(and_inst.name, ntype=and_inst.type.name, ntype_info=and_inst.instance_type, ndata=and_inst, n_input_inst=True, n_output_inst=False)
-    g.add_node(or_inst.name, ntype=or_inst.type.name, ntype_info=or_inst.instance_type, ndata=or_inst, n_input_inst=True, n_output_inst=False)
-    g.add_node(xor_inst.name, ntype=xor_inst.type.name, ntype_info=xor_inst.instance_type, ndata=xor_inst, n_input_inst=False, n_output_inst=True)
+    g.add_node(and_inst.name, ntype=and_inst.type.name, nsubtype=and_inst.instance_type, ndata=and_inst, n_input_inst=True, n_output_inst=False)
+    g.add_node(or_inst.name, ntype=or_inst.type.name, nsubtype=or_inst.instance_type, ndata=or_inst, n_input_inst=True, n_output_inst=False)
+    g.add_node(xor_inst.name, ntype=xor_inst.type.name, nsubtype=xor_inst.instance_type, ndata=xor_inst, n_input_inst=False, n_output_inst=True)
     g.add_edge(and_inst.name, xor_inst.name, key='Y§A', ename='wire_and')
     g.add_edge(or_inst.name, xor_inst.name, key='Y§B', ename='wire_or')
 
     return Pattern(graph=g, ignore_port_names=False, ignore_boundary_conditions=True)
 
 
-@pytest.fixture
+@pytest.fixture()
 def modified_module() -> Module:
     return utils.modified_module()
 
@@ -149,9 +149,9 @@ def test_find_match_basics(standard_pattern: Pattern, not_found_pattern: Pattern
 def test_find_match_standard(simple_pattern: Pattern, standard_pattern: Pattern, modified_module: Module) -> None:
     match = simple_pattern.find_matches(modified_module.graph())
     assert len(match.matches) == 3
-    data_xor1 = list(match.matches[0].nodes.data(data='ntype_info'))
-    data_xor2 = list(match.matches[1].nodes.data(data='ntype_info'))
-    data_xor3 = list(match.matches[2].nodes.data(data='ntype_info'))
+    data_xor1 = list(match.matches[0].nodes.data(data='nsubtype'))
+    data_xor2 = list(match.matches[1].nodes.data(data='nsubtype'))
+    data_xor3 = list(match.matches[2].nodes.data(data='nsubtype'))
 
     # Order is not specified!
     assert data_xor1 != data_xor2
@@ -164,9 +164,9 @@ def test_find_match_standard(simple_pattern: Pattern, standard_pattern: Pattern,
 
     match = standard_pattern.find_matches(modified_module.graph())
     assert len(match.matches) == 3
-    data1 = list(match.matches[0].nodes.data(data='ntype_info'))
-    data2 = list(match.matches[1].nodes.data(data='ntype_info'))
-    data3 = list(match.matches[2].nodes.data(data='ntype_info'))
+    data1 = list(match.matches[0].nodes.data(data='nsubtype'))
+    data2 = list(match.matches[1].nodes.data(data='nsubtype'))
+    data3 = list(match.matches[2].nodes.data(data='nsubtype'))
     # Order is not specified!
     assert data1 != data2
     assert data1 != data3
@@ -410,21 +410,21 @@ def test_graph_from_file_fail() -> None:
 
 
 def test_add_node_metadata() -> None:
-    g: nx.MultiDiGraph[str] = nx.MultiDiGraph()
-    g.add_node('A', ntype='PORT', ntype_info='input')
+    g = ModuleGraph()
+    g.add_node('A', ntype='PORT', nsubtype='input')
     g.add_node('N', ntype='INSTANCE')
-    g.add_node('Y', ntype='PORT', ntype_info='output')
+    g.add_node('Y', ntype='PORT', nsubtype='output')
     g.add_edge('A', 'N')
     g.add_edge('N', 'Y')
     Pattern._add_node_metadata(g)
     assert g.nodes['N']['n_input_inst']
     assert g.nodes['N']['n_output_inst']
 
-    g: nx.MultiDiGraph[str] = nx.MultiDiGraph()
-    g.add_node('A', ntype='PORT', ntype_info='input')
+    g = ModuleGraph()
+    g.add_node('A', ntype='PORT', nsubtype='input')
     g.add_node('N', ntype='INSTANCE')
     g.add_node('M', ntype='INSTANCE')
-    g.add_node('Y', ntype='PORT', ntype_info='output')
+    g.add_node('Y', ntype='PORT', nsubtype='output')
     g.add_edge('A', 'N')
     g.add_edge('N', 'M')
     g.add_edge('M', 'Y')

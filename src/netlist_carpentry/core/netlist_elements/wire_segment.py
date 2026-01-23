@@ -380,7 +380,7 @@ class WireSegment(_Segment, BaseModel):
         return f'{self.__class__.__name__} "{self.name}" with path {self.path.raw}'
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({self.path.raw}, Signal:{self.signal.value})'
+        return f'{self.__class__.__name__}({self.path.raw}, Signal:{self.signal.value}, {len(self.port_segments)} port(s))'
 
 
 class _WireSegmentConst(WireSegment):

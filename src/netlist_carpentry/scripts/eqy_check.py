@@ -71,7 +71,7 @@ class EqyWrapper:
         with open(self.path, 'w') as f:
             f.write(self.format_template(gold_vfile_paths, gold_top_module, gate_vfile_paths, gate_top_module))
 
-    def run_eqy(self, output_path: str = os.getcwd(), remove_if_successful: bool = False, overwrite: bool = False) -> int:
+    def run_eqy(self, output_path: str = os.getcwd(), remove_if_successful: bool = False, overwrite: bool = False, quiet: bool = False) -> int:
         """
         Runs the Yosys EQY tool to prove the logical equivalence of the Verilog designs.
 
@@ -84,6 +84,7 @@ class EqyWrapper:
             output_path (str, optional): The path to the directory where the EQY tool will be executed. Defaults to the current working directory.
             remove_if_successful (bool, optional): Whether to remove the output directory after a successful equivalence proof. Defaults to False.
             overwrite (bool, optional): Whether to overwrite the output directory if it already exists. Defaults to False.
+            quiet (bool, optional): If True, suppresses all Yosys output. If False, prints all Yosys output to the console. Defaults to False.
 
         Returns:
             int: The return code of the EQY tool. 0 if the equivalence proof was successful, otherwise a non-zero value along with an error message.
@@ -91,7 +92,9 @@ class EqyWrapper:
         if overwrite and os.path.exists(output_path):
             shutil.rmtree(output_path, ignore_errors=True)
         dir_path = os.path.dirname(os.path.abspath(__file__))
-        return_code = subprocess.call([f'{dir_path}/eqy.sh', self.path, output_path])
+        stdout = subprocess.PIPE if quiet else None
+        stderr = subprocess.STDOUT if quiet else None
+        return_code = subprocess.call([f'{dir_path}/eqy.sh', self.path, output_path], stdout=stdout, stderr=stderr)
         if return_code == 0 and remove_if_successful:
             shutil.rmtree(output_path, ignore_errors=True)
         return return_code

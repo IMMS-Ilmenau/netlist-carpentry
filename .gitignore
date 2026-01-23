@@ -30,6 +30,7 @@ output
 public
 local_files
 *.zip
+*.vcd
 
 # ignore all files/dirs under any "eqy/out" chain
 **/eqy/out/**

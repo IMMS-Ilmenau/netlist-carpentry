@@ -18,12 +18,12 @@ from typing import (
     runtime_checkable,
 )
 
-import networkx as nx
 from pydantic import NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
 from netlist_carpentry import Direction, Signal
 from netlist_carpentry.core.enums.element_type import EType
+from netlist_carpentry.core.graph.module_graph import ModuleGraph
 from netlist_carpentry.core.netlist_elements.element_path import (
     ElementPath,
     InstancePath,
@@ -302,7 +302,7 @@ class ModuleLike(NetlistElementLike, HasPorts, Protocol):
     def optimize(self) -> bool: ...
     def visualize(self, graph_file_path: str) -> None: ...
     def evaluate(self, modules: Dict[str, ModuleLike] = {}) -> None: ...
-    def graph(self) -> nx.MultiDiGraph[str]: ...
+    def graph(self) -> ModuleGraph: ...
     def export_metadata(
         self,
         path: Union[str, Path],

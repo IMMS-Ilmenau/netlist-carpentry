@@ -5,7 +5,7 @@ import inspect
 import logging
 import os
 import shutil
-from typing import Callable, List, Mapping, Tuple
+from typing import Callable, List, Literal, Mapping, Tuple, Union
 
 from rich.console import Console, ConsoleRenderable
 from rich.highlighter import NullHighlighter
@@ -20,6 +20,14 @@ RICH_THEME: Mapping[str, str] = {
     'WARNING': 'bold orange1',
     'ERROR': 'bold bright_red',
     'CRITICAL': 'bold bright_red',
+}
+LEVELS = Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+LEVEL_MAP = {
+    'DEBUG': 1,
+    'INFO': 2,
+    'WARNING': 3,
+    'ERROR': 4,
+    'CRITICAL': 5,
 }
 
 
@@ -87,6 +95,15 @@ class Log:
         fcn_to_highlight('#' + (len(message) + 4) * '=' + '#')
         fcn_to_highlight('|  ' + message + '  |')
         fcn_to_highlight('#' + (len(message) + 4) * '=' + '#')
+
+    def set_log_level(self, level: Union[int, LEVELS]) -> None:
+        if isinstance(level, str):
+            if level in LEVEL_MAP:
+                level = LEVEL_MAP[level]
+            else:
+                raise ValueError(f"Invalid log level '{level}'")
+        CFG.log_level = level
+        logging.getLogger().setLevel(logging.getLevelName(int(CFG.log_level) * 10))
 
     def debug_highlighted(self, message: str) -> None:
         """Adds a highlighted DEBUG message to the logger."""

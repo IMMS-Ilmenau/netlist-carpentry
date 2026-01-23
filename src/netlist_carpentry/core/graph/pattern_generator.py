@@ -5,10 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Tuple
 
-from networkx import MultiDiGraph as MDG
-
 from netlist_carpentry import Circuit, Module
 from netlist_carpentry.core.graph.constraint import Constraint
+from netlist_carpentry.core.graph.module_graph import ModuleGraph
 from netlist_carpentry.core.graph.pattern import Pattern
 from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
 
@@ -136,7 +135,7 @@ class PatternGenerator:
         return Pattern(find_graph, ignore_port_names=ignore_port_names, matching_constraints=constraints)
 
     @classmethod
-    def _module_from_verilog(cls, file_path: str, remove_ports: bool) -> Tuple[MDG[str], Module]:
+    def _module_from_verilog(cls, file_path: str, remove_ports: bool) -> Tuple[ModuleGraph, Module]:
         """
         Reads a Verilog file from the given file path and returns its graph representation along with the module.
 
@@ -148,7 +147,7 @@ class PatternGenerator:
                 The matching algorithm will then only find matches, if the whole structure (including the module ports) is found!
 
         Returns:
-            Tuple[networkx.MultiDiGraph, Module]: Graph representation of the module in the provided file, plus the module itself.
+            Tuple[ModuleGraph, Module]: Graph representation of the module in the provided file, plus the module itself.
 
         Raises:
             ValueError: If the provided file contains more or less than one module.
@@ -159,7 +158,7 @@ class PatternGenerator:
         return PatternGenerator._from_circuit(circuit, remove_ports)
 
     @classmethod
-    def _module_from_json(cls, file_path: str, remove_ports: bool) -> Tuple[MDG[str], Module]:
+    def _module_from_json(cls, file_path: str, remove_ports: bool) -> Tuple[ModuleGraph, Module]:
         """
         Reads a Yosys netlist from the given file path and returns its graph representation along with the module.
 
@@ -171,7 +170,7 @@ class PatternGenerator:
                 The matching algorithm will then only find matches, if the whole structure (including the module ports) is found!
 
         Returns:
-            Tuple[networkx.MultiDiGraph, Module]: Graph representation of the module in the provided file, plus the module itself.
+            Tuple[ModuleGraph, Module]: Graph representation of the module in the provided file, plus the module itself.
 
         Raises:
             ValueError: If the provided file contains more or less than one module.
@@ -180,7 +179,7 @@ class PatternGenerator:
         return PatternGenerator._from_circuit(circuit, remove_ports)
 
     @classmethod
-    def _from_circuit(cls, circuit: Circuit, remove_ports: bool) -> Tuple[MDG[str], Module]:
+    def _from_circuit(cls, circuit: Circuit, remove_ports: bool) -> Tuple[ModuleGraph, Module]:
         """
         Converts a Circuit object into a graph representation and its corresponding Module.
 
@@ -192,7 +191,7 @@ class PatternGenerator:
                 The matching algorithm will then only find matches, if the whole structure (including the module ports) is found!
 
         Returns:
-            Tuple[networkx.MultiDiGraph, Module]: Graph representation of the module in the provided circuit, plus the module itself.
+            Tuple[ModuleGraph, Module]: Graph representation of the module in the provided circuit, plus the module itself.
 
         Raises:
             ValueError: If the provided circuit contains more or less than one module.

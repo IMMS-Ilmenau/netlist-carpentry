@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
-from networkx import MultiDiGraph as MDG
+from .module_graph import ModuleGraph
 
-EMPTY_GRAPH: MDG[str] = MDG()
+EMPTY_GRAPH = ModuleGraph()
+
+__all__ = ['ModuleGraph']

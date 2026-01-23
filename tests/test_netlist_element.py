@@ -51,6 +51,13 @@ def test_set_name(netlist_element: NetlistElement) -> None:
     with pytest.raises(VerilogSyntaxError):
         netlist_element.set_name('module')
 
+    for char in '1#+-.,!"$%&/()=0@[]{}<>^`~|\\':
+        with pytest.raises(VerilogSyntaxError):
+            netlist_element.set_name(char)
+
+    netlist_element.set_name('§')  # CFG.id_internal
+    assert netlist_element.name == '§'
+
     netlist_element.set_name('Module')  # Not a keyword, in contrast to "module"
     assert netlist_element.name == 'Module'
 

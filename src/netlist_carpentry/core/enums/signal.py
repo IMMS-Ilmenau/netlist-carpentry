@@ -104,7 +104,45 @@ class Signal(Enum):
 
     @staticmethod
     def from_int(sig_val: int, msb_first: bool = True, fixed_width: Optional[PositiveInt] = None) -> Dict[int, 'Signal']:
-        # TODO Documentation
+        """
+        Converts an integer value into a dictionary of Signal objects.
+
+        This method acts as a high-level wrapper for :meth:`from_bin`.
+        It handles the conversion of standard Python integers (including negative values)
+        into a binary string representation before mapping them to signal indices.
+
+        Sign Handling:
+            - **Positive Integers:** Converted to their standard binary representation.
+            - **Negative Integers:** Converted using **two's complement** representation.
+              The bit-width for the two's complement is determined by `fixed_width`.
+              If `fixed_width` is not provided, it defaults to the minimum number of
+              bits required to represent the absolute value of `sig_val`.
+
+        Args:
+            sig_val (int): The integer value to transform. Can be positive or negative.
+            msb_first (bool, optional): Determines the bit-indexing direction.
+                - If True (default), index 0 is the Least Significant Bit (LSB).
+                - This parameter is passed directly to :meth:`from_bin`.
+            fixed_width (Optional[PositiveInt], optional): The desired bit-width.
+                - For negative numbers, this defines the wrap-around point for the
+                  two's complement logic.
+                - If the integer requires fewer bits than `fixed_width`, the resulting
+                  signal will be zero-padded (or sign-extended for negatives).
+                - If the integer requires more bits, it will be truncated.
+
+        Returns:
+            Dict[int, Signal]: A dictionary where keys are integer indices (starting from 0
+                for the LSB) and values are Signal objects (HIGH or LOW).
+
+        Example:
+            >>> # 5 in binary is 101. MSB-first mapping:
+            >>> Signal.from_int(5)
+            {0: <Signal.HIGH>, 1: <Signal.LOW>, 2: <Signal.HIGH>}
+
+            >>> # -1 in 4-bit two's complement is 1111
+            >>> Signal.from_int(-1, fixed_width=4)
+            {0: <Signal.HIGH>, 1: <Signal.HIGH>, 2: <Signal.HIGH>, 3: <Signal.HIGH>}
+        """
         # Produces the two-s complement for negative ints
         if sig_val < 0:
             width = fixed_width if fixed_width is not None else len(bin(abs(sig_val))[2:])
@@ -186,6 +224,46 @@ class Signal(Enum):
 
     @staticmethod
     def from_bin(sig_str: str, msb_first: bool = True, fixed_width: Optional[PositiveInt] = None) -> Dict[int, 'Signal']:
+        """
+        Parses a digital signal string and maps it to a dictionary of Signal objects indexed by bit position.
+
+        This method converts a string representation of a multi-bit signal (e.g., "10xz") into a structured dictionary.
+        It handles bit-ordering (MSB vs LSB), allows fixed bit-widths (padding or truncation),
+        and validates that the input string contains only valid digital logic characters.
+
+        Args:
+            sig_str (str): A string representing the signal values. Valid characters are:
+                - '0': Logic Low
+                - '1': Logic High
+                - 'z': High Impedance/Tristate
+                - 'x': Unknown/Undefined
+            msb_first (bool, optional): Determines the bit-indexing direction.
+                - If True (default), the character at `sig_str[0]` is treated as the Most
+                  Significant Bit (MSB) and assigned the highest index.
+                - If False, the character at `sig_str[0]` is treated as the Least
+                  Significant Bit (LSB) and assigned index 0.
+            fixed_width (Optional[PositiveInt], optional): The desired number of bits.
+                - If the resulting string is shorter than `fixed_width`, it is left-padded
+                  with '0' (MSB padding).
+                - If longer, it is truncated from the left (MSB side).
+                - Defaults to None, using the length of `sig_str` as provided.
+
+        Returns:
+            Dict[int, Signal]: A dictionary where keys are integer indices (starting from 0
+                for the LSB) and values are the corresponding Signal objects.
+
+        Raises:
+            ValueError: If `sig_str` contains characters other than '0', '1', 'x', or 'z'.
+
+        Example:
+            >>> # Parsing a 4-bit MSB-first signal
+            >>> Signal.from_bin("10xz", msb_first=True)
+            {0: <Signal.FLOATING>, 1: <Signal.UNDEFINED>, 2: <Signal.LOW>, 3: <Signal.HIGH>}
+
+            >>> # Parsing with a fixed width (padding)
+            >>> Signal.from_bin("11", fixed_width=4)
+            {0: <Signal.HIGH>, 1: <Signal.HIGH>, 2: <Signal.LOW>, 3: <Signal.LOW>}
+        """
         if any(s not in ['0', '1', 'z', 'x'] for s in sig_str):
             raise ValueError(
                 f'Cannot transform signal string into signal array: found illegal character in string {sig_str} (may only contain 0, 1, x and z)'

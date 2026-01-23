@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Dict, Iterable, Literal, Optional, Tuple, Union
+from collections import defaultdict
+from typing import TYPE_CHECKING, Callable, DefaultDict, Dict, Iterable, Literal, Optional, Tuple, Union
 
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
@@ -108,13 +109,12 @@ class Instance(NetlistElement, BaseModel):
         Returns:
             A dictionary mapping port names to their corresponding connection paths.
         """
-        conn = CustomDict[str, Dict[int, WireSegmentPath]]()
+        conn: DefaultDict[str, Dict[int, WireSegmentPath]] = defaultdict(dict)
         for pname in self.ports:
             p = self.ports[pname]
             for s in p.segments:
                 if p[s].is_connected or include_unconnected:
-                    conn_dict = {s: p[s].ws_path}
-                    conn.update_or_create(pname, conn_dict)
+                    conn[pname].update({s: p[s].ws_path})
         return conn
 
     @property

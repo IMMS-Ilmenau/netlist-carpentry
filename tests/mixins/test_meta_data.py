@@ -35,6 +35,21 @@ def test_is_empty() -> None:
     assert not metadata.is_empty
 
 
+def test_general() -> None:
+    metadata = MetadataMixin()
+    assert 'general' not in metadata
+    assert metadata.is_empty
+    gen = metadata.general
+    assert gen == {}
+    assert 'general' in metadata
+    assert metadata.is_empty
+
+    gen['foo'] = 'bar'
+    assert 'foo' in metadata.general
+    assert metadata.general['foo'] == 'bar'
+    assert not metadata.is_empty
+
+
 def test_has_category() -> None:
     metadata = MetadataMixin()
     assert not metadata.has_category('some_category')
