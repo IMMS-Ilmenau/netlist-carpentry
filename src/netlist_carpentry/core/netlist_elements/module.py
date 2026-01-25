@@ -174,6 +174,27 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         return new_instance
 
     def replace(self, old_instance: Union[str, Instance], new_instance: Instance, silent: bool = False) -> None:
+        """Replaces an existing instance in the module with a new instance.
+
+        This method validates the existence of the instance to be replaced
+        and ensures the new instance's name does not cause a conflict within the module.
+
+        Args:
+            old_instance (Union[str, Instance]): The instance to be replaced. Can be either the
+                instance name (str) or the Instance object itself.
+            new_instance (Instance): The new instance (submodule or gate) to be inserted.
+            silent (bool, optional): If True, suppresses warnings during the reconnection
+                process if ports are left unconnected. Defaults to False.
+
+        Raises:
+            ObjectNotFoundError: If `old_instance` does not exist in the module.
+            IdentifierConflictError: If `new_instance.name` is already taken by
+                another instance in the module.
+            StructureMismatchError: If the new instance is missing ports that
+                were connected in the old instance.
+            WidthMismatchError: If a port name matches but the bit-width differs
+                between the old and new instance.
+        """
         if isinstance(old_instance, Instance):
             old_instance = old_instance.name
         if old_instance not in self.instances:
@@ -186,6 +207,24 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         self._replace(self.instances[old_instance], new_instance, silent)
 
     def _replace(self, old_instance: Instance, new_instance: Instance, silent: bool) -> None:
+        """Performs the internal logic of swapping instances and reconnecting nets.
+
+        This method verifies port compatibility (presence and width), removes the
+        old instance, adds the new instance, and maps the existing net connections
+        from the old ports to the new ports.
+
+        Args:
+            old_instance (Instance): The Instance object to be removed.
+            new_instance (Instance): The Instance object to be added.
+            silent (bool, optional): If False, logs a warning for every port in the new instance
+                that did not exist in the old instance and is consequently left unconnected.
+
+        Raises:
+            StructureMismatchError: If the new instance is missing ports that
+                were connected in the old instance (to prevent dangling nets).
+            WidthMismatchError: If a port exists in both instances but has
+                different bit-widths.
+        """
         missing_ports = set()
         for p in old_instance.ports.values():
             if not p.is_unconnected and p.name not in new_instance.ports:
@@ -505,6 +544,18 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         return []
 
     def name_occupied(self, name: str) -> bool:
+        """Checks if a given identifier is already in use within the module.
+
+        This method verifies if the name conflicts with any existing instances,
+        ports, or wires defined in the module's namespace.
+
+        Args:
+            name: The string identifier to check for existence.
+
+        Returns:
+            True if the name is already used by an instance, port, or wire;
+            False otherwise.
+        """
         return name in self.instances or name in self.ports or name in self.wires
 
     def connect(self, source: ANY_SIGNAL_SOURCE, target: ANY_SIGNAL_TARGET, new_wire_name: Optional[str] = None) -> None:
@@ -728,11 +779,49 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         return edges
 
     def get_outgoing_edges(self, instance_name: str) -> Dict[str, Dict[int, WireSegment]]:
+        """Retrieves all connections associated with the output ports of a specific instance.
+
+        This method filters all edges of the given instance to return only those
+        connected to its output ports.
+
+        Args:
+            instance_name (str): The name of the instance (submodule or gate) to query.
+
+        Returns:
+            A dictionary mapping output port names to their connections. The structure is:
+                {
+                    port_name (str): {
+                        bit_index (int): wire_segment (WireSegment)
+                    }
+                }
+
+        Raises:
+            KeyError: If `instance_name` does not exist in the module's instances.
+        """
         edges = self.get_edges(instance_name)
         inst = self.instances[instance_name]
         return {pname: edges[pname] for pname in edges if inst.ports[pname].is_output}
 
     def get_incoming_edges(self, instance_name: str) -> Dict[str, Dict[int, WireSegment]]:
+        """Retrieves all connections associated with the input ports of a specific instance.
+
+        This method filters all edges of the given instance to return only those
+        connected to its input ports.
+
+        Args:
+            instance_name (str): The name of the instance (submodule or gate) to query.
+
+        Returns:
+            A dictionary mapping input port names to their connections. The structure is:
+            {
+                port_name (str): {
+                    bit_index (int): wire_segment (WireSegment)
+                }
+            }
+
+        Raises:
+            KeyError: If `instance_name` does not exist in the module's instances.
+        """
         edges = self.get_edges(instance_name)
         inst = self.instances[instance_name]
         return {pname: edges[pname] for pname in edges if inst.ports[pname].is_input}
@@ -826,7 +915,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         neighbors: Dict[str, Dict[int, List[PortSegment]]] = {}
         if instance_name in self.instances:
-            inst: Instance = self.get_instance(instance_name)
+            inst = self.instances[instance_name]
             edges = self.get_edges(instance_name)
             for pname in edges:
                 neighbors[pname] = {}

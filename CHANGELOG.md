@@ -1,14 +1,18 @@
-# Changelog 0.3.0 (2026-01-22)
+# Changelog 0.3.1
 
-## Highlights
+
+
+# Older Versions
+
+## 0.3.0 (2026-01-22)
+
+### Highlights
 - Improved graph visualization by extending the current implementation with interactive graphs, powered by [Dash Cytoscape](https://dash.plotly.com/cytoscape)
     - Graphs can be visualized both as static images and interactive widgets
     - Supported in both Jupyter notebooks and web applications
     - Multiple ways to customize graphs, including node/edge labels, colors, sizes
 - Support for VCD data annotation and analysis
 - Various API simplifications and bug fixes
-
-## What's new
 
 ### ADDED
 - Interactive circuit graphs powered by **dash‑cytoscape** (see `netlist_carpentry.core.graph.visualization` package)
@@ -40,9 +44,6 @@
 ### REMOVED
 - Graph caching logic - was unreliable, graph is now always rebuilt upon calling, dropped caching completely
 
-
-
-# Older Versions
 
 ## 0.2.0 (2025-11-27)
 
