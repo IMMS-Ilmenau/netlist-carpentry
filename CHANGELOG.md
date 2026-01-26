@@ -95,7 +95,7 @@
 - Missing parent references fixed in various utilities
 
 ### REMOVED
-- `netlist_carpentry.utils.gate_lib.LibUtils.current_module` - traversal is now handled via the `parent` attribute of each instance
+- `netlist_carpentry.utils.gate_lib.LibUtils` - traversal is now handled via the `parent` attribute of each instance
 - Hashing support in `NetlistElement` and all subclasses (prevents accidental mutation in collections, since they can no longer be keys or set elements)
 
 
