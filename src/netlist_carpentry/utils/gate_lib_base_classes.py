@@ -97,8 +97,10 @@ class PrimitiveGate(Instance, BaseModel):
     """
 
     instance_type: str = CFG.id_internal
+    """Identifier for instances of this gate type."""
 
     parameters: TypedParams = {}
+    """Parameters of this gate, e.g. data width, signedness or polarity."""
 
     @property
     def width(self) -> PositiveInt:
@@ -111,10 +113,20 @@ class PrimitiveGate(Instance, BaseModel):
 
     @property
     def is_combinational(self) -> bool:
+        """Whether instances of this gate are considered combinational gates.
+
+        `True` for combinational gates, such as AND gates or arithmetic gates.
+        `False` for flip-flops and latches.
+        """
         return True
 
     @property
     def is_sequential(self) -> bool:
+        """Whether instances of this gate are considered sequential gates.
+
+        `False` for combinational gates, such as AND gates or arithmetic gates.
+        `True` for flip-flops and latches.
+        """
         return not self.is_combinational
 
     @property
