@@ -28,59 +28,6 @@ from netlist_carpentry.utils.gate_lib_dataclasses import (
 from netlist_carpentry.utils.safe_format_dict import SafeFormatDict
 
 
-class LibUtils:
-    """
-    Class for some methods related to handling elements from the Gate Library.
-
-    This class provides methods for collecting wire segments connected
-    to a port segment and transforming them into Verilog syntax.
-
-    More functionality may be added later as needed.
-    """
-
-    @classmethod
-    def p2ws2v(cls, port: ANY_PORT, exclude_indices: Optional[List[int]] = None) -> str:
-        """
-        Converts a Port object to its corresponding Verilog structure by using the connected wire segments.
-
-        This method takes the connected wire segments of a Port object and converts them to their corresponding
-        Verilog signal structure (p2ws2v -> Port to WireSegment to Verilog signal syntax).
-        The method requires that the currently selected module matches the module of the Port object,
-        which is derived from the design path of the Port object.
-        For each segment of the port, it checks whether a corresponding connected wire segment exists in the current module.
-        If the port is set to a constant, the corresponding constant wire segment placeholder is used instead.
-        Port segments can be excluded from the conversion by providing a list of indices,
-        indicating which segments should be excluded from the conversion (e.g. segments that are known to be unconnected).
-
-        Args:
-            port (Port): The Port object to convert.
-            exclude_indices (List[int], optional): A list of indices to exclude from the conversion. Defaults to an empty list.
-
-        Returns:
-            str: The Verilog signal structure as a string.
-
-        Raises:
-            AttributeError: If the currently selected module does not match the module of the port.
-        """
-        from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
-
-        if exclude_indices is None:
-            exclude_indices = []
-        curr_module: Module = port.module
-        wsegs: List[WireSegment] = []
-        for idx, ps in reversed(port.segments.items()):
-            if idx not in exclude_indices:
-                if not ps.is_tied:
-                    ws = curr_module.get_from_path(ps.ws_path)
-                    if ws is not None:
-                        wsegs.append(ws)
-                    else:
-                        raise ValueError(f'No wire found for path {ps.ws_path}!')
-                else:
-                    wsegs.append(CONST_MAP_VAL2OBJ.get(ps.raw_ws_path, WIRE_SEGMENT_X))
-        return P2V.simplify_wire_segments(curr_module, wsegs)
-
-
 class PrimitiveGate(Instance, BaseModel):
     """
     A base class for all primitive gates.
@@ -171,6 +118,47 @@ class PrimitiveGate(Instance, BaseModel):
 
     def sync_parameters(self) -> InstanceParams:
         return self.parameters
+
+    def p2ws2v(self, port: ANY_PORT, exclude_indices: Optional[List[int]] = None) -> str:
+        """
+        Converts a Port object to its corresponding Verilog structure by using the connected wire segments.
+
+        This method takes the connected wire segments of a Port object and converts them to their corresponding
+        Verilog signal structure (p2ws2v -> Port to WireSegment to Verilog signal syntax).
+        The method requires that the currently selected module matches the module of the Port object,
+        which is derived from the design path of the Port object.
+        For each segment of the port, it checks whether a corresponding connected wire segment exists in the current module.
+        If the port is set to a constant, the corresponding constant wire segment placeholder is used instead.
+        Port segments can be excluded from the conversion by providing a list of indices,
+        indicating which segments should be excluded from the conversion (e.g. segments that are known to be unconnected).
+
+        Args:
+            port (Port): The Port object to convert.
+            exclude_indices (List[int], optional): A list of indices to exclude from the conversion. Defaults to an empty list.
+
+        Returns:
+            str: The Verilog signal structure as a string.
+
+        Raises:
+            AttributeError: If the currently selected module does not match the module of the port.
+        """
+        from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
+
+        if exclude_indices is None:
+            exclude_indices = []
+        curr_module: Module = port.module
+        wsegs: List[WireSegment] = []
+        for idx, ps in reversed(port.segments.items()):
+            if idx not in exclude_indices:
+                if not ps.is_tied:
+                    ws = curr_module.get_from_path(ps.ws_path)
+                    if ws is not None:
+                        wsegs.append(ws)
+                    else:
+                        raise ValueError(f'No wire found for path {ps.ws_path}!')
+                else:
+                    wsegs.append(CONST_MAP_VAL2OBJ.get(ps.raw_ws_path, WIRE_SEGMENT_X))
+        return P2V.simplify_wire_segments(curr_module, wsegs)
 
     def _get_unconnected_idx(self, port: ANY_PORT) -> List[int]:
         exclude_indices = [idx for idx, ps in port.segments.items() if ps.is_unconnected]
@@ -290,8 +278,8 @@ class UnaryGate(PrimitiveGate, BaseModel):
     @property
     def verilog_net_map(self) -> Dict[str, str]:
         exclude_indices = self._get_unconnected_idx(self.ports['Y'])
-        out_str = LibUtils.p2ws2v(self.ports['Y'], exclude_indices)
-        in1_str = LibUtils.p2ws2v(self.ports['A'], exclude_indices)
+        out_str = self.p2ws2v(self.ports['Y'], exclude_indices)
+        in1_str = self.p2ws2v(self.ports['A'], exclude_indices)
         return {'Y': out_str, 'A': in1_str}
 
     def _check_signal_signed(self, a: str) -> str:
@@ -368,13 +356,13 @@ class ReduceGate(UnaryGate, BaseModel):
     @property
     def verilog_net_map(self) -> Dict[str, str]:
         exclude_indices = self._get_unconnected_idx(self.ports['A'])
-        in1_str = LibUtils.p2ws2v(self.ports['A'], exclude_indices)
-        out_str = LibUtils.p2ws2v(self.ports['Y'])
+        in1_str = self.p2ws2v(self.ports['A'], exclude_indices)
+        out_str = self.p2ws2v(self.ports['Y'])
         return {'Y': out_str, 'A': in1_str}
 
     @property
     def verilog(self) -> str:
-        # Check whether output is connected (i.e. LibUtils.p2ws2v(self.ports["Y"]) != "1'bx"), do not transform outgoing segments without connection
+        # Check whether output is connected (i.e. self.p2ws2v(self.ports["Y"]) != "1'bx"), do not transform outgoing segments without connection
         out = self.verilog_net_map['Y']
         in1 = self.verilog_net_map['A']
         return self.verilog_template.format(out=out, in1=in1) if out != "1'bx" else ''
@@ -436,9 +424,9 @@ class BinaryGate(PrimitiveGate, BaseModel):
     @property
     def verilog_net_map(self) -> Dict[str, str]:
         exclude_indices = self._get_unconnected_idx(self.ports['Y'])
-        out_str = LibUtils.p2ws2v(self.ports['Y'], exclude_indices)
-        in1_str = LibUtils.p2ws2v(self.ports['A'], exclude_indices)
-        in2_str = LibUtils.p2ws2v(self.ports['B'], exclude_indices)
+        out_str = self.p2ws2v(self.ports['Y'], exclude_indices)
+        in1_str = self.p2ws2v(self.ports['A'], exclude_indices)
+        in2_str = self.p2ws2v(self.ports['B'], exclude_indices)
         return {'Y': out_str, 'A': in1_str, 'B': in2_str}
 
     @property
@@ -560,9 +548,9 @@ class ArithmeticGate(PrimitiveGate, BaseModel):
     @property
     def verilog_net_map(self) -> Dict[str, str]:
         unused_bits = self._unused_idx()
-        out_str = LibUtils.p2ws2v(self.output_port, unused_bits)
-        in1_str = LibUtils.p2ws2v(self.input_ports[0], unused_bits)
-        in2_str = LibUtils.p2ws2v(self.input_ports[1], unused_bits)
+        out_str = self.p2ws2v(self.output_port, unused_bits)
+        in1_str = self.p2ws2v(self.input_ports[0], unused_bits)
+        in2_str = self.p2ws2v(self.input_ports[1], unused_bits)
         return {'Y': out_str, 'A': in1_str, 'B': in2_str}
 
     @property
@@ -607,9 +595,9 @@ class BinaryNto1Gate(BinaryGate, BaseModel):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        in1_str = LibUtils.p2ws2v(self.ports['A'])
-        in2_str = LibUtils.p2ws2v(self.ports['B'])
-        out_str = LibUtils.p2ws2v(self.output_port)
+        in1_str = self.p2ws2v(self.ports['A'])
+        in2_str = self.p2ws2v(self.ports['B'])
+        out_str = self.p2ws2v(self.output_port)
         return {'Y': out_str, 'A': in1_str, 'B': in2_str}
 
     @property
@@ -671,8 +659,8 @@ class StorageGate(PrimitiveGate, BaseModel):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        in1 = LibUtils.p2ws2v(self.input_port)
-        out = LibUtils.p2ws2v(self.output_port)
+        in1 = self.p2ws2v(self.input_port)
+        out = self.p2ws2v(self.output_port)
         return {'Q': out, 'D': in1}
 
     def _storage_assigns(self, sig_value: str = '') -> str:
@@ -681,7 +669,7 @@ class StorageGate(PrimitiveGate, BaseModel):
         return f'{out}\t<=\t{in1};' if out != "1'bx" else ''
 
     def _v_header(self, port: Port[Instance], polarity: Signal) -> str:
-        wire = LibUtils.p2ws2v(port) if LibUtils.p2ws2v(port) != "1'bx" else ''
+        wire = self.p2ws2v(port) if self.p2ws2v(port) != "1'bx" else ''
         return ('posedge ' if polarity == Signal.HIGH else 'negedge ') + wire if wire else ''
 
     def sync_parameters(self) -> _SequentialParams:
@@ -741,7 +729,7 @@ class ClkMixin(StorageGate):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        clk = LibUtils.p2ws2v(self.clk_port) if LibUtils.p2ws2v(self.clk_port) != "1'bx" else ''
+        clk = self.p2ws2v(self.clk_port) if self.p2ws2v(self.clk_port) != "1'bx" else ''
         sigs = super().verilog_net_map
         sigs.update({'CLK': clk})
         return sigs
@@ -795,7 +783,7 @@ class EnMixin(StorageGate):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        en = LibUtils.p2ws2v(self.en_port)
+        en = self.p2ws2v(self.en_port)
         sigs = super().verilog_net_map
         sigs.update({'EN': en})
         return sigs
@@ -807,7 +795,7 @@ class EnMixin(StorageGate):
 
         Has the form `en_net_name` or `~en_net_name`, depending on the enable polarity.
         """
-        en_wire = LibUtils.p2ws2v(self.en_port) if LibUtils.p2ws2v(self.en_port) != "1'bx" else ''
+        en_wire = self.p2ws2v(self.en_port) if self.p2ws2v(self.en_port) != "1'bx" else ''
         inv = '' if self.en_polarity == Signal.HIGH else '~'
         return inv + en_wire
 
@@ -887,7 +875,7 @@ class RstMixin(StorageGate):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        rst = LibUtils.p2ws2v(self.rst_port)
+        rst = self.p2ws2v(self.rst_port)
         sigs = super().verilog_net_map
         sigs.update({'RST': rst})
         return sigs
@@ -908,7 +896,7 @@ class RstMixin(StorageGate):
 
         Has the form `rst_net_name` or `~rst_net_name`, depending on the reset polarity.
         """
-        rst_net = LibUtils.p2ws2v(self.rst_port) if LibUtils.p2ws2v(self.rst_port) != "1'bx" else ''
+        rst_net = self.p2ws2v(self.rst_port) if self.p2ws2v(self.rst_port) != "1'bx" else ''
         return rst_net if self.rst_polarity == Signal.HIGH else f'~{rst_net}'
 
     @property
@@ -1006,9 +994,9 @@ class ScanMixin(StorageGate):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        se = LibUtils.p2ws2v(self.se_port)
-        si = LibUtils.p2ws2v(self.si_port)
-        so = LibUtils.p2ws2v(self.so_port)
+        se = self.p2ws2v(self.se_port)
+        si = self.p2ws2v(self.si_port)
+        so = self.p2ws2v(self.so_port)
         sigs = super().verilog_net_map
         sigs.update({'SE': se, 'SI': si, 'SO': so})
         return sigs
@@ -1018,8 +1006,8 @@ class ScanMixin(StorageGate):
         se = self.verilog_net_map['SE']
         si = self.verilog_net_map['SI']
         so = self.verilog_net_map['SO']
-        si_str = f'{LibUtils.p2ws2v(self.output_port)}\t<=\t{si};'
-        so_str = f'assign\t{so}\t=\t{LibUtils.p2ws2v(self.output_port)};'
+        si_str = f'{self.p2ws2v(self.output_port)}\t<=\t{si};'
+        so_str = f'assign\t{so}\t=\t{self.p2ws2v(self.output_port)};'
 
         context_map = super().verilog_context_map
         context_map.update(se=se, si=si_str, so=so_str)

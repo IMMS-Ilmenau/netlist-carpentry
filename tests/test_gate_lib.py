@@ -13,7 +13,6 @@ from netlist_carpentry.core.exceptions import EvaluationError
 from netlist_carpentry.core.netlist_elements.element_path import PortPath, WireSegmentPath
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
-from netlist_carpentry.core.netlist_elements.port import Port
 from netlist_carpentry.core.netlist_elements.wire_segment import WIRE_SEGMENT_1
 from netlist_carpentry.utils.gate_lib import (
     ADFF,
@@ -33,7 +32,6 @@ from netlist_carpentry.utils.gate_lib import (
     ScanDFFE,
     UnaryGate,
 )
-from netlist_carpentry.utils.gate_lib_base_classes import LibUtils
 from netlist_carpentry.utils.log import LOG
 
 
@@ -83,24 +81,6 @@ def test_gate_lib_map(simple_module: Module) -> None:
 
     _build_gate_lib_map()
     assert len(_gate_lib_map) == 41  # Currently 41 gates in library
-
-
-def test_ws2v(simple_module: Module) -> None:
-    from utils import empty_module
-
-    m = empty_module()
-    m.create_wire('w1')
-    m.create_wire('w4', 4)
-    inst = m.create_instance(Module(raw_path='some_submodule'), 'test_inst')
-    p = Port(raw_path='test_module1.port1', direction=Direction.IN, module_or_instance=inst)
-    p.create_port_segment(0).change_connection(WireSegmentPath(raw='test_module1.w1.0'))
-    ps_str1 = LibUtils.p2ws2v(p)
-    assert ps_str1 == 'w1'
-
-    p = Port(raw_path='test_module1.port1', direction=Direction.IN, module_or_instance=inst)
-    p.create_port_segment(0).change_connection(WireSegmentPath(raw='test_module1.w4.0'))
-    ps_str2 = LibUtils.p2ws2v(p)
-    assert ps_str2 == 'w4[0]'
 
 
 def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:

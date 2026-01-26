@@ -25,7 +25,6 @@ from netlist_carpentry.utils.gate_lib_base_classes import (
     BinaryNto1Gate,
     ClkMixin,
     EnMixin,
-    LibUtils,
     PrimitiveGate,
     ReduceGate,
     RstMixin,
@@ -972,11 +971,11 @@ class Multiplexer(PrimitiveGate, BaseModel):
     @property
     def verilog_net_map(self) -> Dict[str, str]:
         exclude_indices = self._get_unconnected_idx(self.ports['Y'])
-        out_str = LibUtils.p2ws2v(self.ports['Y'], exclude_indices)
-        s_str = LibUtils.p2ws2v(self.ports['S'])
+        out_str = self.p2ws2v(self.ports['Y'], exclude_indices)
+        s_str = self.p2ws2v(self.ports['S'])
         vnet_dict = {'Y': out_str, 'S': s_str}
         for i in range(1 << self.bit_width):
-            vnet_dict[f'D{i}'] = LibUtils.p2ws2v(self.ports[f'D{i}'], exclude_indices)
+            vnet_dict[f'D{i}'] = self.p2ws2v(self.ports[f'D{i}'], exclude_indices)
         return vnet_dict
 
     @property
@@ -1001,10 +1000,10 @@ class Multiplexer(PrimitiveGate, BaseModel):
         if self.bit_width > 1:
             for i in range(1 << self.bit_width):
                 d_port = self.ports[f'D{i}']
-                out_signals = LibUtils.p2ws2v(self.output_port, exclude_indices)
-                in_signals = LibUtils.p2ws2v(d_port, exclude_indices)
+                out_signals = self.p2ws2v(self.output_port, exclude_indices)
+                in_signals = self.p2ws2v(d_port, exclude_indices)
                 cases += f"\t\t{self.bit_width}'b{format(i, f'0{self.bit_width}b')} : {out_signals} <= {in_signals};\n"
-            return self.verilog_template.format(sel=LibUtils.p2ws2v(self.ports['S']), cases=cases[:-1])
+            return self.verilog_template.format(sel=self.p2ws2v(self.ports['S']), cases=cases[:-1])
         return self._verilog_ternary_form
 
     @property
@@ -1019,10 +1018,10 @@ class Multiplexer(PrimitiveGate, BaseModel):
             str: The Verilog code for the multiplexer gate in ternary form.
         """
         exclude_indices = self._get_unconnected_idx(self.output_port)
-        out_signals = LibUtils.p2ws2v(self.output_port, exclude_indices)
-        sel = LibUtils.p2ws2v(self.s_port)
-        val_false = LibUtils.p2ws2v(self.ports['D0'], exclude_indices)
-        val_true = LibUtils.p2ws2v(self.ports['D1'], exclude_indices)
+        out_signals = self.p2ws2v(self.output_port, exclude_indices)
+        sel = self.p2ws2v(self.s_port)
+        val_false = self.p2ws2v(self.ports['D0'], exclude_indices)
+        val_true = self.p2ws2v(self.ports['D1'], exclude_indices)
         return f'assign\t{out_signals}\t= {sel} ? {val_true} : {val_false};'
 
     def sync_parameters(self) -> MuxParams:
@@ -1209,11 +1208,11 @@ class Demultiplexer(PrimitiveGate, BaseModel):
     @property
     def verilog_net_map(self) -> Dict[str, str]:
         exclude_indices = self._get_unconnected_idx(self.ports['D'])
-        in_str = LibUtils.p2ws2v(self.ports['D'], exclude_indices)
-        s_str = LibUtils.p2ws2v(self.ports['S'])
+        in_str = self.p2ws2v(self.ports['D'], exclude_indices)
+        s_str = self.p2ws2v(self.ports['S'])
         vnet_dict = {'D': in_str, 'S': s_str}
         for i in range(1 << self.bit_width):
-            vnet_dict[f'Y{i}'] = LibUtils.p2ws2v(self.ports[f'Y{i}'], exclude_indices)
+            vnet_dict[f'Y{i}'] = self.p2ws2v(self.ports[f'Y{i}'], exclude_indices)
         return vnet_dict
 
     @property
@@ -1237,10 +1236,10 @@ class Demultiplexer(PrimitiveGate, BaseModel):
         for i in range(1 << self.bit_width):
             y_port = self.ports[f'Y{i}']
             exclude_indices = self._get_unconnected_idx(y_port)
-            out_signals = LibUtils.p2ws2v(y_port, exclude_indices)
-            in_signals = LibUtils.p2ws2v(self.input_port, exclude_indices)
+            out_signals = self.p2ws2v(y_port, exclude_indices)
+            in_signals = self.p2ws2v(self.input_port, exclude_indices)
             cases += f"\t\t{self.bit_width}'b{format(i, f'0{self.bit_width}b')} : {out_signals} <= {in_signals};\n"
-        return self.verilog_template.format(sel=LibUtils.p2ws2v(self.ports['S']), cases=cases[:-1])
+        return self.verilog_template.format(sel=self.p2ws2v(self.ports['S']), cases=cases[:-1])
 
     def sync_parameters(self) -> MuxParams:
         super().sync_parameters()
@@ -1586,10 +1585,10 @@ class DLatch(EnMixin, StorageGate, BaseModel):
 
     @property
     def verilog(self) -> str:
-        en = LibUtils.p2ws2v(self.en_port)
+        en = self.p2ws2v(self.en_port)
         en = f'~{en}' if self.en_polarity is Signal.LOW else en
         exclude_indices = self._get_unconnected_idx(self.output_port)
-        assignments = f'\t\t{LibUtils.p2ws2v(self.output_port, exclude_indices)} = {LibUtils.p2ws2v(self.input_port, exclude_indices)};'
+        assignments = f'\t\t{self.p2ws2v(self.output_port, exclude_indices)} = {self.p2ws2v(self.input_port, exclude_indices)};'
         return self.verilog_template.format(en=en, assignments=assignments)
 
     def evaluate(self) -> None:
