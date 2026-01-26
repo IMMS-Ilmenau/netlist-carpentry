@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from netlist_carpentry import Instance, Module, Port
 
     # MyPy sees this as a generic class
-    BaseGraph = MultiDiGraph[str]  # type: ignore[misc]
+    BaseGraph = MultiDiGraph[str]
 else:
     BaseGraph = MultiDiGraph  # Runtime sees this as a standard class
 
@@ -32,7 +32,7 @@ class ModuleGraph(BaseGraph):
     @overload
     def get_data(self, node_name: str, key: str) -> object: ...
     def get_data(self, node_name: str, key: Union[DATA_CATEGORIES, str]) -> object:
-        return self.nodes[node_name][key]  # type: ignore
+        return self.nodes[node_name][key]
 
     @overload
     def set_data(self, node_name: str, val: NODE_TYPES, key: Literal['ntype']) -> None: ...
@@ -43,7 +43,7 @@ class ModuleGraph(BaseGraph):
     @overload
     def set_data(self, node_name: str, val: object, key: str) -> None: ...
     def set_data(self, node_name: str, val: object, key: str) -> None:
-        self.nodes[node_name][key] = val  # type: ignore
+        self.nodes[node_name][key] = val
 
     def node_type(self, node_name: str) -> NODE_TYPES:
         """Returns the node type of the given node.
