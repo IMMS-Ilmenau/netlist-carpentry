@@ -103,6 +103,25 @@ def test_add_from_circuit(empty_circuit: Circuit, connected_circuit: Circuit) ->
         empty_circuit.add_from_circuit(connected_circuit)
 
 
+def test_add_from_circuit_file(empty_circuit: Circuit) -> None:
+    adder_c = read('tests/files/simpleAdder.v')
+    added = empty_circuit.add_from_circuit('tests/files/simpleAdder.v')
+    assert added == adder_c.modules
+    assert 'simpleAdder' in added
+    assert empty_circuit.module_count == 1
+    assert added['simpleAdder'].circuit == empty_circuit
+    assert '§adff' in empty_circuit.instances
+    assert len(empty_circuit.instances['§adff']) == 1
+    assert '§add' in empty_circuit.instances
+    assert len(empty_circuit.instances['§add']) == 1
+
+    with pytest.raises(IdentifierConflictError):
+        empty_circuit.add_from_circuit('tests/files/simpleAdder.v')
+
+    with pytest.raises(RuntimeError):
+        empty_circuit.add_from_circuit('bad_path')
+
+
 def test_create_module(empty_circuit: Circuit) -> None:
     created = empty_circuit.create_module('testModule')
 

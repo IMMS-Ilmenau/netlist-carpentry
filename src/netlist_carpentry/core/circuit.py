@@ -162,7 +162,7 @@ class Circuit(BaseModel):
         for instance in module.instances.values():
             self.instances[instance.instance_type].append(instance.path)
 
-    def add_from_circuit(self, other_circuit: Circuit) -> Dict[str, Module]:
+    def add_from_circuit(self, other_circuit: Union[str, Circuit]) -> Dict[str, Module]:
         """
         Adds all modules from a given circuit to this circuit.
 
@@ -171,11 +171,16 @@ class Circuit(BaseModel):
         it will also change in the other circuit.
 
         Args:
-            other_circuit (Circuit): The circuit of which the modules should be added.
+            other_circuit (Union[str, Circuit]): The circuit of which the modules should be added.
+                Can also be a path to a Verilog file containing the other circuit.
 
         Returns:
             Dict[str, Module]: A dict of all module names and modules from the given circuit that were added to this circuit.
         """
+        from netlist_carpentry import read
+
+        if isinstance(other_circuit, str):
+            other_circuit = read(other_circuit)
         for m in other_circuit:
             self.add_module(m)
         return other_circuit.modules
