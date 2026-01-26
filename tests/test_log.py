@@ -216,7 +216,7 @@ def test_initialize_logging(log_setup: Log) -> None:
 
 def test__create_handlers_no_file() -> None:
     # _create_handlers method, but without log file creation
-    handlers, error = _create_handlers(CFG.output_dir, skip_file_creation=True)
+    handlers, error = _create_handlers(None)
 
     assert len(handlers) == 1
     assert isinstance(handlers[0], RichHandler)
@@ -224,7 +224,7 @@ def test__create_handlers_no_file() -> None:
 
     prev_path = Log.file_path
     Log.file_path = ''
-    handlers, error = _create_handlers(LOG_DIRECTORY, skip_file_creation=False)
+    handlers, error = _create_handlers(LOG_DIRECTORY)
     Log.file_path = prev_path
     assert len(handlers) == 1
     assert isinstance(handlers[0], RichHandler)
@@ -237,12 +237,12 @@ def test__create_handlers_no_permission() -> None:
         # TODO in ci this does work and does not create a PermissionError (is this wanted?)
         # So to supress that this test fails, we check whether the directory is created without raising a PermissionError
         os.makedirs('/logs/', exist_ok=True)
-        handlers, error = _create_handlers(42, skip_file_creation=False)
+        handlers, error = _create_handlers(42)
         assert len(handlers) == 1
         assert isinstance(handlers[0], RichHandler)
         assert error
     except PermissionError:
-        handlers, error = _create_handlers('/logs/', skip_file_creation=False)
+        handlers, error = _create_handlers('/logs/')
         assert len(handlers) == 1
         assert isinstance(handlers[0], RichHandler)
         assert error

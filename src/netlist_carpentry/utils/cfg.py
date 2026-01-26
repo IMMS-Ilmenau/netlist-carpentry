@@ -12,8 +12,6 @@ class Config:
     def __init__(self) -> None:
         """Initializes the configuration class."""
 
-        self.output_dir = ''
-        """The directory where output files are saved. Defaults to '' (empty string), which is the current working directory."""
         self.log_level = 3
         """
         The level of logging, with higher values indicating more verbose logging.

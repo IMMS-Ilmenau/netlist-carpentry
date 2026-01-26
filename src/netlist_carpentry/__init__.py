@@ -71,7 +71,7 @@ NC_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Activate rudimentary LOG handling at first import
 if not LOG._init_finished:
-    initialize_logging(no_file=True)
+    initialize_logging()
 
 yosys_path = shutil.which('yosys')
 if not yosys_path:

@@ -246,14 +246,14 @@ def test_get_driver(wire_segment: WireSegment) -> None:
 
 
 def test_get_drivers_multiple(wire_segment: WireSegment) -> None:
-    initialize_logging(no_file=True)
+    initialize_logging()
     _add_multidriver(wire_segment)
     with pytest.raises(MultipleDriverError):
         wire_segment.driver(True)
 
 
 def test_get_loads(wire_segment: WireSegment) -> None:
-    initialize_logging(no_file=True)
+    initialize_logging()
     warns = LOG.warns_quantity
     assert wire_segment.loads(True) == [wire_segment.port_segments[1], wire_segment.port_segments[2]]
 

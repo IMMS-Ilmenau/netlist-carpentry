@@ -5,7 +5,7 @@ import inspect
 import logging
 import os
 import shutil
-from typing import Callable, List, Literal, Mapping, Tuple, Union
+from typing import Callable, List, Literal, Mapping, Optional, Tuple, Union
 
 from rich.console import Console, ConsoleRenderable
 from rich.highlighter import NullHighlighter
@@ -262,13 +262,13 @@ class RichHandler(_RichHandler):
         return super().render_message(record, message)
 
 
-def initialize_logging(output_dir: str = CFG.output_dir + 'logs/', no_file: bool = False, custom_file_name: str = '') -> bool:
+def initialize_logging(output_dir: Optional[str] = None, custom_file_name: str = '') -> bool:
     """
     Sets up the initial configuration for the logging module.
 
     Args:
-        output_dir (str): The directory where log files will be saved. Defaults to `CFG.output_dir + 'logs/'`.
-        no_file (bool): If True, logging to a file will be disabled. Defaults to False.
+        output_dir (Optional[str]): The directory where log files will be saved.
+            If None, no log file will be saved. Defaults to None.
         custom_file_name (str): A custom file name to use for logging. Defaults to an empty string, in which case the log file name will be generated based on on the current timestamp and log level.
 
     Returns:
@@ -280,10 +280,10 @@ def initialize_logging(output_dir: str = CFG.output_dir + 'logs/', no_file: bool
 
     # Set the file path to None if no_file is True, otherwise create a log file name
     fname = custom_file_name if custom_file_name != '' else f'{timestamp_str}_{log_level_name}.log'
-    Log.file_path = '' if no_file else f'{output_dir}{fname}'
+    Log.file_path = '' if output_dir is None else f'{output_dir}{fname}'
 
     # Create handlers for the logger
-    handlers, error_occurred = _create_handlers(output_dir, no_file)
+    handlers, error_occurred = _create_handlers(output_dir)
 
     # Set up basic logging configuration with the created handlers
     logging.basicConfig(level=log_level_name, handlers=handlers, force=True)
@@ -293,12 +293,13 @@ def initialize_logging(output_dir: str = CFG.output_dir + 'logs/', no_file: bool
     return error_occurred
 
 
-def _create_handlers(output_dir: str, skip_file_creation: bool) -> Tuple[List[logging.Handler], bool]:
+def _create_handlers(output_dir: Optional[str]) -> Tuple[List[logging.Handler], bool]:
     """
     Creates handlers for the logger.
 
     Args:
-        output_dir (str): The directory where log files will be saved.
+        output_dir (Optional[str]): The directory where log files will be saved.
+            If None, no log file will be created.
         skip_file_creation (bool): If True, logging to a file will be disabled.
 
     Returns:
@@ -319,7 +320,7 @@ def _create_handlers(output_dir: str, skip_file_creation: bool) -> Tuple[List[lo
     handlers: List[logging.Handler] = [shell_handler]
     error_occurred = False
 
-    if not skip_file_creation:
+    if output_dir is not None:
         try:
             # Create the output directory if it does not exist
             os.makedirs(output_dir, exist_ok=True)
