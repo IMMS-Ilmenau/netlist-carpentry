@@ -1,6 +1,11 @@
 # Changelog 0.3.1
 
+## CHANGED
+- `netlist_carpentry.utils.gate_lib_base_classes.LibUtils.p2ws2v()` → `netlist_carpentry.utils.gate_lib_base_classes.PrimitiveGate.p2ws2v()`
+- `netlist_carpentry.utils.gate_lib_base_classes.LibUtils.get_unconnected_idx()` → `netlist_carpentry.utils.gate_lib_base_classes.PrimitiveGate._get_unconnected_idx()` (now also protected)
 
+## REMOVED
+- `netlist_carpentry.utils.gate_lib_base_classes.LibUtils`
 
 # Older Versions
 

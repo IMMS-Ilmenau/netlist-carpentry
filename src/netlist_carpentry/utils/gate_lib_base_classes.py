@@ -119,7 +119,7 @@ class PrimitiveGate(Instance, BaseModel):
     def sync_parameters(self) -> InstanceParams:
         return self.parameters
 
-    def p2ws2v(self, port: ANY_PORT, exclude_indices: Optional[List[int]] = None) -> str:
+    def p2v(self, port: ANY_PORT, exclude_indices: Optional[List[int]] = None) -> str:
         """
         Converts a Port object to its corresponding Verilog structure by using the connected wire segments.
 
@@ -278,8 +278,8 @@ class UnaryGate(PrimitiveGate, BaseModel):
     @property
     def verilog_net_map(self) -> Dict[str, str]:
         exclude_indices = self._get_unconnected_idx(self.ports['Y'])
-        out_str = self.p2ws2v(self.ports['Y'], exclude_indices)
-        in1_str = self.p2ws2v(self.ports['A'], exclude_indices)
+        out_str = self.p2v(self.ports['Y'], exclude_indices)
+        in1_str = self.p2v(self.ports['A'], exclude_indices)
         return {'Y': out_str, 'A': in1_str}
 
     def _check_signal_signed(self, a: str) -> str:
@@ -356,8 +356,8 @@ class ReduceGate(UnaryGate, BaseModel):
     @property
     def verilog_net_map(self) -> Dict[str, str]:
         exclude_indices = self._get_unconnected_idx(self.ports['A'])
-        in1_str = self.p2ws2v(self.ports['A'], exclude_indices)
-        out_str = self.p2ws2v(self.ports['Y'])
+        in1_str = self.p2v(self.ports['A'], exclude_indices)
+        out_str = self.p2v(self.ports['Y'])
         return {'Y': out_str, 'A': in1_str}
 
     @property
@@ -424,9 +424,9 @@ class BinaryGate(PrimitiveGate, BaseModel):
     @property
     def verilog_net_map(self) -> Dict[str, str]:
         exclude_indices = self._get_unconnected_idx(self.ports['Y'])
-        out_str = self.p2ws2v(self.ports['Y'], exclude_indices)
-        in1_str = self.p2ws2v(self.ports['A'], exclude_indices)
-        in2_str = self.p2ws2v(self.ports['B'], exclude_indices)
+        out_str = self.p2v(self.ports['Y'], exclude_indices)
+        in1_str = self.p2v(self.ports['A'], exclude_indices)
+        in2_str = self.p2v(self.ports['B'], exclude_indices)
         return {'Y': out_str, 'A': in1_str, 'B': in2_str}
 
     @property
@@ -548,9 +548,9 @@ class ArithmeticGate(PrimitiveGate, BaseModel):
     @property
     def verilog_net_map(self) -> Dict[str, str]:
         unused_bits = self._unused_idx()
-        out_str = self.p2ws2v(self.output_port, unused_bits)
-        in1_str = self.p2ws2v(self.input_ports[0], unused_bits)
-        in2_str = self.p2ws2v(self.input_ports[1], unused_bits)
+        out_str = self.p2v(self.output_port, unused_bits)
+        in1_str = self.p2v(self.input_ports[0], unused_bits)
+        in2_str = self.p2v(self.input_ports[1], unused_bits)
         return {'Y': out_str, 'A': in1_str, 'B': in2_str}
 
     @property
@@ -595,9 +595,9 @@ class BinaryNto1Gate(BinaryGate, BaseModel):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        in1_str = self.p2ws2v(self.ports['A'])
-        in2_str = self.p2ws2v(self.ports['B'])
-        out_str = self.p2ws2v(self.output_port)
+        in1_str = self.p2v(self.ports['A'])
+        in2_str = self.p2v(self.ports['B'])
+        out_str = self.p2v(self.output_port)
         return {'Y': out_str, 'A': in1_str, 'B': in2_str}
 
     @property
@@ -659,8 +659,8 @@ class StorageGate(PrimitiveGate, BaseModel):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        in1 = self.p2ws2v(self.input_port)
-        out = self.p2ws2v(self.output_port)
+        in1 = self.p2v(self.input_port)
+        out = self.p2v(self.output_port)
         return {'Q': out, 'D': in1}
 
     def _storage_assigns(self, sig_value: str = '') -> str:
@@ -669,7 +669,7 @@ class StorageGate(PrimitiveGate, BaseModel):
         return f'{out}\t<=\t{in1};' if out != "1'bx" else ''
 
     def _v_header(self, port: Port[Instance], polarity: Signal) -> str:
-        wire = self.p2ws2v(port) if self.p2ws2v(port) != "1'bx" else ''
+        wire = self.p2v(port) if self.p2v(port) != "1'bx" else ''
         return ('posedge ' if polarity == Signal.HIGH else 'negedge ') + wire if wire else ''
 
     def sync_parameters(self) -> _SequentialParams:
@@ -729,7 +729,7 @@ class ClkMixin(StorageGate):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        clk = self.p2ws2v(self.clk_port) if self.p2ws2v(self.clk_port) != "1'bx" else ''
+        clk = self.p2v(self.clk_port) if self.p2v(self.clk_port) != "1'bx" else ''
         sigs = super().verilog_net_map
         sigs.update({'CLK': clk})
         return sigs
@@ -783,7 +783,7 @@ class EnMixin(StorageGate):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        en = self.p2ws2v(self.en_port)
+        en = self.p2v(self.en_port)
         sigs = super().verilog_net_map
         sigs.update({'EN': en})
         return sigs
@@ -795,7 +795,7 @@ class EnMixin(StorageGate):
 
         Has the form `en_net_name` or `~en_net_name`, depending on the enable polarity.
         """
-        en_wire = self.p2ws2v(self.en_port) if self.p2ws2v(self.en_port) != "1'bx" else ''
+        en_wire = self.p2v(self.en_port) if self.p2v(self.en_port) != "1'bx" else ''
         inv = '' if self.en_polarity == Signal.HIGH else '~'
         return inv + en_wire
 
@@ -875,7 +875,7 @@ class RstMixin(StorageGate):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        rst = self.p2ws2v(self.rst_port)
+        rst = self.p2v(self.rst_port)
         sigs = super().verilog_net_map
         sigs.update({'RST': rst})
         return sigs
@@ -896,7 +896,7 @@ class RstMixin(StorageGate):
 
         Has the form `rst_net_name` or `~rst_net_name`, depending on the reset polarity.
         """
-        rst_net = self.p2ws2v(self.rst_port) if self.p2ws2v(self.rst_port) != "1'bx" else ''
+        rst_net = self.p2v(self.rst_port) if self.p2v(self.rst_port) != "1'bx" else ''
         return rst_net if self.rst_polarity == Signal.HIGH else f'~{rst_net}'
 
     @property
@@ -994,9 +994,9 @@ class ScanMixin(StorageGate):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        se = self.p2ws2v(self.se_port)
-        si = self.p2ws2v(self.si_port)
-        so = self.p2ws2v(self.so_port)
+        se = self.p2v(self.se_port)
+        si = self.p2v(self.si_port)
+        so = self.p2v(self.so_port)
         sigs = super().verilog_net_map
         sigs.update({'SE': se, 'SI': si, 'SO': so})
         return sigs
@@ -1006,8 +1006,8 @@ class ScanMixin(StorageGate):
         se = self.verilog_net_map['SE']
         si = self.verilog_net_map['SI']
         so = self.verilog_net_map['SO']
-        si_str = f'{self.p2ws2v(self.output_port)}\t<=\t{si};'
-        so_str = f'assign\t{so}\t=\t{self.p2ws2v(self.output_port)};'
+        si_str = f'{self.p2v(self.output_port)}\t<=\t{si};'
+        so_str = f'assign\t{so}\t=\t{self.p2v(self.output_port)};'
 
         context_map = super().verilog_context_map
         context_map.update(se=se, si=si_str, so=so_str)
