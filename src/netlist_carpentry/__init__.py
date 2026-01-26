@@ -2,8 +2,7 @@
 import os
 import shutil
 
-from netlist_carpentry.utils.cfg import CFG  # Config and log must be loaded before the other modules
-from netlist_carpentry.utils.log import Log, LOG, initialize_logging
+from netlist_carpentry.utils import CFG, LOG, initialize_logging, VERILOG_KEYWORDS  # Config and log must be loaded before the other modules
 from netlist_carpentry.core.graph import EMPTY_GRAPH
 from netlist_carpentry.core.enums import Direction, Signal
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
@@ -45,6 +44,7 @@ __all__ = [
     'LOG',
     'NC_DIR',
     'NC_SCRIPTS_DIR',
+    'VERILOG_KEYWORDS',
     'WIRE_SEGMENT_0',
     'WIRE_SEGMENT_1',
     'WIRE_SEGMENT_X',
@@ -70,7 +70,7 @@ __all__ = [
 NC_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Activate rudimentary LOG handling at first import
-if not Log._init_finished:
+if not LOG._init_finished:
     initialize_logging(no_file=True)
 
 yosys_path = shutil.which('yosys')

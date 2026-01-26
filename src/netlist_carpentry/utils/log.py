@@ -12,7 +12,7 @@ from rich.highlighter import NullHighlighter
 from rich.logging import RichHandler as _RichHandler
 from rich.theme import Theme
 
-from netlist_carpentry import CFG
+from netlist_carpentry.utils import CFG
 
 RICH_THEME: Mapping[str, str] = {
     'DEBUG': 'bright_cyan',
@@ -152,7 +152,7 @@ class Log:
         """
         self.fatal(message)
         self.finish()
-        raise exception(message)
+        raise exception(message)  # type: ignore[misc]
 
     def mute(self) -> None:
         """
