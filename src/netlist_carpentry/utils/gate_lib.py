@@ -971,7 +971,7 @@ class Multiplexer(PrimitiveGate, BaseModel):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        exclude_indices = LibUtils.get_unconnected_idx(self.ports['Y'])
+        exclude_indices = self._get_unconnected_idx(self.ports['Y'])
         out_str = LibUtils.p2ws2v(self.ports['Y'], exclude_indices)
         s_str = LibUtils.p2ws2v(self.ports['S'])
         vnet_dict = {'Y': out_str, 'S': s_str}
@@ -997,7 +997,7 @@ class Multiplexer(PrimitiveGate, BaseModel):
             str: The Verilog code for the multiplexer gate.
         """
         cases = ''
-        exclude_indices = LibUtils.get_unconnected_idx(self.output_port)
+        exclude_indices = self._get_unconnected_idx(self.output_port)
         if self.bit_width > 1:
             for i in range(1 << self.bit_width):
                 d_port = self.ports[f'D{i}']
@@ -1018,7 +1018,7 @@ class Multiplexer(PrimitiveGate, BaseModel):
         Returns:
             str: The Verilog code for the multiplexer gate in ternary form.
         """
-        exclude_indices = LibUtils.get_unconnected_idx(self.output_port)
+        exclude_indices = self._get_unconnected_idx(self.output_port)
         out_signals = LibUtils.p2ws2v(self.output_port, exclude_indices)
         sel = LibUtils.p2ws2v(self.s_port)
         val_false = LibUtils.p2ws2v(self.ports['D0'], exclude_indices)
@@ -1208,7 +1208,7 @@ class Demultiplexer(PrimitiveGate, BaseModel):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        exclude_indices = LibUtils.get_unconnected_idx(self.ports['D'])
+        exclude_indices = self._get_unconnected_idx(self.ports['D'])
         in_str = LibUtils.p2ws2v(self.ports['D'], exclude_indices)
         s_str = LibUtils.p2ws2v(self.ports['S'])
         vnet_dict = {'D': in_str, 'S': s_str}
@@ -1236,7 +1236,7 @@ class Demultiplexer(PrimitiveGate, BaseModel):
         cases = ''
         for i in range(1 << self.bit_width):
             y_port = self.ports[f'Y{i}']
-            exclude_indices = LibUtils.get_unconnected_idx(y_port)
+            exclude_indices = self._get_unconnected_idx(y_port)
             out_signals = LibUtils.p2ws2v(y_port, exclude_indices)
             in_signals = LibUtils.p2ws2v(self.input_port, exclude_indices)
             cases += f"\t\t{self.bit_width}'b{format(i, f'0{self.bit_width}b')} : {out_signals} <= {in_signals};\n"
@@ -1588,7 +1588,7 @@ class DLatch(EnMixin, StorageGate, BaseModel):
     def verilog(self) -> str:
         en = LibUtils.p2ws2v(self.en_port)
         en = f'~{en}' if self.en_polarity is Signal.LOW else en
-        exclude_indices = LibUtils.get_unconnected_idx(self.output_port)
+        exclude_indices = self._get_unconnected_idx(self.output_port)
         assignments = f'\t\t{LibUtils.p2ws2v(self.output_port, exclude_indices)} = {LibUtils.p2ws2v(self.input_port, exclude_indices)};'
         return self.verilog_template.format(en=en, assignments=assignments)
 

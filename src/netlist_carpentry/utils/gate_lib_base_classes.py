@@ -80,13 +80,6 @@ class LibUtils:
                     wsegs.append(CONST_MAP_VAL2OBJ.get(ps.raw_ws_path, WIRE_SEGMENT_X))
         return P2V.simplify_wire_segments(curr_module, wsegs)
 
-    @classmethod
-    def get_unconnected_idx(cls, port: ANY_PORT) -> List[int]:
-        exclude_indices = [idx for idx, ps in port.segments.items() if ps.is_unconnected]
-        if exclude_indices:
-            LOG.warn(f'Excluding these segments from port {port.raw_path} from write-out, since they are unconnected: {exclude_indices}')
-        return exclude_indices
-
 
 class PrimitiveGate(Instance, BaseModel):
     """
@@ -178,6 +171,12 @@ class PrimitiveGate(Instance, BaseModel):
 
     def sync_parameters(self) -> InstanceParams:
         return self.parameters
+
+    def _get_unconnected_idx(self, port: ANY_PORT) -> List[int]:
+        exclude_indices = [idx for idx, ps in port.segments.items() if ps.is_unconnected]
+        if exclude_indices:
+            LOG.warn(f'Excluding these segments from port {port.raw_path} from write-out, since they are unconnected: {exclude_indices}')
+        return exclude_indices
 
     def _fix_signedness_mismatch(self, port_name: str, param_name: Literal['A_SIGNED', 'B_SIGNED']) -> bool:
         if self.parameters.get(param_name, False) != self.ports[port_name].signed:
@@ -290,7 +289,7 @@ class UnaryGate(PrimitiveGate, BaseModel):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        exclude_indices = LibUtils.get_unconnected_idx(self.ports['Y'])
+        exclude_indices = self._get_unconnected_idx(self.ports['Y'])
         out_str = LibUtils.p2ws2v(self.ports['Y'], exclude_indices)
         in1_str = LibUtils.p2ws2v(self.ports['A'], exclude_indices)
         return {'Y': out_str, 'A': in1_str}
@@ -368,7 +367,7 @@ class ReduceGate(UnaryGate, BaseModel):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        exclude_indices = LibUtils.get_unconnected_idx(self.ports['A'])
+        exclude_indices = self._get_unconnected_idx(self.ports['A'])
         in1_str = LibUtils.p2ws2v(self.ports['A'], exclude_indices)
         out_str = LibUtils.p2ws2v(self.ports['Y'])
         return {'Y': out_str, 'A': in1_str}
@@ -436,7 +435,7 @@ class BinaryGate(PrimitiveGate, BaseModel):
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
-        exclude_indices = LibUtils.get_unconnected_idx(self.ports['Y'])
+        exclude_indices = self._get_unconnected_idx(self.ports['Y'])
         out_str = LibUtils.p2ws2v(self.ports['Y'], exclude_indices)
         in1_str = LibUtils.p2ws2v(self.ports['A'], exclude_indices)
         in2_str = LibUtils.p2ws2v(self.ports['B'], exclude_indices)
