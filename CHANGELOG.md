@@ -3,9 +3,13 @@
 ## CHANGED
 - `netlist_carpentry.utils.gate_lib_base_classes.LibUtils.p2ws2v()` → `netlist_carpentry.utils.gate_lib_base_classes.PrimitiveGate.p2ws2v()`
 - `netlist_carpentry.utils.gate_lib_base_classes.LibUtils.get_unconnected_idx()` → `netlist_carpentry.utils.gate_lib_base_classes.PrimitiveGate._get_unconnected_idx()` (now also protected)
+- `netlist_carpentry.utils.initialize_logging()` no longer takes `no_file` argument, instead set `output_dir` to None for the same effect
 
 ## REMOVED
-- `netlist_carpentry.utils.gate_lib_base_classes.LibUtils`
+- `netlist_carpentry.CFG.output_dir`
+- `netlist_carpentry.LOG.finish()` (unused and fragile, Log.report() can be used instead)
+- `netlist_carpentry.LOG.fatal_and_exit()` (raise an appropriate exception instead)
+- `netlist_carpentry.utils.gate_lib_base_classes.LibUtils` (previous methods are now integrated into `gate_lib_base_classes.PrimitiveGate`)
 
 # Older Versions
 
