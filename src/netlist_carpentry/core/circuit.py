@@ -578,7 +578,7 @@ class Circuit(BaseModel):
         generate_script = not eqy_script_path  # If no path is provided, generate the eqy script
         if not eqy_script_path:
             eqy_script_path = out_dir + '/script.eqy'
-        eqy = EqyWrapper(eqy_script_path)
+        eqy = EqyWrapper(eqy_script_path, overwrite=True)
         output_vfile = f'{out_dir}/{self.name}_out.v'
         self.write(output_vfile, overwrite=True)
         if not gold_top_module:

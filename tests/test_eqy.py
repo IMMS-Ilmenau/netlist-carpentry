@@ -16,10 +16,16 @@ def test_eqy_basics() -> None:
     eqy = EqyWrapper('some/path')
     assert str(eqy.path) == 'some/path'
 
+    eqy.create_eqy_file([], '', [], '')
+    with pytest.raises(FileExistsError):
+        EqyWrapper('some/path')
+    if os.path.exists('some/path'):
+        shutil.rmtree('some')
+
 
 def test_create_eqy_file() -> None:
     eqy_path = 'tests/files/gen/test_create_eqy_file.eqy'
-    eqy = EqyWrapper(eqy_path)
+    eqy = EqyWrapper(eqy_path, overwrite=True)
     if os.path.exists(eqy_path):
         os.remove(eqy_path)
     eqy.create_eqy_file(['input_file1.v', 'input_file2.v'], 'test_top', [], '')

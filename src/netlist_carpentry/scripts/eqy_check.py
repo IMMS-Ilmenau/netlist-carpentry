@@ -3,8 +3,10 @@
 import os
 import shutil
 import subprocess
+import tempfile
+from contextlib import nullcontext
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 
 class EqyWrapper:
@@ -13,15 +15,21 @@ class EqyWrapper:
     It generates a .eqy script from a template and executes it using the Yosys EQY tool.
     """
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, overwrite: bool = False):
         """
-        Initializes the EqyWrapper with the path to the directory with the Yosys EQY script.
+        Initializes the EqyWrapper with the desired file path for the Yosys EQY script.
 
         Args:
-            path (str): The path to the directory where the .eqy script will be saved.
+            path (str): The path (including the desired file name) to the directory where the .eqy script will be saved.
+                The path must not point to a directory or a file that already exists.
+                To overwrite an existing file at this path, set overwrite to True.
+            overwrite (bool, optional): If True, overwrites an existing file at the specified path.
+                If False, raises a FileExistsError if an existing file at this path. Defaults to False.
         """
         self.path = Path(path)
         """The path to the directory where the .eqy script will be saved."""
+        if self.path.exists() and not overwrite:
+            raise FileExistsError(f'Path {self.path} already exists!')
 
     def format_template(self, gold_vfile_paths: List[str], gold_top_module: str, gate_vfile_paths: List[str], gate_top_module: str) -> str:
         """
@@ -55,7 +63,7 @@ class EqyWrapper:
 
     def create_eqy_file(self, gold_vfile_paths: List[str], gold_top_module: str, gate_vfile_paths: List[str], gate_top_module: str) -> None:
         """
-        Creates the EQY script file at the specified path.
+        Creates the EQY script file at the path `self.path`.
 
         The gold Verilog files are the golden reference design files, while the gate Verilog files are the synthesized (gate-level) designs.
         In the scope of this framework, the gate designs refer to the modified or optimized versions of the original designs.
@@ -70,8 +78,9 @@ class EqyWrapper:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.path, 'w') as f:
             f.write(self.format_template(gold_vfile_paths, gold_top_module, gate_vfile_paths, gate_top_module))
+        self.path.chmod(self.path.stat().st_mode | 0o111)  # chmod for user/group/other
 
-    def run_eqy(self, output_path: str = os.getcwd(), remove_if_successful: bool = False, overwrite: bool = False, quiet: bool = False) -> int:
+    def run_eqy(self, output_path: Optional[str] = None, overwrite: bool = False, quiet: bool = False) -> int:
         """
         Runs the Yosys EQY tool to prove the logical equivalence of the Verilog designs.
 
@@ -81,20 +90,27 @@ class EqyWrapper:
         If the directory exists, and the parameter is False or omitted, the equivalence checking script will fail with a corresponding error message.
 
         Args:
-            output_path (str, optional): The path to the directory where the EQY tool will be executed. Defaults to the current working directory.
-            remove_if_successful (bool, optional): Whether to remove the output directory after a successful equivalence proof. Defaults to False.
-            overwrite (bool, optional): Whether to overwrite the output directory if it already exists. Defaults to False.
+            output_path (Optional[str], optional): The path to the directory where the EQY tool will be executed.
+                If None, executes the equivalence check in a temporary directory. Defaults to None.
+            overwrite (bool, optional): Whether to overwrite the output directory if it already exists.
+                Only has an effect, if an output_path is provided. Defaults to False.
             quiet (bool, optional): If True, suppresses all Yosys output. If False, prints all Yosys output to the console. Defaults to False.
 
         Returns:
             int: The return code of the EQY tool. 0 if the equivalence proof was successful, otherwise a non-zero value along with an error message.
         """
-        if overwrite and os.path.exists(output_path):
+        if overwrite and output_path is not None and os.path.exists(output_path):
             shutil.rmtree(output_path, ignore_errors=True)
-        dir_path = os.path.dirname(os.path.abspath(__file__))
-        stdout = subprocess.PIPE if quiet else None
-        stderr = subprocess.STDOUT if quiet else None
-        return_code = subprocess.call([f'{dir_path}/eqy.sh', self.path, output_path], stdout=stdout, stderr=stderr)
-        if return_code == 0 and remove_if_successful:
-            shutil.rmtree(output_path, ignore_errors=True)
+        # Use the path if the given path is not None, otherwise use a temporary directory
+        context = tempfile.TemporaryDirectory() if output_path is None else nullcontext(output_path)
+        if output_path is not None:
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+
+        with context as workdir:
+            dir_path = os.path.dirname(os.path.abspath(__file__))
+            stdout = subprocess.PIPE if quiet else None
+            stderr = subprocess.STDOUT if quiet else None
+            return_code = subprocess.call(
+                [f'{dir_path}/eqy.sh', str(self.path.resolve()), str(Path(workdir).resolve())], stdout=stdout, stderr=stderr
+            )
         return return_code
