@@ -146,15 +146,6 @@ def test_log_fatal_level_too_high(log_setup: Log) -> None:
         assert 'Test fatal message' not in next(line.strip() for line in logs)
 
 
-def test_log_fatal_and_exit(log_setup: Log) -> None:
-    # Test fatal and exit method of Log class
-    with pytest.raises(ValueError):
-        log_setup.fatal_and_exit('Test fatal message', ValueError)
-    with open(LOG_PATH, 'r') as f:
-        logs = f.readlines()
-    assert 'Test fatal message' in next(line.strip() for line in logs)
-
-
 def test_log_mute_unmute(log_setup: Log) -> None:
     # Mute the log: messages should not be logged
     log_setup.mute()

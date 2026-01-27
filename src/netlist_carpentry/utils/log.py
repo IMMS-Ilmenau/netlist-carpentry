@@ -141,19 +141,6 @@ class Log:
             logging.fatal(self.format_string(message))
             self.fatals_quantity += 1
 
-    def fatal_and_exit(self, message: str, exception: type) -> None:
-        """
-        Adds a FATAL message to the logger and ends the program by raising the
-        given exception.
-
-        Args:
-            message (str): The message to log.
-            exception (type): The exception class to raise, e.g. `ValueError`.
-        """
-        self.fatal(message)
-        self.finish()
-        raise exception(message)  # type: ignore[misc]
-
     def mute(self) -> None:
         """
         Disable all following logging messages. Script outputs are still printed to
@@ -216,19 +203,6 @@ class Log:
             if not skip:
                 return f'{f.filename[f.filename.rfind("/") + 1 : f.filename.rfind(".")]}.{f.function}'
         return 'invalid_caller_name'
-
-    def finish(self, start_time: float = -1, end_time: float = -1) -> None:
-        """
-        Outputs error and warning summary, and disables the logger afterwards.
-
-        Args:
-            start_time (float): The start time of the program execution.
-            end_time (float): The end time of the program execution.
-        """
-        self.report()
-        spent_time = round(end_time - start_time, 2)
-        self.info('Completed all tasks' + f' in {spent_time} seconds!' if spent_time > 0 else '!')
-        logging.basicConfig(handlers=[], force=True)
 
     def report(self) -> None:
         """
