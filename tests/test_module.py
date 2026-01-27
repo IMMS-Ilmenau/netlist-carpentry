@@ -39,7 +39,7 @@ from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DIC
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.wire_segment import WIRE_SEGMENT_0
 from netlist_carpentry.utils.gate_factory import adff
-from netlist_carpentry.utils.gate_lib import ADFFE, AndGate
+from netlist_carpentry.utils.gate_lib import ADFFE, DFF, AndGate
 from netlist_carpentry.utils.log import LOG
 
 
@@ -370,6 +370,31 @@ def test_copy_instance_keep_inputs(standard_module: Module) -> None:
         else:
             assert inst2.ports[pname].is_connected
             assert inst2.ports[pname][0].ws == standard_module.wires['test_wire'][0]
+
+
+@pytest.mark.skip
+def test_change_instance_type(dff_module: Module) -> None:
+    m = Module(raw_path='m')
+    with pytest.raises(ObjectNotFoundError):
+        dff_module.change_instance_type('bad_name', m)
+
+    dff = dff_module.instances['dff_inst']
+    with pytest.raises(StructureMismatchError):
+        dff_module.change_instance_type(dff, m)
+
+    assert dff.instance_type == '§dff'
+    assert isinstance(dff, DFF)
+    assert dff.is_primitive
+    assert dff.is_sequential
+    m.create_port('D')
+    m.create_port('CLK')
+    m.create_port('Q')
+
+    dff_module.change_instance_type(dff, m)
+    assert dff.instance_type == 'm'
+    assert not dff.is_primitive
+    assert dff.is_module_instance
+    assert not isinstance(dff, DFF)
 
 
 def test_replace_instance(dff_module: Module) -> None:

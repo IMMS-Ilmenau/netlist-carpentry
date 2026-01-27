@@ -173,6 +173,24 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 new_instance.disconnect(p.name)
         return new_instance
 
+    def _check_missing_ports(self, old_instance: Instance, new_instance: Union[Instance, Module]) -> None:
+        missing_ports = set()
+        for p in old_instance.ports.values():
+            if not p.is_unconnected and p.name not in new_instance.ports:
+                missing_ports.add(p.name)
+        if missing_ports:
+            raise StructureMismatchError(
+                f'Unable to replace {old_instance.raw_path}: New instance {new_instance.raw_path} is missing these ports: {", ".join(missing_ports)}'
+            )
+
+    def change_instance_type(self, old_instance: Union[str, Instance], new_type_definition: Module) -> None:
+        if isinstance(old_instance, Instance):
+            old_instance = old_instance.name
+        if old_instance not in self.instances:
+            raise ObjectNotFoundError(f'Cannot replace instance {old_instance}, since no such instance exists in module {self.name}!')
+        old_instance = self.instances[old_instance]
+        self._check_missing_ports(old_instance, new_type_definition)
+
     def replace(self, old_instance: Union[str, Instance], new_instance: Instance, silent: bool = False) -> None:
         """Replaces an existing instance in the module with a new instance.
 
@@ -225,14 +243,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             WidthMismatchError: If a port exists in both instances but has
                 different bit-widths.
         """
-        missing_ports = set()
-        for p in old_instance.ports.values():
-            if not p.is_unconnected and p.name not in new_instance.ports:
-                missing_ports.add(p.name)
-        if missing_ports:
-            raise StructureMismatchError(
-                f'Unable to replace {old_instance.raw_path}: New instance {new_instance.raw_path} is missing these ports: {", ".join(missing_ports)}'
-            )
+        self._check_missing_ports(old_instance, new_instance)
         connections = old_instance.connections
         for pname, p in old_instance.ports.items():
             if pname in new_instance.ports and p.width != new_instance.ports[pname].width:
