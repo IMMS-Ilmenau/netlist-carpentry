@@ -372,9 +372,10 @@ def test_copy_instance_keep_inputs(standard_module: Module) -> None:
             assert inst2.ports[pname][0].ws == standard_module.wires['test_wire'][0]
 
 
-@pytest.mark.skip
 def test_change_instance_type(dff_module: Module) -> None:
-    m = Module(raw_path='m')
+    c = Circuit(name='c')
+    c.add_module(dff_module)
+    m = c.create_module('m')
     with pytest.raises(ObjectNotFoundError):
         dff_module.change_instance_type('bad_name', m)
 
@@ -391,10 +392,14 @@ def test_change_instance_type(dff_module: Module) -> None:
     m.create_port('Q')
 
     dff_module.change_instance_type(dff, m)
-    assert dff.instance_type == 'm'
-    assert not dff.is_primitive
-    assert dff.is_module_instance
-    assert not isinstance(dff, DFF)
+    dff2 = dff_module.instances['dff_inst']
+
+    assert dff2.instance_type == 'm'
+    assert not dff2.is_primitive
+    assert dff2.is_module_instance
+    assert not isinstance(dff2, DFF)
+
+    assert dff.ports == dff2.ports
 
 
 def test_replace_instance(dff_module: Module) -> None:
