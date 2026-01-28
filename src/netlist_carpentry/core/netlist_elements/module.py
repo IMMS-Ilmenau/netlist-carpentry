@@ -185,11 +185,14 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
     def change_instance_type(self, old_instance: Union[str, Instance], new_type_definition: Module) -> None:
         """
-        Replaces an existing instance with a new one of a different type.
+        **Replaces an existing instance** with a new one of a different type.
 
         This method swaps the definition of an instance while attempting to preserve
         its original name and port connections. It first verifies that the new
         module definition contains all the necessary ports used by the old instance.
+
+        **The original object is removed and replaced with a new object!**
+        The old reference won't point to a valid instance anymore.
 
         Args:
             old_instance (Union[str, Instance]): The instance to be replaced. Can be either the
