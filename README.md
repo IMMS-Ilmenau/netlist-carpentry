@@ -58,6 +58,13 @@ They can also be viewed in the [online documentation](https://imms-ilmenau.githu
 A guide on how to expand or modify the tool is also given.
 Visit `docs/src/dev_guide` or the online development guide for more information.
 
+## Citation
+If you use Netlist Carpentry in your research, please consider citing it:
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18350355.svg)](https://doi.org/10.5281/zenodo.18350355)
+
+Citations of individual versions are also possible using the version-specific DOIs on the Zenodo-Site. Please use the link of the DOI-badge for more information.
+
 ## Acknowledgement
 
 The DI-Meta-X project where this software has been developed is funded by the German Federal Ministry of Research, Technology and Space under the reference 16ME0976. Responsibility for the content of this publication lies with the author.
