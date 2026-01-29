@@ -19,7 +19,9 @@ dependencies = [
     "networkx>=3.2.1",
     # TODO Add dependencies here
     "pydantic>=2.10.6",
+    #internal
     "pydantic-ai>=0.8.1",
+    #/internal
     "pywellen>=0.19.3",
     "rich>=13.9.4",
     "scipy>=1.13.1",
