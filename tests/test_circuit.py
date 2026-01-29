@@ -449,7 +449,8 @@ def test_uniquify() -> None:
     assert len(c.instances['m1']) == 3
     assert c.instances['m1'] == [InstancePath(raw='m2.inst1'), InstancePath(raw='m2.inst2'), InstancePath(raw='m2.inst3')]
     assert 'm1' in c
-    c.uniquify(m1)
+    mapping = c.uniquify(m1)
+    assert mapping == {i0.path: 'm1_0', i1.path: 'm1_1', i2.path: 'm1_2'}
     assert 'm1' not in c
     assert len(c.instances) == 3
     assert c.instances['m1_0'] == [i0.path]
@@ -459,7 +460,8 @@ def test_uniquify() -> None:
     assert i1.instance_type == 'm1_1'
     assert i2.instance_type == 'm1_2'
 
-    c.uniquify()  # Nothing changed
+    mapping = c.uniquify()  # Nothing changed
+    assert mapping == {}
     assert len(c.instances) == 3
     assert c.instances['m1_0'] == [i0.path]
     assert c.instances['m1_1'] == [i1.path]
@@ -478,7 +480,8 @@ def test_uniquify_keep_original_module() -> None:
     assert len(c.instances) == 1  # m2 has no instances, thus total length is only 1
     assert len(c.instances['m1']) == 3
     assert c.instances['m1'] == [InstancePath(raw='m2.inst1'), InstancePath(raw='m2.inst2'), InstancePath(raw='m2.inst3')]
-    c.uniquify(m1, keep_original_module=True)
+    mapping = c.uniquify(m1, keep_original_module=True)
+    assert mapping == {i0.path: 'm1_0', i1.path: 'm1_1', i2.path: 'm1_2'}
     assert 'm1' in c
     assert len(c.instances) == 3
     assert c.instances['m1'] == []  # Not anymore in instances dict

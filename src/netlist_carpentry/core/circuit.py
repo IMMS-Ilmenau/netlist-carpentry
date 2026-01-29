@@ -38,6 +38,8 @@ from netlist_carpentry.scripts.eqy_check import EqyWrapper
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.log import LOG
 
+MODULE_NAME = str
+
 
 class Circuit(BaseModel):
     """
@@ -456,7 +458,7 @@ class Circuit(BaseModel):
             return WireSegmentPath(raw=path_str)
         raise PathResolutionError(f'Cannot resolve path {path_str}: The last resolved object is a wire with path {path_str}!')
 
-    def uniquify(self, module: Optional[Union[str, Module]] = None, *, keep_original_module: bool = False) -> None:
+    def uniquify(self, module: Optional[Union[str, Module]] = None, *, keep_original_module: bool = False) -> Dict[InstancePath, MODULE_NAME]:
         """Ensure that every module instance in the circuit has its own unique definition.
 
         When a module is instantiated many times, all instances share the same
@@ -482,9 +484,10 @@ class Circuit(BaseModel):
         if isinstance(module, str):
             module = self[module]
         modules = [module] if module is not None else [self[mname] for mname in self.instances if len(self.instances[mname]) > 1 and mname in self]
-        self._uniquify(modules, keep_original_module)
+        return self._uniquify(modules, keep_original_module)
 
-    def _uniquify(self, modules: List[Module], keep_original_module: bool) -> None:
+    def _uniquify(self, modules: List[Module], keep_original_module: bool) -> Dict[InstancePath, MODULE_NAME]:
+        mapdict = {}
         for m in modules:
             idx = 0
             mapping = {}
@@ -497,10 +500,12 @@ class Circuit(BaseModel):
                 self.add_module(m_i)
                 self.get_from_path(m_instpath).instance_type = new_inst_type
                 mapping[new_inst_type] = [m_instpath]
+                mapdict[m_instpath] = new_inst_type
             self.instances.update(mapping)
             self.instances.pop(m.name)
             if not keep_original_module:
                 self.remove_module(m)
+        return mapdict
 
     @overload
     def set_signal(self, path: str, signal_value: LogicLevel) -> None: ...
