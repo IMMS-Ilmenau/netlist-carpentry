@@ -482,6 +482,10 @@ class Circuit(BaseModel):
             keep_original_module (bool, optional): Whether to keep the original module(s) that no longer are instantiated anywhere.
                 If True, the original module is kept. If False, the original module and its references in `Circuit.instances` are removed.
                 Defaults to False.
+
+        Returns:
+            Dict[InstancePath, ModuleName]: A dictionary mapping the module instance paths to the new module names.
+                Each module name follows the schema ``<orig_name>_<index>``.
         """
         if isinstance(module, str):
             module = self[module]
