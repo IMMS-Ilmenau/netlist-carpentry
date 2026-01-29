@@ -579,12 +579,18 @@ class Instance(NetlistElement, BaseModel):
                 or instance whose behavior depends on the whole bus, and splitting would make it lose its meaning.
         """
         if self.splittable:
-            return self._split()
+            slices = self._split()
+            self._split_sync_params(slices.values())
+            return slices
         else:
             raise SplittingUnsupportedError(f'Cannot split instance {self.raw_path}: Cannot split instances of type {self.__class__.__name__}!')
 
     def _split(self) -> Dict[NonNegativeInt, Self]:
         raise NotImplementedError(f'Not implemented for class {self.__class__.__name__}!')
+
+    def _split_sync_params(self, slices: Iterable[Self]) -> None:
+        for inst in slices:
+            inst.parameters = self.parameters
 
     def change_mutability(self, is_now_locked: bool, recursive: bool = False) -> Self:
         """

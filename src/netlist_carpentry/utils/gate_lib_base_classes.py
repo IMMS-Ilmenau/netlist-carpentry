@@ -8,7 +8,7 @@ including methods for setting input signals, evaluating output signals, and upda
 See the gate_lib.py module for further information.
 """
 
-from typing import Dict, List, Literal, Optional, Tuple, Type
+from typing import Dict, Iterable, List, Literal, Optional, Tuple, Type
 
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
@@ -230,6 +230,11 @@ class PrimitiveGate(Instance, BaseModel):
                 super_module.connect(connections[pname][idx], p[0])
             new_insts[idx] = inst
         return new_insts
+
+    def _split_sync_params(self, slices: Iterable[Self]) -> None:
+        super()._split_sync_params(slices)
+        for inst in slices:
+            inst.parameters['Y_WIDTH'] = 1
 
 
 class UnaryGate(PrimitiveGate, BaseModel):
@@ -684,8 +689,6 @@ class StorageGate(PrimitiveGate, BaseModel):
         super_module.remove_instance(self.name)
         for idx in range(self.data_width):
             inst: Self = super_module.add_instance(self.__class__(raw_path=f'{self.raw_path}_{idx}'))
-            inst.parameters = self.parameters
-            inst.parameters['WIDTH'] = 1
             for pname in list(inst.ports.keys()):
                 p = inst.ports[pname]
                 if pname == 'D' or pname == 'Q':
@@ -696,6 +699,11 @@ class StorageGate(PrimitiveGate, BaseModel):
 
             new_insts[idx] = inst
         return new_insts
+
+    def _split_sync_params(self, slices: Iterable[Self]) -> None:
+        super()._split_sync_params(slices)
+        for inst in slices:
+            inst.parameters['WIDTH'] = 1
 
 
 class ClkMixin(StorageGate):
