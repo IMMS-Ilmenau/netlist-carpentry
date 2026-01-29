@@ -39,7 +39,7 @@ from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.log import LOG
 
 ModuleName = str
-InstanceName = str
+InstanceType = str
 VerilogPath = str
 
 
@@ -62,7 +62,7 @@ class Circuit(BaseModel):
     _creator: str = ''
     """The name of the circuit's creator."""
 
-    _instances: DefaultDict[str, List[InstancePath]] = defaultdict(list)
+    _instances: DefaultDict[InstanceType, List[InstancePath]] = defaultdict(list)
 
     @property
     def modules(self) -> CustomDict[ModuleName, Module]:
@@ -107,7 +107,7 @@ class Circuit(BaseModel):
         self._creator = new_creator
 
     @property
-    def instances(self) -> DefaultDict[InstanceName, List[InstancePath]]:
+    def instances(self) -> DefaultDict[InstanceType, List[InstancePath]]:
         """A dictionary containing the names of all modules (and primitive gates) as keys,
         and a list of paths to corresponding module instances throughout the circuit.
 
