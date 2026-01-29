@@ -59,7 +59,7 @@ class ModuleDfsMixin(ModuleBaseMixin):
         Returns:
             Set[ElementPath]: A set of next paths to be explored.
         """
-        e: NetlistElement = self.get_from_path(curr_path)  # type: ignore[call-overload]
+        e: NetlistElement = self.get_from_path(curr_path)
         if isinstance(e, PortSegment):
             return self._dfs_single_path_next_from_port(e)
         if isinstance(e, WireSegment):
