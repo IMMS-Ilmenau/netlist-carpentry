@@ -85,7 +85,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if instance.module is not None and instance.module is not self:
             raise SingleOwnershipError(f'Instance {self.raw_path} belongs to module {instance.module.name}. Cannot add it to module {self.name}!')
         instance.module = self
-        if self.has_circuit and instance.is_module_instance:
+        if self.has_circuit:
             self.circuit.instances[instance.instance_type].append(instance.path)
         return self.instances.add(instance.name, instance, locked=self.locked)
 

@@ -3,7 +3,7 @@ import os
 import pytest
 from pydantic import ValidationError
 
-from netlist_carpentry import WIRE_SEGMENT_1, WIRE_SEGMENT_X
+from netlist_carpentry import WIRE_SEGMENT_1, WIRE_SEGMENT_X, Module
 from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.element_type import EType
@@ -41,6 +41,13 @@ def locked_instance() -> Instance:
     from utils import locked_instance as ii
 
     return ii()
+
+
+@pytest.fixture()
+def dff_module() -> Module:
+    from utils import dff_module as dfm
+
+    return dfm()
 
 
 def test_instance_creation(empty_standard_instance: Instance) -> None:
@@ -460,6 +467,19 @@ def test_split(standard_instance_with_ports: Instance) -> None:
         standard_instance_with_ports.split()
     with pytest.raises(NotImplementedError):
         standard_instance_with_ports._split()
+
+
+def test_split_circuit_instances(dff_module: Module) -> None:
+    c = Circuit(name='c')
+    c.add_module(dff_module)
+
+    dff = dff_module.instances_by_types['§dff'][0]
+    assert dff.path in c.instances['§dff']
+    slices = dff.split()
+    assert len(slices) == 4
+    assert dff.path not in c.instances['§dff']
+    for df_slice in slices.values():
+        assert df_slice.path in c.instances['§dff']
 
 
 def test_change_mutability(standard_instance_with_ports: Instance) -> None:
