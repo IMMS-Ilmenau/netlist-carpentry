@@ -949,6 +949,13 @@ class RstMixin(StorageGate):
             return {idx: self.rst_val[idx]}
         return super()._calc_output(idx)
 
+    def _split_sync_params(self, slices: Iterable[Self]) -> None:
+        super()._split_sync_params(slices)
+        idx = 0
+        for slice in slices:
+            slice.parameters['ARST_VALUE'] = int(self.rst_val[idx].value)
+            idx += 1
+
 
 class ScanMixin(StorageGate):
     parameters: DFFParams = {}

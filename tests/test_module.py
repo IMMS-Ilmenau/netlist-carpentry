@@ -38,7 +38,7 @@ from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.wire_segment import WIRE_SEGMENT_0
-from netlist_carpentry.utils.gate_factory import adff
+from netlist_carpentry.utils.gate_factory import adff, adffe
 from netlist_carpentry.utils.gate_lib import ADFFE, DFF, AndGate
 from netlist_carpentry.utils.log import LOG
 
@@ -88,6 +88,22 @@ def dff_circuit() -> Circuit:
     from utils import dff_circuit
 
     return dff_circuit()
+
+
+@pytest.fixture()
+def dff_circuit_simple() -> Circuit:
+    c = Circuit(name='c')
+    m = c.create_module('m')
+    adffe(
+        m,
+        'adffe_inst',
+        D=m.create_port('D', Dir.IN, 8),
+        CLK=m.create_port('CLK', Dir.IN, 1),
+        RST=m.create_port('RST', Dir.IN, 1),
+        EN=m.create_port('EN', Dir.IN, 1),
+        Q=m.create_port('Q', Dir.OUT, 8),
+    )
+    return c
 
 
 def test_module_creation(empty_module: Module) -> None:
@@ -1521,6 +1537,17 @@ def test_split_instance(dff_module: Module) -> None:
         assert inst.ports['Q'][0].ws_path == connections['Q'][idx]
         assert inst.parameters['WIDTH'] == 1
         assert inst.parameters['CLK_POLARITY'] == dff.parameters['CLK_POLARITY']
+
+
+def test_split_instance_rst_val(dff_circuit_simple: Circuit) -> None:
+    adffe = dff_circuit_simple.get_from_path(dff_circuit_simple.instances['§adffe'][0])
+    adffe.parameters['ARST_VALUE'] = 85  # '01010101'
+    slices = adffe.split()
+    for idx, dslice in slices.items():
+        if idx % 2:  # Odd indices (backwards, since LSB-first in dictionary)
+            assert dslice.parameters['ARST_VALUE'] == 0
+        else:  # Even
+            assert dslice.parameters['ARST_VALUE'] == 1
 
 
 def test_split_all(dff_module: Module) -> None:

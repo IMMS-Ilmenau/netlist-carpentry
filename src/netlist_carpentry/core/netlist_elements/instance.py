@@ -590,7 +590,7 @@ class Instance(NetlistElement, BaseModel):
 
     def _split_sync_params(self, slices: Iterable[Self]) -> None:
         for inst in slices:
-            inst.parameters = self.parameters
+            inst.parameters = self.parameters.copy()
 
     def change_mutability(self, is_now_locked: bool, recursive: bool = False) -> Self:
         """
