@@ -38,7 +38,9 @@ from netlist_carpentry.scripts.eqy_check import EqyWrapper
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.log import LOG
 
-MODULE_NAME = str
+ModuleName = str
+InstanceName = str
+VerilogPath = str
 
 
 class Circuit(BaseModel):
@@ -53,9 +55,9 @@ class Circuit(BaseModel):
 
     name: str
     """The name of the circuit."""
-    _modules = CustomDict[str, Module]()
+    _modules = CustomDict[ModuleName, Module]()
     """A dictionary mapping module names to Module objects."""
-    _top_name: str = ''
+    _top_name: ModuleName = ''
     """The name of the top-level module in the circuit."""
     _creator: str = ''
     """The name of the circuit's creator."""
@@ -63,22 +65,22 @@ class Circuit(BaseModel):
     _instances: DefaultDict[str, List[InstancePath]] = defaultdict(list)
 
     @property
-    def modules(self) -> CustomDict[str, Module]:
+    def modules(self) -> CustomDict[ModuleName, Module]:
         """
         Returns the dictionary of modules in the circuit.
 
         Returns:
-            Dict[str, Module]: The dictionary of modules, where the key is the module name and the value is a Module object.
+            Dict[MODULE_NAME, Module]: The dictionary of modules, where the key is the module name and the value is a Module object.
         """
         return self._modules
 
     @property
-    def module_count(self) -> int:
+    def module_count(self) -> NonNegativeInt:
         """The number of modules in the circuit."""
         return len(self)
 
     @property
-    def top_name(self) -> str:
+    def top_name(self) -> ModuleName:
         """The name of the top-level module in the circuit."""
         return self._top_name
 
@@ -105,7 +107,7 @@ class Circuit(BaseModel):
         self._creator = new_creator
 
     @property
-    def instances(self) -> DefaultDict[str, List[InstancePath]]:
+    def instances(self) -> DefaultDict[InstanceName, List[InstancePath]]:
         """A dictionary containing the names of all modules (and primitive gates) as keys,
         and a list of paths to corresponding module instances throughout the circuit.
 
@@ -164,7 +166,7 @@ class Circuit(BaseModel):
         for instance in module.instances.values():
             self.instances[instance.instance_type].append(instance.path)
 
-    def add_from_circuit(self, other_circuit: Union[str, Circuit]) -> Dict[str, Module]:
+    def add_from_circuit(self, other_circuit: Union[VerilogPath, Circuit]) -> Dict[ModuleName, Module]:
         """
         Adds all modules from a given circuit to this circuit.
 
@@ -173,11 +175,11 @@ class Circuit(BaseModel):
         it will also change in the other circuit.
 
         Args:
-            other_circuit (Union[str, Circuit]): The circuit of which the modules should be added.
+            other_circuit (Union[VerilogPath, Circuit]): The circuit of which the modules should be added.
                 Can also be a path to a Verilog file containing the other circuit.
 
         Returns:
-            Dict[str, Module]: A dict of all module names and modules from the given circuit that were added to this circuit.
+            Dict[ModuleName, Module]: A dict of all module names and modules from the given circuit that were added to this circuit.
         """
         from netlist_carpentry import read
 
@@ -187,19 +189,19 @@ class Circuit(BaseModel):
             self.add_module(m)
         return other_circuit.modules
 
-    def create_module(self, name: str) -> Module:
+    def create_module(self, name: ModuleName) -> Module:
         """
         Creates a new module with the given name and adds it to the circuit.
 
         Args:
-            name (str): The name of the module to create.
+            name (ModuleName): The name of the module to create.
 
         Returns:
             Module: The module that was created and added to this circuit.
         """
         return self.add_module(Module(raw_path=name))
 
-    def copy_module(self, old_module: Union[str, Module], new_name: str) -> Module:
+    def copy_module(self, old_module: Union[ModuleName, Module], new_name: ModuleName) -> Module:
         """Duplicates the given module, and the new instance receives the given name.
 
         If `old_module` is a string, a module with this name must exist in this circuit.
@@ -207,9 +209,9 @@ class Circuit(BaseModel):
         from the original module.
 
         Args:
-            old_module (Union[str, Module]): The original module to copy. Can be a string, in which case
+            old_module (Union[ModuleName, Module]): The original module to copy. Can be a string, in which case
                 a module with this exact name must exist within this circuit
-            new_name (str): The new name of the freshly created module copy.
+            new_name (ModuleName): The new name of the freshly created module copy.
 
         Raises:
             ObjectNotFoundError: If a string is given and no module with such name exists in this circuit.
@@ -226,12 +228,12 @@ class Circuit(BaseModel):
         new_module.set_name(new_name)
         return self.add_module(new_module)
 
-    def remove_module(self, module: Union[str, Module]) -> None:
+    def remove_module(self, module: Union[ModuleName, Module]) -> None:
         """
         Removes a module from the circuit.
 
         Args:
-            module (Union[str, Module]): The name of the module (or the module object) to remove.
+            module (Union[ModuleName, Module]): The name of the module (or the module object) to remove.
 
         Raises:
             ObjectNotFoundError: If no such module exists in this circuit.
@@ -254,12 +256,12 @@ class Circuit(BaseModel):
             if instance.instance_type in self.instances:
                 self.instances[instance.instance_type].remove(instance.path)
 
-    def get_module(self, module_name: str) -> Optional[Module]:
+    def get_module(self, module_name: ModuleName) -> Optional[Module]:
         """
         Gets a module from the circuit.
 
         Args:
-            module_name (str): The name of the module to get.
+            module_name (ModuleName): The name of the module to get.
 
         Returns:
             Optional[Module]: The module with the given name, if it exists.
@@ -283,14 +285,14 @@ class Circuit(BaseModel):
         """
         return next((m for i, m in enumerate(self) if i == index), None)
 
-    def set_top(self, module: Union[str, Module, None]) -> None:
+    def set_top(self, module: Union[ModuleName, Module, None]) -> None:
         """
         Sets the name of the top-level module in the circuit.
 
         Set `module=None` to remove the current top module selection, and no module will be top module.
 
         Args:
-            module (Union[str, Module, None]): The name of the new top-level module in the circuit, or the Module object itself.
+            module (Union[ModuleName, Module, None]): The name of the new top-level module in the circuit, or the Module object itself.
                 Passing `None` will just remove the current top module selection, and no module will be top module.
 
         Raises:
@@ -458,7 +460,7 @@ class Circuit(BaseModel):
             return WireSegmentPath(raw=path_str)
         raise PathResolutionError(f'Cannot resolve path {path_str}: The last resolved object is a wire with path {path_str}!')
 
-    def uniquify(self, module: Optional[Union[str, Module]] = None, *, keep_original_module: bool = False) -> Dict[InstancePath, MODULE_NAME]:
+    def uniquify(self, module: Optional[Union[ModuleName, Module]] = None, *, keep_original_module: bool = False) -> Dict[InstancePath, ModuleName]:
         """Ensure that every module instance in the circuit has its own unique definition.
 
         When a module is instantiated many times, all instances share the same
@@ -473,7 +475,7 @@ class Circuit(BaseModel):
         If ``module`` is a name that does not exist, ``ObjectNotFoundError`` is raised.
 
         Args:
-            module (Optional[Union[str, Module]], optional): The module to uniquify.
+            module (Optional[Union[ModuleName, Module]], optional): The module to uniquify.
                 If a string is supplied it is treated as the module name and looked up in the circuit.
                 If ``None`` the method identifies **all** modules that appear more than once in ``self.instances`` and uniquifies them.
                 Defaults to ``None``.
@@ -486,7 +488,7 @@ class Circuit(BaseModel):
         modules = [module] if module is not None else [self[mname] for mname in self.instances if len(self.instances[mname]) > 1 and mname in self]
         return self._uniquify(modules, keep_original_module)
 
-    def _uniquify(self, modules: List[Module], keep_original_module: bool) -> Dict[InstancePath, MODULE_NAME]:
+    def _uniquify(self, modules: List[Module], keep_original_module: bool) -> Dict[InstancePath, ModuleName]:
         mapdict = {}
         for m in modules:
             idx = 0
