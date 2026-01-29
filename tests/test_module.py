@@ -1505,6 +1505,7 @@ def test_split_instance(dff_module: Module) -> None:
     assert len(dff_module.instances) == 1
     assert len(dff_module.instances_by_types['§dff']) == 1
     dff = dff_module.instances_by_types['§dff'][0]
+    dff.parameters['CLK_POLARITY'] = Signal.LOW
     connections = dff.connections
     dffs = dff_module.split(dff)
     assert dff.name not in dff_module.instances
@@ -1518,6 +1519,8 @@ def test_split_instance(dff_module: Module) -> None:
         assert inst.ports['D'][0].ws_path == connections['D'][idx]
         assert inst.ports['CLK'][0].ws_path == connections['CLK'][0]
         assert inst.ports['Q'][0].ws_path == connections['Q'][idx]
+        assert inst.parameters['WIDTH'] == 1
+        assert inst.parameters['CLK_POLARITY'] == dff.parameters['CLK_POLARITY']
 
 
 def test_split_all(dff_module: Module) -> None:

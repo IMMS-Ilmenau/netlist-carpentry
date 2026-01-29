@@ -684,6 +684,8 @@ class StorageGate(PrimitiveGate, BaseModel):
         super_module.remove_instance(self.name)
         for idx in range(self.data_width):
             inst: Self = super_module.add_instance(self.__class__(raw_path=f'{self.raw_path}_{idx}'))
+            inst.parameters = self.parameters
+            inst.parameters['WIDTH'] = 1
             for pname in list(inst.ports.keys()):
                 p = inst.ports[pname]
                 if pname == 'D' or pname == 'Q':
