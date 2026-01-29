@@ -20,7 +20,7 @@ from typing import (
 )
 
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
-from typing_extensions import NotRequired, Self, TypeGuard
+from typing_extensions import NotRequired, Self
 
 from netlist_carpentry import LOG, Direction, Signal
 from netlist_carpentry.core.enums.element_type import EType
@@ -392,7 +392,8 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
     def unsigned(self) -> bool:
         return not self.signed
 
-    def is_instance_port(self) -> TypeGuard['Port[Instance]']:  # type: ignore[valid-type]
+    @property
+    def is_instance_port(self) -> bool:
         """
         Whether this port is an instance port.
 
@@ -403,14 +404,15 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         return isinstance(self.parent, Instance)
 
-    def is_module_port(self) -> TypeGuard['Port[Module]']:  # type: ignore[valid-type]
+    @property
+    def is_module_port(self) -> bool:
         """
         Whether this port is a module port.
 
         True, if this port is a module port.
         False, if this port is an instance port.
         """
-        return not Port.is_instance_port(self)
+        return not self.is_instance_port
 
     @property
     def is_input(self) -> bool:
@@ -442,7 +444,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         Returns:
             bool: True if this port is a driver port, False otherwise.
         """
-        return (self.is_instance_port() and self.is_output) or (self.is_module_port() and self.is_input)
+        return (self.is_instance_port and self.is_output) or (self.is_module_port and self.is_input)
 
     @property
     def is_load(self) -> bool:
@@ -454,7 +456,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         Returns:
             bool: True if this port is a load port, False otherwise.
         """
-        return (self.is_instance_port() and self.is_input) or (self.is_module_port() and self.is_output)
+        return (self.is_instance_port and self.is_input) or (self.is_module_port and self.is_output)
 
     @property
     def connected_wire_segments(self) -> Dict[NonNegativeInt, WireSegmentPath]:
@@ -479,7 +481,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         old_name = self.name
         self.parent.ports[new_name] = self.parent.ports.pop(old_name)  # type: ignore[assignment]
         super().set_name(new_name)
-        if Port.is_module_port(self) and old_name in self.module.wires:
+        if self.is_module_port and old_name in self.module.wires:
             self.module.wires[old_name].set_name(new_name)
 
     def _add_port_segment(self, port_segment: PortSegment) -> PortSegment:

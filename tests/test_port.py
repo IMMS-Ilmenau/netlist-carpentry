@@ -56,8 +56,8 @@ def test_port_creation(standard_port_in: Port[Instance], standard_port_out: Port
     assert standard_port_in.width == 1
     assert standard_port_in.offset == 0
     assert standard_port_in.direction == Direction.IN
-    assert standard_port_in.is_instance_port()
-    assert not standard_port_in.is_module_port()
+    assert standard_port_in.is_instance_port
+    assert not standard_port_in.is_module_port
     assert standard_port_in.type is EType.PORT
     assert standard_port_in.signal is Signal.FLOATING  # Unconnected load port => Signal.FLOATING
     assert standard_port_in.signal_array == {0: Signal.FLOATING}
@@ -65,8 +65,8 @@ def test_port_creation(standard_port_in: Port[Instance], standard_port_out: Port
 
     assert standard_port_out.width == 2
     assert standard_port_out.direction == Direction.OUT
-    assert not standard_port_out.is_instance_port()
-    assert standard_port_out.is_module_port()
+    assert not standard_port_out.is_instance_port
+    assert standard_port_out.is_module_port
     assert standard_port_out[0].path.raw == 'test_module1.test_port2.0'
     assert standard_port_out[1].path.raw == 'test_module1.test_port2.1'
     assert standard_port_out[0] == standard_port_out[0]
@@ -80,7 +80,7 @@ def test_port_creation(standard_port_in: Port[Instance], standard_port_out: Port
     assert standard_port_in.can_carry_signal
 
     with pytest.raises(ParentNotFoundError):
-        Port(raw_path='a.b', direction=Direction.IN, module_or_instance=None).is_module_port()
+        Port(raw_path='a.b', direction=Direction.IN, module_or_instance=None).is_module_port
 
 
 def test_port_len(standard_port_in: Port[Instance], standard_port_out: Port[Module]) -> None:
