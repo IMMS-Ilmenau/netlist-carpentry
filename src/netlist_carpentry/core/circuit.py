@@ -456,7 +456,7 @@ class Circuit(BaseModel):
             return WireSegmentPath(raw=path_str)
         raise PathResolutionError(f'Cannot resolve path {path_str}: The last resolved object is a wire with path {path_str}!')
 
-    def uniquify(self, module: Optional[Union[str, Module]] = None) -> None:
+    def uniquify(self, module: Optional[Union[str, Module]] = None, *, keep_original_module: bool = False) -> None:
         """Ensure that every module instance in the circuit has its own unique definition.
 
         When a module is instantiated many times, all instances share the same
@@ -475,13 +475,16 @@ class Circuit(BaseModel):
                 If a string is supplied it is treated as the module name and looked up in the circuit.
                 If ``None`` the method identifies **all** modules that appear more than once in ``self.instances`` and uniquifies them.
                 Defaults to ``None``.
+            keep_original_module (bool, optional): Whether to keep the original module(s) that no longer are instantiated anywhere.
+                If True, the original module is kept. If False, the original module and its references in `Circuit.instances` are removed.
+                Defaults to False.
         """
         if isinstance(module, str):
             module = self[module]
         modules = [module] if module is not None else [self[mname] for mname in self.instances if len(self.instances[mname]) > 1 and mname in self]
-        self._uniquify(modules)
+        self._uniquify(modules, keep_original_module)
 
-    def _uniquify(self, modules: List[Module]) -> None:
+    def _uniquify(self, modules: List[Module], keep_original_module: bool) -> None:
         for m in modules:
             idx = 0
             mapping = {}
@@ -496,7 +499,8 @@ class Circuit(BaseModel):
                 mapping[new_inst_type] = [m_instpath]
             self.instances.update(mapping)
             self.instances.pop(m.name)
-            self.remove_module(m)
+            if not keep_original_module:
+                self.remove_module(m)
 
     @overload
     def set_signal(self, path: str, signal_value: LogicLevel) -> None: ...
