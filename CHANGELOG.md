@@ -1,9 +1,17 @@
 # Changelog 0.3.1
 
+## ADDED
+- `netlist_carpentry.Module.change_instance_type()` method to change the type of an instance (by creating a new instance under the hood and discarding the old one, as the new object may be of another class)
+
 ## CHANGED
 - `netlist_carpentry.utils.gate_lib_base_classes.LibUtils.p2ws2v()` → `netlist_carpentry.utils.gate_lib_base_classes.PrimitiveGate.p2ws2v()`
 - `netlist_carpentry.utils.gate_lib_base_classes.LibUtils.get_unconnected_idx()` → `netlist_carpentry.utils.gate_lib_base_classes.PrimitiveGate._get_unconnected_idx()` (now also protected)
 - `netlist_carpentry.utils.initialize_logging()` no longer takes `no_file` argument, instead set `output_dir` to None for the same effect
+- `netlist_carpentry.Circuit.uniquify()` now returns a mapping of instance paths to new module names
+
+## FIXED
+- `netlist_carpentry.Instance.split()` was discarding instance parameters completely, now copies parameters and updates instance width accordingly
+- `netlist_carpentry.Circuit.uniquify()` no longer crashes after `netlist_carpentry.Instance.split()` was run (fixed split instances missing in `netlist_carpentry.Circuit.instances`)
 
 ## REMOVED
 - `netlist_carpentry.CFG.output_dir`
