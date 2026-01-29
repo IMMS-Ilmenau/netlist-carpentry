@@ -84,21 +84,21 @@ def test_instance_with_ports(standard_instance_with_ports: Instance) -> None:
     assert len(standard_instance_with_ports.ports) == 3
     assert standard_instance_with_ports.ports['PortA'].name == 'PortA'
     assert standard_instance_with_ports.ports['PortA'].direction == Direction.IN
-    assert standard_instance_with_ports.ports['PortA'].is_instance_port
+    assert standard_instance_with_ports.ports['PortA'].is_instance_port()
     assert standard_instance_with_ports.ports['PortA'].width == 1
     assert standard_instance_with_ports.ports['PortA'].signal == Signal.UNDEFINED  # Load connected -> UNDEFINED until evaluation
     standard_instance_with_ports.ports['PortA'][0].set_ws_path('')
     assert standard_instance_with_ports.ports['PortA'].signal == Signal.FLOATING  # Load unconnected -> Signal.FLOATING
     assert standard_instance_with_ports.ports['PortB'].name == 'PortB'
     assert standard_instance_with_ports.ports['PortB'].direction == Direction.IN
-    assert standard_instance_with_ports.ports['PortB'].is_instance_port
+    assert standard_instance_with_ports.ports['PortB'].is_instance_port()
     assert standard_instance_with_ports.ports['PortB'].width == 4
     assert standard_instance_with_ports.ports['PortB'][0].signal == Signal.UNDEFINED  # Load connected -> UNDEFINED until evaluation
     standard_instance_with_ports.ports['PortB'][0].set_ws_path('')
     assert standard_instance_with_ports.ports['PortB'][0].signal == Signal.FLOATING  # Load unconnected -> Signal.FLOATING
     assert standard_instance_with_ports.ports['PortC'].name == 'PortC'
     assert standard_instance_with_ports.ports['PortC'].direction == Direction.OUT
-    assert standard_instance_with_ports.ports['PortC'].is_instance_port
+    assert standard_instance_with_ports.ports['PortC'].is_instance_port()
     assert standard_instance_with_ports.ports['PortC'].width == 1
     assert standard_instance_with_ports.ports['PortC'].signal == Signal.UNDEFINED
     standard_instance_with_ports.ports['PortC'][0].set_ws_path('')

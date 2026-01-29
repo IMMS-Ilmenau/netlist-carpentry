@@ -365,14 +365,14 @@ def test_build_instances(simple_reader: YNR) -> None:
     assert len(add.ports) == 3
     assert add.input_ports == (add.ports['A'], add.ports['B'])
     assert add.ports['A'].width == 8
-    assert add.ports['A'].is_instance_port
+    assert add.ports['A'].is_instance_port()
     ps = [add.ports['A'][i].raw_ws_path == f'simpleAdder.in1.{i}' for i in add.ports['A'].segments]
     assert all(ps)
     assert add.ports['B'].width == 8
-    assert add.ports['B'].is_instance_port
+    assert add.ports['B'].is_instance_port()
     assert all(add.ports['B'][i].raw_ws_path == f'simpleAdder.in2.{i}' for i in add.ports['B'].segments)
     assert add.ports['Y'].width == 9
-    assert add.ports['Y'].is_instance_port
+    assert add.ports['Y'].is_instance_port()
     assert all(add.ports['Y'][i].raw_ws_path == f'simpleAdder.§0§out§8§0§.{i}' for i in add.ports['Y'].segments)
     for i in range(8):
         assert add.ports['A'][i] in m.wires['in1'][i].port_segments
@@ -389,16 +389,16 @@ def test_build_instances(simple_reader: YNR) -> None:
     assert adff.input_ports == (adff.ports['D'], adff.ports['CLK'], adff.ports['RST'])
     assert adff.output_port == adff.ports['Q']
     assert adff.ports['D'].width == 9
-    assert adff.ports['D'].is_instance_port
+    assert adff.ports['D'].is_instance_port()
     assert all(adff.ports['D'][i].raw_ws_path == f'simpleAdder.§0§out§8§0§.{i}' for i in adff.ports['D'].segments)
     assert adff.ports['CLK'].width == 1
-    assert adff.ports['CLK'].is_instance_port
+    assert adff.ports['CLK'].is_instance_port()
     assert all(adff.ports['CLK'][i].raw_ws_path == f'simpleAdder.clk.{i}' for i in adff.ports['CLK'].segments)
     assert adff.ports['RST'].width == 1
-    assert adff.ports['RST'].is_instance_port
+    assert adff.ports['RST'].is_instance_port()
     assert all(adff.ports['RST'][i].raw_ws_path == f'simpleAdder.rst.{i}' for i in adff.ports['RST'].segments)
     assert adff.ports['Q'].width == 9
-    assert adff.ports['Q'].is_instance_port
+    assert adff.ports['Q'].is_instance_port()
     assert all(adff.ports['Q'][i].raw_ws_path == f'simpleAdder.out.{i}' for i in adff.ports['Q'].segments)
 
 

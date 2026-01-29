@@ -250,7 +250,7 @@ class PortSegment(_Segment, BaseModel):
         True, if the superordinate port is an instance port.
         False, if the superordinate port is a module port.
         """
-        return self.parent.is_instance_port
+        return self.parent.is_instance_port()
 
     @property
     def is_module_port(self) -> bool:
@@ -260,7 +260,7 @@ class PortSegment(_Segment, BaseModel):
         True, if the superordinate port is a module port.
         False, if the superordinate port is an instance port.
         """
-        return self.parent.is_module_port
+        return self.parent.is_module_port()
 
     @property
     def is_input(self) -> bool:

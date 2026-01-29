@@ -632,7 +632,7 @@ def test_create_port(empty_module: Module, locked_module: Module) -> None:
     assert empty_module.ports[p.name].direction == p.direction
     assert empty_module.ports[p.name].path.raw == empty_module.path.raw + '.' + p.name
     assert empty_module.ports[p.name].locked
-    assert not empty_module.ports[p.name].is_instance_port
+    assert not empty_module.ports[p.name].is_instance_port()
     assert len(empty_module.ports[p.name].segments) == 1
 
     with pytest.raises(IdentifierConflictError):
