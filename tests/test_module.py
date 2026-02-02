@@ -407,6 +407,9 @@ def test_change_instance_type(dff_module: Module) -> None:
     m.create_port('CLK')
     m.create_port('Q')
 
+    for p in dff.ports.values():
+        assert p.is_connected
+
     dff_module.change_instance_type(dff, m)
     dff2 = dff_module.instances['dff_inst']
 
@@ -416,6 +419,10 @@ def test_change_instance_type(dff_module: Module) -> None:
     assert not isinstance(dff2, DFF)
 
     assert dff.ports == dff2.ports
+    for p in dff.ports.values():
+        assert p.is_unconnected
+    for p in dff2.ports.values():
+        assert p.is_connected
 
 
 def test_replace_instance(dff_module: Module) -> None:
