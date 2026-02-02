@@ -213,7 +213,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         old_instance = self.instances[old_instance]
         self._check_missing_ports(old_instance, new_type_definition)
         new_instance = self.create_instance(new_type_definition, old_instance.name + '_new')
-        new_instance.ports.update(old_instance.ports)
+        new_instance.ports.update(copy.deepcopy(old_instance.ports))
         self.remove_instance(old_instance)
         new_instance.set_name(old_instance.name)
 
