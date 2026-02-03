@@ -1,25 +1,38 @@
-# Changelog 0.3.1
+# Changelog 0.3.2
 
 ## ADDED
+- `netlist_carpentry.Module.reconnect()` to move the connection of one port to another, such that the first port becomes unconnected, and the second port receives the former connection of the first
+
+## FIXED
+- `netlist_carpentry.Instance.split()` was dropping reset values for D-FF
+- `netlist_carpentry.Module.change_instance_type()` was destroying previous connections
+- `netlist_carpentry.Module.change_instance_type()` was leaking memory due to excessive copying of the whole circuit
+- Issues with renaming process were fixed, where occasionally the old name remained in the port connection dictionaries
+
+
+# Older Versions
+
+## 0.3.1 (2026-01-29)
+
+### ADDED
 - `netlist_carpentry.Module.change_instance_type()` method to change the type of an instance (by creating a new instance under the hood and discarding the old one, as the new object may be of another class)
 
-## CHANGED
+### CHANGED
 - `netlist_carpentry.utils.gate_lib_base_classes.LibUtils.p2ws2v()` → `netlist_carpentry.utils.gate_lib_base_classes.PrimitiveGate.p2ws2v()`
 - `netlist_carpentry.utils.gate_lib_base_classes.LibUtils.get_unconnected_idx()` → `netlist_carpentry.utils.gate_lib_base_classes.PrimitiveGate._get_unconnected_idx()` (now also protected)
 - `netlist_carpentry.utils.initialize_logging()` no longer takes `no_file` argument, instead set `output_dir` to None for the same effect
 - `netlist_carpentry.Circuit.uniquify()` now returns a mapping of instance paths to new module names
 
-## FIXED
+### FIXED
 - `netlist_carpentry.Instance.split()` was discarding instance parameters completely, now copies parameters and updates instance width accordingly
 - `netlist_carpentry.Circuit.uniquify()` no longer crashes after `netlist_carpentry.Instance.split()` was run (fixed split instances missing in `netlist_carpentry.Circuit.instances`)
 
-## REMOVED
+### REMOVED
 - `netlist_carpentry.CFG.output_dir`
 - `netlist_carpentry.LOG.finish()` (unused and fragile, Log.report() can be used instead)
 - `netlist_carpentry.LOG.fatal_and_exit()` (raise an appropriate exception instead)
 - `netlist_carpentry.utils.gate_lib_base_classes.LibUtils` (previous methods are now integrated into `gate_lib_base_classes.PrimitiveGate`)
 
-# Older Versions
 
 ## 0.3.0 (2026-01-22)
 
