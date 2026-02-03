@@ -36,6 +36,11 @@ def connected_circuit() -> Circuit:
     return connected_circuit()
 
 
+@pytest.fixture
+def uniquify_circuit() -> Circuit:
+    return read('tests/files/uniquify_module.v', top='uniquify_module')
+
+
 def test_circuit_creation(empty_circuit: Circuit) -> None:
     assert empty_circuit.name == 'test_circuit'
     assert empty_circuit.modules == {}
@@ -493,6 +498,45 @@ def test_uniquify_keep_original_module() -> None:
     assert i2.instance_type == 'm1_2'
 
 
+def test_uniquify_paths(uniquify_circuit: Circuit) -> None:
+    mapping = uniquify_circuit.uniquify()
+    assert len(mapping) == 4
+    assert mapping[InstancePath(raw='uniquify_module.I1')] == 'inner_module_0'
+    assert mapping[InstancePath(raw='uniquify_module.I2')] == 'inner_module_1'
+    assert mapping[InstancePath(raw='uniquify_module.I3')] == 'inner_module_2'
+    assert mapping[InstancePath(raw='uniquify_module.I4')] == 'inner_module_3'
+
+    m = uniquify_circuit['inner_module_0']
+    for inst in m.instances.values():
+        assert 'inner_module_0' in inst.path.parts
+        assert 'inner_module' not in inst.path.parts
+        for port in inst.ports.values():
+            assert 'inner_module_0' in port.path.parts
+            assert 'inner_module' not in port.path.parts
+            for _, ps in port:
+                assert 'inner_module_0' in ps.path.parts
+                assert 'inner_module' not in ps.path.parts
+                assert 'inner_module_0' in ps.ws_path.parts
+                assert 'inner_module' not in ps.ws_path.parts
+    for port in m.ports.values():
+        assert 'inner_module_0' in port.path.parts
+        assert 'inner_module' not in port.path.parts
+        for _, ps in port:
+            assert 'inner_module_0' in ps.path.parts
+            assert 'inner_module' not in ps.path.parts
+            assert 'inner_module_0' in ps.ws_path.parts
+            assert 'inner_module' not in ps.ws_path.parts
+    for wire in m.wires.values():
+        assert 'inner_module_0' in wire.path.parts
+        assert 'inner_module' not in wire.path.parts
+        for _, ws in wire:
+            assert 'inner_module_0' in ws.path.parts
+            assert 'inner_module' not in ws.path.parts
+            for wsps in ws.port_segments:
+                assert 'inner_module_0' in wsps.ws_path.parts
+                assert 'inner_module' not in wsps.ws_path.parts
+
+
 def test_connected_circuit(connected_circuit: Circuit) -> None:
     assert connected_circuit.creator == 'SomeCreator'
     assert connected_circuit.module_count == 2
@@ -721,4 +765,5 @@ def test_export_metadata(connected_circuit: Circuit) -> None:
 
 if __name__ == '__main__':
     file_name = os.path.basename(__file__)
+    pytest.main(args=['-k', file_name])
     pytest.main(args=['-k', file_name])

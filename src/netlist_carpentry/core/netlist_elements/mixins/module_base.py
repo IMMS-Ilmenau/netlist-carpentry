@@ -287,22 +287,13 @@ class ModuleBaseMixin(NetlistElement):
     def _set_name_recursively(self, old_name: str, new_name: str) -> None:
         for p in self.ports.values():
             p.raw_path = p.path.replace(old_name, new_name).raw
-            for _, ps in p:
-                ps.raw_path = ps.path.replace(old_name, new_name).raw
-                ps.set_ws_path(ps.ws_path.replace(old_name, new_name).raw)
+            p._set_name_recursively(old_name, new_name)
         for w in self.wires.values():
             w.raw_path = w.path.replace(old_name, new_name).raw
-            for _, ws in w:
-                ws.raw_path = ws.path.replace(old_name, new_name).raw
-                for ps in ws.port_segments:
-                    ps.raw_path = ps.path.replace(old_name, new_name).raw
+            w._set_name_recursively(old_name, new_name)
         for i in self.instances.values():
             i.raw_path = i.path.replace(old_name, new_name).raw
-            for pi in i.ports.values():
-                pi.raw_path = pi.path.replace(old_name, new_name).raw
-                for _, s in pi:
-                    s.raw_path = s.path.replace(old_name, new_name).raw
-                    s.set_ws_path(s.ws_path.replace(old_name, new_name).raw)
+            i._set_name_recursively(old_name, new_name)
 
     def change_mutability(self, is_now_locked: bool, recursive: bool = False) -> Self:
         """

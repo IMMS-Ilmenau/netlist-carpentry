@@ -560,6 +560,7 @@ class Instance(NetlistElement, BaseModel):
             p.raw_path = p.path.replace(old_name, new_name).raw
             for _, ps in p:
                 ps.raw_path = ps.path.replace(old_name, new_name).raw
+                ps.set_ws_path(ps.ws_path.replace(old_name, new_name).raw)
 
     def split(self) -> Dict[NonNegativeInt, Self]:
         """
