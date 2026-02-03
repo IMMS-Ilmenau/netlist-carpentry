@@ -1,6 +1,6 @@
 [project]
 name = "netlist-carpentry"
-version = "0.3.1"
+version = "0.3.2"
 description = "A library for netlist modification and analysis"
 readme = "README.md"
 requires-python = ">=3.9"
