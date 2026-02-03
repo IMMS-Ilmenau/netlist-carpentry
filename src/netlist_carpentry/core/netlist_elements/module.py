@@ -215,7 +215,10 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         self._check_missing_ports(old_instance, new_type_definition)
         new_instance = self.create_instance(new_type_definition, old_instance.name + '_new')
         LOG.debug(f'Updating {len(old_instance.ports)} ports in {new_instance.raw_path}...')
-        new_instance.ports.update(copy.deepcopy(old_instance.ports))
+        connections = old_instance.connections
+        for pname, con_dict in connections.items():
+            for idx, ws_path in con_dict.items():
+                new_instance.connect_modify(pname, ws_path=ws_path, index=idx)
         LOG.debug(f'Removing old instance {old_instance.raw_path}...')
         self.remove_instance(old_instance)
         new_instance.set_name(old_instance.name)

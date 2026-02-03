@@ -410,6 +410,7 @@ def test_change_instance_type(dff_module: Module) -> None:
     for p in dff.ports.values():
         assert p.is_connected
 
+    connections = copy.deepcopy(dff.connections)
     dff_module.change_instance_type(dff, m)
     dff2 = dff_module.instances['dff_inst']
 
@@ -423,6 +424,7 @@ def test_change_instance_type(dff_module: Module) -> None:
         assert p.is_unconnected
     for p in dff2.ports.values():
         assert p.is_connected
+    assert connections == dff2.connections
 
 
 def test_replace_instance(dff_module: Module) -> None:
