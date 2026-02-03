@@ -177,7 +177,7 @@ class NetlistElement(HooksMixin, BaseModel):
             raise VerilogSyntaxError(f'Cannot set name {new_name}: Invalid Identifier (escaped identifiers are currently not supported)!')
         old_name = self.name
         if new_name != old_name:
-            LOG.info(f'Changing instance name from object at {self.raw_path} from {self.name} to {new_name}!')
+            LOG.debug(f'Changing instance name from object at {self.raw_path} from {self.name} to {new_name}!')
             new_raw_path = self.raw_path.split(self.path.sep)[:-1]
             new_raw_path.append(new_name)
             self.raw_path = self.path.sep.join(new_raw_path)
