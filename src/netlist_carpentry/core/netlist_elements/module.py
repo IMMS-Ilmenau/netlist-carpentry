@@ -16,6 +16,7 @@ from netlist_carpentry.core.exceptions import (
     AlreadyConnectedError,
     IdentifierConflictError,
     InvalidDirectionError,
+    MissingConnectionError,
     MultipleDriverError,
     ObjectLockedError,
     ObjectNotFoundError,
@@ -779,6 +780,58 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         else:
             inst = self.instances[p.grandparent_name]
             inst.disconnect(p.parent_name, index=p.index)
+
+    def reconnect(self, source: Union[PortPath, T_PORT], target: Union[PortPath, T_PORT]) -> None:
+        """
+        Moves (or reconnects) all existing wire connections from a source port to a target port.
+
+        This method acts as a wrapper that accepts either port objects (Port[Instance] or Port[Module]) or
+        hierarchical paths (PortPath). It resolves any paths into their respective
+        port objects before performing the reconnection.
+
+        In this process, the wire(s) connected to the source port are removed from the source port and connected
+        (in the same order) to the target port.
+        The target port must be unconnected!
+
+        Args:
+            source (Union[PortPath, T_PORT]): The port (or path to the port) currently holding the connections.
+            target (Union[PortPath, T_PORT]): The destination port (or path) where the connections should be moved.
+
+        Raises:
+            MissingConnectionError: If the source port has no wires connected to it.
+            AlreadyConnectedError: If at least one segment of the target port is already connect to a wire.
+            WidthMismatchError: If the given ports have different widths.
+        """
+        if isinstance(source, PortPath):
+            source = self.get_from_path(source)
+        if isinstance(target, PortPath):
+            target = self.get_from_path(target)
+        self._reconnect(source, target)
+
+    def _reconnect(self, source: T_PORT, target: T_PORT) -> None:
+        """
+        Internal implementation for transferring wire segments between port objects.
+
+        This method disconnects all wire segments from the source port and
+        attaches them to the corresponding indices of the target port.
+
+        Args:
+            source: The port object to disconnect wires from.
+            target: The port object to connect the wires to.
+
+        Raises:
+            MissingConnectionError: If the source port has no wires connected to it.
+            AlreadyConnectedError: If at least one segment of the target port is already connect to a wire.
+            WidthMismatchError: If the given ports have different widths.
+        """
+        if source.width != target.width:
+            raise WidthMismatchError(f'Cannot reconnect {source.raw_path} to {target.raw_path}: Ports have different widths!')
+        if source.is_unconnected:
+            raise MissingConnectionError(f'Cannot reconnect {source.raw_path} to {target.raw_path}: Source port has no connection!')
+        orig_con = source.connected_wire_segments.copy()
+        self.disconnect(source)
+        for idx, ws_path in orig_con.items():
+            self.connect(ws_path, target[idx])
 
     def _collect_port_edges(self, instance: Instance, port_name: str) -> Dict[int, WireSegment]:
         connections = instance.connections[port_name]

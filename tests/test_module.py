@@ -16,6 +16,7 @@ from netlist_carpentry.core.exceptions import (
     EvaluationError,
     IdentifierConflictError,
     InvalidDirectionError,
+    MissingConnectionError,
     MultipleDriverError,
     ObjectLockedError,
     ObjectNotFoundError,
@@ -1108,6 +1109,33 @@ def test_disconnect_inst_port_path(connected_module: Module) -> None:
     assert pseg not in w.ports[0]
     assert pseg.ws_path == WIRE_SEGMENT_X.path
     assert inst.connections[p.name][0] == WIRE_SEGMENT_X.path
+
+
+def test_reconnect(connected_module: Module) -> None:
+    in3 = connected_module.ports['in3']
+    in4 = connected_module.ports['in4']
+    in5 = connected_module.create_port('in5', Dir.IN)
+    in6 = connected_module.create_port('in6', Dir.IN)
+    in7 = connected_module.create_port('in7', Dir.IN, width=4)
+    prev_path = in4.connected_wire_segments.copy()
+    assert in4.is_connected
+    assert in4.connected_wire_segments == prev_path
+    assert in5.is_unconnected
+
+    connected_module.reconnect(in4, in5)
+
+    assert in4.is_unconnected
+    assert in5.is_connected
+    assert in5.connected_wire_segments == prev_path
+
+    with pytest.raises(MissingConnectionError):
+        connected_module.reconnect(in6, in5)
+
+    with pytest.raises(AlreadyConnectedError):
+        connected_module.reconnect(in3, in5)
+
+    with pytest.raises(WidthMismatchError):
+        connected_module.reconnect(in4, in7)
 
 
 def test_update_module_instances() -> None:

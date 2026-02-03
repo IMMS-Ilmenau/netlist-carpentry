@@ -31,6 +31,12 @@ class AlreadyConnectedError(CircuitStructureError):
     pass
 
 
+class MissingConnectionError(CircuitStructureError):
+    """Raised when a connection was expected but is not present (e.g. an unconnected port, where a connected port was expected)."""
+
+    pass
+
+
 class InvalidDirectionError(CircuitStructureError):
     """Raised when a port with an invalid direction is passed."""
 
