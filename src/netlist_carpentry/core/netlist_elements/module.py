@@ -211,9 +211,12 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if old_instance not in self.instances:
             raise ObjectNotFoundError(f'Cannot replace instance {old_instance}, since no such instance exists in module {self.name}!')
         old_instance = self.instances[old_instance]
+        LOG.debug(f'Checking for missing ports in module {new_type_definition.name} for old_instance {old_instance.raw_path}...')
         self._check_missing_ports(old_instance, new_type_definition)
         new_instance = self.create_instance(new_type_definition, old_instance.name + '_new')
+        LOG.debug(f'Updating {len(old_instance.ports)} ports in {new_instance.raw_path}...')
         new_instance.ports.update(copy.deepcopy(old_instance.ports))
+        LOG.debug(f'Removing old instance {old_instance.raw_path}...')
         self.remove_instance(old_instance)
         new_instance.set_name(old_instance.name)
 
