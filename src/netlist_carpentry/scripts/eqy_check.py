@@ -58,8 +58,8 @@ class EqyWrapper:
         dir_path = os.path.dirname(os.path.abspath(__file__))
         script_path = f'{dir_path}/eqy_proc.sh'
         subprocess.call(['chmod', 'u+x', script_path])
-        subprocess.call([script_path, gold_path, gold_top_module], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        subprocess.call([script_path, gate_path, gate_top_module], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.call([script_path, gold_path, gold_top_module], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.call([script_path, gate_path, gate_top_module], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def create_eqy_file(self, gold_vfile_paths: List[str], gold_top_module: str, gate_vfile_paths: List[str], gate_top_module: str) -> None:
         """
