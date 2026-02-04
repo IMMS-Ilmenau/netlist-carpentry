@@ -320,16 +320,17 @@ class YosysNetlistReader(AbstractReader):
         module.add_instance(inst)
 
     def _build_instance_ports(self, module: Module, inst: Instance, instance_data_dict: YosysCell) -> None:
-        if 'port_directions' in instance_data_dict:
-            for port_name, port_connection in instance_data_dict['connections'].items():
-                # Default ports in primitives from gate library have placeholder segments
-                # They must be removed before assigning read data
-                if port_name in inst.ports:
-                    inst.ports[port_name].segments.clear()
+        for port_name, port_connection in instance_data_dict['connections'].items():
+            # Default ports in primitives from gate library have placeholder segments
+            # They must be removed before assigning read data
+            if port_name in inst.ports:
+                inst.ports[port_name].segments.clear()
+            if 'port_directions' in instance_data_dict:
                 port_direction = self._build_instance_ports_direction(instance_data_dict['port_directions'], port_name)
-                self._build_instance_ports_connections(module, inst, port_name, port_connection, port_direction)
-        else:
-            LOG.warn(f'Instance port dictionary is not complete for instance {inst.raw_path}!')
+            else:
+                LOG.debug(f'Instance {inst.raw_path} has no directions and will thus be treated as a black-box!')
+                port_direction = Direction.UNKNOWN
+            self._build_instance_ports_connections(module, inst, port_name, port_connection, port_direction)
 
     def _build_instance_ports_direction(self, pdirs: YosysPortDirections, pname: str) -> Direction:
         return Direction.UNKNOWN if pname not in pdirs else Direction.get(pdirs[pname])

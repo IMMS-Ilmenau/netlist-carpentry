@@ -415,10 +415,14 @@ def test_build_instance_port_edge_cases(simple_reader: YNR) -> None:
     assert inst.ports['A'][0].raw_ws_path == 'test.w.0'
     assert m.wires['w'][0].port_segments == [inst.ports['A'][0]]
 
+    m.wires['w'][0].port_segments.clear()
     inst_dict.pop('port_directions')
     inst = Instance(raw_path='test.instance', instance_type='§and', module=None)
     simple_reader._build_instance_ports(m, inst, inst_dict)
-    assert inst.ports == {}
+    assert len(inst.ports) == 1
+    assert inst.ports['A'].direction == Direction.UNKNOWN
+    assert inst.ports['A'][0].raw_ws_path == 'test.w.0'
+    assert m.wires['w'][0].port_segments == [inst.ports['A'][0]]
 
 
 def test_build_instance_port_consts(simple_reader: YNR) -> None:
