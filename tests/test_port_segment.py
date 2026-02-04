@@ -281,6 +281,15 @@ def test_super_inst_or_module_name(port_segment: PortSegment) -> None:
     assert invalid.grandparent_name == ''
 
 
+def test_set_ws_path(port_segment: PortSegment) -> None:
+    port_segment.set_ws_path('a.b.c')
+    assert port_segment.ws_path == WireSegmentPath(raw='a.b.c')
+
+    port_segment.set_ws_path(WireSegmentPath(raw='d.e.f'))
+    assert port_segment.ws_path == WireSegmentPath(raw='d.e.f')
+    assert port_segment.raw_ws_path == 'd.e.f'
+
+
 def test_tie_signal(port_segment: PortSegment) -> None:
     super_port = Port(raw_path='a.b.c', direction=Direction.IN, module_or_instance=Instance(raw_path='a.b', instance_type='c', module=None))
     port_segment.port = super_port

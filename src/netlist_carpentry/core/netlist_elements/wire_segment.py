@@ -176,7 +176,7 @@ class WireSegment(_Segment, BaseModel):
         Returns:
             PortSegment: The PortSegment object that was added to this wire segment.
         """
-        port_segment.set_ws_path(self.raw_path)
+        port_segment.set_ws_path(self.path)
         return self.port_segments.add(port_segment, locked=self.locked)
 
     def add_port_segments(self, port_segments: Iterable[PortSegment]) -> List[PortSegment]:

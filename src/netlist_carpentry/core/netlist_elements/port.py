@@ -700,7 +700,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
     def _set_name_recursively(self, old_name: str, new_name: str) -> None:
         for _, ps in self:
             ps.raw_path = ps.path.replace(old_name, new_name).raw
-            ps.set_ws_path(ps.ws_path.replace(old_name, new_name).raw)
+            ps.set_ws_path(ps.ws_path.replace(old_name, new_name))
 
     def change_mutability(self, is_now_locked: bool, recursive: bool = False) -> Self:
         if recursive:

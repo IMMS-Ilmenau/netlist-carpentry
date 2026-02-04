@@ -343,16 +343,19 @@ class PortSegment(_Segment, BaseModel):
             return self.path.nth_parent(2).name  # parent of port segment parent: either module or instance to which the port belongs
         return ''
 
-    def set_ws_path(self, ws_path: str) -> Self:
+    def set_ws_path(self, ws_path: Union[str, WireSegmentPath]) -> Self:
         """
         Sets or updates the wire segment path for this port segment.
 
         Args:
-            ws_path (str): The new wire segment path to be set.
+            ws_path (Union[str, WireSegmentPath]): The new wire segment path to be set,
+                either as plain string or as path object.
 
         Returns:
             PortSegment: This port segment with its wire segment path updated.
         """
+        if isinstance(ws_path, WireSegmentPath):
+            ws_path = ws_path.raw
         self._raw_ws_path = ws_path
         return self
 
@@ -453,7 +456,7 @@ class PortSegment(_Segment, BaseModel):
         """
         if self.locked:
             raise ObjectLockedError(f'Unable to connect port segment {self.raw_path} to {new_wire_segment_path.raw}: Port segment is locked!')
-        self.set_ws_path(new_wire_segment_path.raw)
+        self.set_ws_path(new_wire_segment_path)
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__} "{self.name}" with path {self.path.raw}'

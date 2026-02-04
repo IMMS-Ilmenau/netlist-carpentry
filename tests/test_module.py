@@ -174,7 +174,7 @@ def test_output_ports(connected_module: Module) -> None:
 def test_instances_with_constant_inputs(connected_module: Module) -> None:
     assert connected_module.instances_with_constant_inputs == [connected_module.instances['dff_inst']]
 
-    connected_module.instances['and_inst'].ports['A'][0].set_ws_path(WIRE_SEGMENT_0.raw_path)
+    connected_module.instances['and_inst'].ports['A'][0].set_ws_path(WIRE_SEGMENT_0.path)
     assert connected_module.instances_with_constant_inputs == [connected_module.instances['and_inst'], connected_module.instances['dff_inst']]
 
 

@@ -340,9 +340,9 @@ class Instance(NetlistElement, BaseModel):
         else:
             port = Port(raw_path=f'{self.path.raw}.{port_name}', direction=direction, module_or_instance=self)
             self.ports.add(port_name, port, locked=self.locked)
-        ws_path = ws_path.raw if ws_path is not None else ''
+        ws_path_raw = ws_path.raw if ws_path is not None else ''
         try:
-            return port.create_port_segment(index).set_ws_path(ws_path)
+            return port.create_port_segment(index).set_ws_path(ws_path_raw)
         except IdentifierConflictError as e:
             raise IdentifierConflictError(
                 f'Unable to add port {port_name} (index {index}) to instance {self.name}!'
@@ -440,10 +440,10 @@ class Instance(NetlistElement, BaseModel):
         if port is not None:
             # The index is not initialized yet, i.e. no wire segment for this index is present
             if index not in port.segments:
-                port.create_port_segment(index).set_ws_path(ws_path.raw)
+                port.create_port_segment(index).set_ws_path(ws_path)
             # The wire segment at the given index is connected to a different wire
             elif port[index].raw_ws_path != ws_path.raw:
-                port[index].set_ws_path(ws_path.raw)
+                port[index].set_ws_path(ws_path)
                 self.ports.remove(port_name, locked=self.locked)
                 self.ports.add(port_name, port, locked=self.locked)
             else:
@@ -560,7 +560,7 @@ class Instance(NetlistElement, BaseModel):
             p.raw_path = p.path.replace(old_name, new_name).raw
             for _, ps in p:
                 ps.raw_path = ps.path.replace(old_name, new_name).raw
-                ps.set_ws_path(ps.ws_path.replace(old_name, new_name).raw)
+                ps.set_ws_path(ps.ws_path.replace(old_name, new_name))
 
     def split(self) -> Dict[NonNegativeInt, Self]:
         """

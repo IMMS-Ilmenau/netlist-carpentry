@@ -557,7 +557,7 @@ class Wire(NetlistElement, BaseModel):
         for _, ws in self:
             ws.raw_path = ws.path.replace(old_name, new_name).raw
             for ps in ws.port_segments:
-                ps.set_ws_path(ps.ws_path.replace(old_name, new_name).raw)
+                ps.set_ws_path(ps.ws_path.replace(old_name, new_name))
 
     def change_mutability(self, is_now_locked: bool, recursive: bool = False) -> Self:
         if recursive:
