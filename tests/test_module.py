@@ -394,11 +394,11 @@ def test_change_instance_type(dff_module: Module) -> None:
     c.add_module(dff_module)
     m = c.create_module('m')
     with pytest.raises(ObjectNotFoundError):
-        dff_module.change_instance_type('bad_name', m)
+        dff_module.refine_instance('bad_name', m)
 
     dff = dff_module.instances['dff_inst']
     with pytest.raises(StructureMismatchError):
-        dff_module.change_instance_type(dff, m)
+        dff_module.refine_instance(dff, m)
 
     assert dff.instance_type == '§dff'
     assert isinstance(dff, DFF)
@@ -412,7 +412,7 @@ def test_change_instance_type(dff_module: Module) -> None:
         assert p.is_connected
 
     connections = copy.deepcopy(dff.connections)
-    dff_module.change_instance_type(dff, m)
+    dff_module.refine_instance(dff, m)
     dff2 = dff_module.instances['dff_inst']
 
     assert dff2.instance_type == 'm'
@@ -431,13 +431,13 @@ def test_change_instance_type(dff_module: Module) -> None:
 def test_replace_instance(dff_module: Module) -> None:
     adffe = ADFFE(raw_path=f'{dff_module.name}.adffe_inst')
     with pytest.raises(ObjectNotFoundError):
-        dff_module.replace('lulz no instance', adffe)
+        dff_module.substitute_instance('lulz no instance', adffe)
 
     dff = dff_module.instances_by_types['§dff'][0]
     with pytest.raises(IdentifierConflictError):
-        dff_module.replace(dff, dff)
+        dff_module.substitute_instance(dff, dff)
     with pytest.raises(WidthMismatchError):
-        dff_module.replace(dff, adffe)
+        dff_module.substitute_instance(dff, adffe)
 
     adffe = ADFFE(raw_path=f'{dff_module.name}.adffe_inst', parameters={'WIDTH': 4})
     assert dff.name in dff_module.instances
@@ -448,7 +448,7 @@ def test_replace_instance(dff_module: Module) -> None:
         assert p.is_unconnected
     dff_connections = dff.connections
     warns = LOG.warns_quantity
-    dff_module.replace(dff, adffe)
+    dff_module.substitute_instance(dff, adffe)
     assert LOG.warns_quantity == warns + 2
     assert dff.name not in dff_module.instances
     assert adffe.name in dff_module.instances
@@ -463,10 +463,10 @@ def test_replace_instance(dff_module: Module) -> None:
 
     with pytest.raises(StructureMismatchError):
         dff_module.connect(dff_module.ports['CLK'], adffe.ports['RST'])
-        dff_module.replace(adffe, dff)
+        dff_module.substitute_instance(adffe, dff)
 
     adffe.disconnect('RST')
-    dff_module.replace(adffe, dff)
+    dff_module.substitute_instance(adffe, dff)
     assert '§adffe' not in dff_module.instances_by_types
     assert '§dff' in dff_module.instances_by_types
 
@@ -475,7 +475,7 @@ def test_replace_instance_silent(dff_module: Module) -> None:
     dff = dff_module.instances_by_types['§dff'][0]
     adffe = ADFFE(raw_path=f'{dff_module.name}.adffe_inst', parameters={'WIDTH': 4})
     warns = LOG.warns_quantity
-    dff_module.replace(dff, adffe, silent=True)
+    dff_module.substitute_instance(dff, adffe, silent=True)
     assert LOG.warns_quantity == warns
 
 

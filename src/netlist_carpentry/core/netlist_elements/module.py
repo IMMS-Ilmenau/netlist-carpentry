@@ -184,7 +184,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 f'Unable to replace {old_instance.raw_path}: New instance {new_instance.raw_path} is missing these ports: {", ".join(missing_ports)}'
             )
 
-    def change_instance_type(self, old_instance: Union[str, Instance], new_type_definition: Module) -> None:
+    def refine_instance(self, old_instance: Union[str, Instance], new_type_definition: Module) -> None:
         """
         **Replaces an existing instance** with a new one of a different type.
 
@@ -224,7 +224,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         self.remove_instance(old_instance)
         new_instance.set_name(old_instance.name)
 
-    def replace(self, old_instance: Union[str, Instance], new_instance: Instance, silent: bool = False) -> None:
+    def substitute_instance(self, old_instance: Union[str, Instance], new_instance: Instance, silent: bool = False) -> None:
         """Replaces an existing instance in the module with a new instance.
 
         This method validates the existence of the instance to be replaced
@@ -255,9 +255,9 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 f'Error whilst replacing instance {old_instance} with {new_instance.raw_path}: '
                 + f'An instance with name {new_instance.name} already exists in module {self.name}!'
             )
-        self._replace(self.instances[old_instance], new_instance, silent)
+        self._substitute_instance(self.instances[old_instance], new_instance, silent)
 
-    def _replace(self, old_instance: Instance, new_instance: Instance, silent: bool) -> None:
+    def _substitute_instance(self, old_instance: Instance, new_instance: Instance, silent: bool) -> None:
         """Performs the internal logic of swapping instances and reconnecting nets.
 
         This method verifies port compatibility (presence and width), removes the

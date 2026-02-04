@@ -47,7 +47,7 @@ def replace_ff_with_scan_ff(m: Module) -> List[ScanDFF]:
     m.split_all('dff')
     dffs: List[DFF] = m.get_instances(type='dff', fuzzy=True)  # type: ignore[assignment]
     for dff in dffs:
-        m.replace(dff, dff.get_scanff(), silent=True)
+        m.substitute_instance(dff, dff.get_scanff(), silent=True)
     scan_ffs: List[ScanDFF] = m.get_instances(type='dff', fuzzy=True)  # type: ignore[assignment]
     return scan_ffs  # These are the scan flip-flops just replaced
 
