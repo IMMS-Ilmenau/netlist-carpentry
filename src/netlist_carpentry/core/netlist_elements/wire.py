@@ -241,7 +241,7 @@ class Wire(NetlistElement, BaseModel):
             The inner dictionary has wire segment indices (int) as keys, and the values are ElementPaths
             representing the instance path of the port connected at this wire index.
         """
-        port_dict = {}
+        port_dict: Dict[int, List[PortSegment]] = {}
         for s_idx in self.segments:
             port_dict[s_idx] = self[s_idx].port_segments
         return port_dict
@@ -249,7 +249,7 @@ class Wire(NetlistElement, BaseModel):
     @property
     def connected_port_segments(self) -> List[PortSegment]:
         """Retrieves a list of all (unique) port segments connected to this wire."""
-        unique_ps = CustomList()
+        unique_ps = CustomList[PortSegment]()
         for s in self.segments.values():
             for p in s.port_segments:
                 unique_ps.add(p)
