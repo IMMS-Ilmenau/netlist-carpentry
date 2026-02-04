@@ -464,10 +464,24 @@ def test_set_name() -> None:
 
     for _, ws in w:
         for ps in ws.port_segments:
-            assert 'wire4b' not in ps.raw_ws_path
-            assert 'WIRE' in ps.raw_ws_path
+            assert 'wire4b' not in ps.ws_path.parts
+            assert 'WIRE' in ps.ws_path.parts
 
-    w.parent.create_port('WIRE', width=4)
+    w.set_name('WIREWIRE')  # Checks path.replace, if the name is already present as "subpart"
+    assert w.raw_path == 'test_module1.WIREWIRE'
+    assert w[1].raw_path == 'test_module1.WIREWIRE.1'
+    assert w[2].raw_path == 'test_module1.WIREWIRE.2'
+    assert w[3].raw_path == 'test_module1.WIREWIRE.3'
+    assert w[4].raw_path == 'test_module1.WIREWIRE.4'
+    assert 'WIRE' not in w.parent.wires
+    assert 'WIREWIRE' in w.parent.wires
+
+    for _, ws in w:
+        for ps in ws.port_segments:
+            assert 'WIRE' not in ps.ws_path.parts
+            assert 'WIREWIRE' in ps.ws_path.parts
+
+    w.parent.create_port('WIREWIRE', width=4)
     with pytest.raises(UnsupportedOperationError):
         w.set_name('NEW_NAME')
 

@@ -552,12 +552,12 @@ class Wire(NetlistElement, BaseModel):
         return mapping if get_mapping else any_or_all(mapping[k] for k in mapping)
 
     def _set_name_recursively(self, old_name: str, new_name: str) -> None:
-        if old_name in self.module.ports:
+        if old_name in self.parent.ports:
             raise UnsupportedOperationError(f'Cannot rename wire {self.raw_path}: Cannot rename a wire that has the same name as a module port!')
         for _, ws in self:
             ws.raw_path = ws.path.replace(old_name, new_name).raw
             for ps in ws.port_segments:
-                ps.set_ws_path(ps.raw_ws_path.replace(old_name, new_name))
+                ps.set_ws_path(ps.ws_path.replace(old_name, new_name).raw)
 
     def change_mutability(self, is_now_locked: bool, recursive: bool = False) -> Self:
         if recursive:
