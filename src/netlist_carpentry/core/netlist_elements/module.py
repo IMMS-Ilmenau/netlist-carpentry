@@ -209,19 +209,10 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if old_instance not in self.instances:
             raise ObjectNotFoundError(f'Cannot replace instance {old_instance}, since no such instance exists in module {self.name}!')
         old_instance = self.instances[old_instance]
-        LOG.debug(f'Checking for missing ports in module {new_type_definition.name} for old_instance {old_instance.raw_path}...')
         new_instance = self.create_instance(new_type_definition, old_instance.name + '_new')
-        self._check_missing_ports(old_instance, new_instance)
-        self._refine_instance(old_instance, new_instance)
-
-    def _refine_instance(self, old_instance: Instance, new_instance: Instance) -> None:
-        LOG.debug(f'Updating {len(old_instance.ports)} ports in {new_instance.raw_path}...')
-        connections = old_instance.connections
-        for pname, con_dict in connections.items():
-            for idx, ws_path in con_dict.items():
-                new_instance.connect_modify(pname, ws_path=ws_path, index=idx)
-        LOG.debug(f'Removing old instance {old_instance.raw_path}...')
-        self.remove_instance(old_instance)
+        # References to module are gone, instance is re-added in _substitute_instance
+        self.remove_instance(new_instance.name)
+        self._substitute_instance(old_instance, new_instance, True)
         new_instance.set_name(old_instance.name)
 
     def substitute_instance(self, old_instance: Union[str, Instance], new_instance: Instance, silent: bool = False) -> None:

@@ -399,7 +399,6 @@ def test_refine_instance(dff_module: Module) -> None:
     dff = dff_module.instances['dff_inst']
     with pytest.raises(StructureMismatchError):
         dff_module.refine_instance(dff, m)
-    dff_module.remove_instance('dff_inst_new')
 
     assert dff.instance_type == '§dff'
     assert isinstance(dff, DFF)
@@ -407,12 +406,17 @@ def test_refine_instance(dff_module: Module) -> None:
     assert dff.is_sequential
     m.create_port('D')
     m.create_port('CLK')
-    m.create_port('Q')
+    m.create_port('Q', width=4)
 
     for p in dff.ports.values():
         assert p.is_connected
 
     connections = copy.deepcopy(dff.connections)
+    with pytest.raises(WidthMismatchError):
+        dff_module.refine_instance(dff, m)
+
+    m.remove_port('D')
+    m.create_port('D', width=4)
     dff_module.refine_instance(dff, m)
     dff2 = dff_module.instances['dff_inst']
 
