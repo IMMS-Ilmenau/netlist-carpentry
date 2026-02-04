@@ -389,7 +389,7 @@ def test_copy_instance_keep_inputs(standard_module: Module) -> None:
             assert inst2.ports[pname][0].ws == standard_module.wires['test_wire'][0]
 
 
-def test_change_instance_type(dff_module: Module) -> None:
+def test_refine_instance(dff_module: Module) -> None:
     c = Circuit(name='c')
     c.add_module(dff_module)
     m = c.create_module('m')
@@ -399,6 +399,7 @@ def test_change_instance_type(dff_module: Module) -> None:
     dff = dff_module.instances['dff_inst']
     with pytest.raises(StructureMismatchError):
         dff_module.refine_instance(dff, m)
+    dff_module.remove_instance('dff_inst_new')
 
     assert dff.instance_type == '§dff'
     assert isinstance(dff, DFF)
@@ -428,7 +429,7 @@ def test_change_instance_type(dff_module: Module) -> None:
     assert connections == dff2.connections
 
 
-def test_replace_instance(dff_module: Module) -> None:
+def test_substitute_instance(dff_module: Module) -> None:
     adffe = ADFFE(raw_path=f'{dff_module.name}.adffe_inst')
     with pytest.raises(ObjectNotFoundError):
         dff_module.substitute_instance('lulz no instance', adffe)
@@ -471,7 +472,7 @@ def test_replace_instance(dff_module: Module) -> None:
     assert '§dff' in dff_module.instances_by_types
 
 
-def test_replace_instance_silent(dff_module: Module) -> None:
+def test_substitute_instance_silent(dff_module: Module) -> None:
     dff = dff_module.instances_by_types['§dff'][0]
     adffe = ADFFE(raw_path=f'{dff_module.name}.adffe_inst', parameters={'WIDTH': 4})
     warns = LOG.warns_quantity

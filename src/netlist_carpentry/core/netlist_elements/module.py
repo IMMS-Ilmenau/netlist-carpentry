@@ -174,17 +174,14 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 new_instance.disconnect(p.name)
         return new_instance
 
-    def _check_missing_ports(self, old_instance: Instance, new_instance: Union[Instance, Module]) -> None:
-        missing_ports = set()
-        for p in old_instance.ports.values():
-            if not p.is_unconnected and p.name not in new_instance.ports:
-                missing_ports.add(p.name)
+    def _check_missing_ports(self, old_instance: Instance, new_instance: Instance) -> None:
+        missing_ports = {p.name for p in old_instance.ports.values() if not p.is_unconnected and p.name not in new_instance.ports}
         if missing_ports:
             raise StructureMismatchError(
                 f'Unable to replace {old_instance.raw_path}: New instance {new_instance.raw_path} is missing these ports: {", ".join(missing_ports)}'
             )
 
-    def refine_instance(self, old_instance: Union[str, Instance], new_type_definition: Module) -> None:
+    def refine_instance(self, old_instance: Union[str, Instance], new_type_definition: Union[Module, Type[Instance]]) -> None:
         """
         **Replaces an existing instance** with a new one of a different type.
 
@@ -213,8 +210,11 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             raise ObjectNotFoundError(f'Cannot replace instance {old_instance}, since no such instance exists in module {self.name}!')
         old_instance = self.instances[old_instance]
         LOG.debug(f'Checking for missing ports in module {new_type_definition.name} for old_instance {old_instance.raw_path}...')
-        self._check_missing_ports(old_instance, new_type_definition)
         new_instance = self.create_instance(new_type_definition, old_instance.name + '_new')
+        self._check_missing_ports(old_instance, new_instance)
+        self._refine_instance(old_instance, new_instance)
+
+    def _refine_instance(self, old_instance: Instance, new_instance: Instance) -> None:
         LOG.debug(f'Updating {len(old_instance.ports)} ports in {new_instance.raw_path}...')
         connections = old_instance.connections
         for pname, con_dict in connections.items():
