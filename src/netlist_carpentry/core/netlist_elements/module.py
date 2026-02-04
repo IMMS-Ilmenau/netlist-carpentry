@@ -7,6 +7,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union, overload
+from uuid import uuid4
 
 from dash import Dash
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
@@ -174,13 +175,6 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 new_instance.disconnect(p.name)
         return new_instance
 
-    def _check_missing_ports(self, old_instance: Instance, new_instance: Instance) -> None:
-        missing_ports = {p.name for p in old_instance.ports.values() if not p.is_unconnected and p.name not in new_instance.ports}
-        if missing_ports:
-            raise StructureMismatchError(
-                f'Unable to replace {old_instance.raw_path}: New instance {new_instance.raw_path} is missing these ports: {", ".join(missing_ports)}'
-            )
-
     def refine_instance(self, old_instance: Union[str, Instance], new_type_definition: Union[Module, Type[Instance]]) -> None:
         """
         **Replaces an existing instance** with a new one of a different type.
@@ -209,11 +203,12 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if old_instance not in self.instances:
             raise ObjectNotFoundError(f'Cannot replace instance {old_instance}, since no such instance exists in module {self.name}!')
         old_instance = self.instances[old_instance]
-        new_instance = self.create_instance(new_type_definition, old_instance.name + '_new')
-        # References to module are gone, instance is re-added in _substitute_instance
-        self.remove_instance(new_instance.name)
-        self._substitute_instance(old_instance, new_instance, True)
+        new_instance = self.create_instance(new_type_definition, old_instance.name + uuid4().hex)
+        self._substitute_check_ports(old_instance, new_instance)
+        connections = old_instance.connections
+        self.remove_instance(old_instance)
         new_instance.set_name(old_instance.name)
+        self._substitute_connect(new_instance, connections)
 
     def substitute_instance(self, old_instance: Union[str, Instance], new_instance: Instance, silent: bool = False) -> None:
         """Replaces an existing instance in the module with a new instance.
@@ -267,22 +262,30 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             WidthMismatchError: If a port exists in both instances but has
                 different bit-widths.
         """
-        self._check_missing_ports(old_instance, new_instance)
+        self._substitute_check_ports(old_instance, new_instance)
         connections = old_instance.connections
+        self.remove_instance(old_instance)
+        self.add_instance(new_instance)
+        self._substitute_connect(new_instance, connections)
+
+    def _substitute_check_ports(self, old_instance: Instance, new_instance: Instance) -> None:
+        missing_ports = {p.name for p in old_instance.ports.values() if not p.is_unconnected and p.name not in new_instance.ports}
+        if missing_ports:
+            raise StructureMismatchError(
+                f'Unable to replace {old_instance.raw_path}: New instance {new_instance.raw_path} is missing these ports: {", ".join(missing_ports)}'
+            )
         for pname, p in old_instance.ports.items():
             if pname in new_instance.ports and p.width != new_instance.ports[pname].width:
                 raise WidthMismatchError(
                     f'Port {pname} is {p.width} bit wide in {old_instance.raw_path}, but {new_instance.ports[pname].width} bit wide in {new_instance.raw_path}'
                 )
-        self.remove_instance(old_instance)
-        self.add_instance(new_instance)
+
+    def _substitute_connect(self, new_instance: Instance, connections: Dict[str, Dict[int, WireSegmentPath]]) -> None:
         for pname in list(new_instance.ports.keys()):
             if pname in connections:
                 p = new_instance.ports[pname]
                 for idx, ps in p:
                     self.connect(connections[pname][idx], ps)
-            elif not silent:
-                LOG.warn(f'No port {pname} in old instance {old_instance.raw_path}: This port is left unconnected!')
 
     def remove_instance(self, instance: Union[str, Instance]) -> None:
         """

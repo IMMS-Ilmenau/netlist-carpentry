@@ -452,9 +452,7 @@ def test_substitute_instance(dff_module: Module) -> None:
     for p in adffe.ports.values():
         assert p.is_unconnected
     dff_connections = dff.connections
-    warns = LOG.warns_quantity
     dff_module.substitute_instance(dff, adffe)
-    assert LOG.warns_quantity == warns + 2
     assert dff.name not in dff_module.instances
     assert adffe.name in dff_module.instances
     assert adffe.ports['D'].is_connected
