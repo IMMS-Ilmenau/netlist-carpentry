@@ -1,16 +1,27 @@
-# Changelog 0.3.2
+# Changelog 0.3.3
 
-## ADDED
-- `netlist_carpentry.Module.reconnect()` to move the connection of one port to another, such that the first port becomes unconnected, and the second port receives the former connection of the first
+## CHANGED
+- `netlist_carpentry.Module.change_instance_type()` → `netlist_carpentry.Module.refine_instance()`
+- `netlist_carpentry.Module.replace()` → `netlist_carpentry.Module.substitute_instance()`
 
 ## FIXED
+- Fixed renaming issues that occurred for wires when renaming a modules
+- Fixed issue with black-box instances losing all connection data if no port direction is specified for the instance
+
+
+# Older Versions
+
+## 0.3.2 (2026-02-03)
+
+### ADDED
+- `netlist_carpentry.Module.reconnect()` to move the connection of one port to another, such that the first port becomes unconnected, and the second port receives the former connection of the first
+
+### FIXED
 - `netlist_carpentry.Instance.split()` was dropping reset values for D-FF
 - `netlist_carpentry.Module.change_instance_type()` was destroying previous connections
 - `netlist_carpentry.Module.change_instance_type()` was leaking memory due to excessive copying of the whole circuit
 - Issues with renaming process were fixed, where occasionally the old name remained in the port connection dictionaries
 
-
-# Older Versions
 
 ## 0.3.1 (2026-01-29)
 
