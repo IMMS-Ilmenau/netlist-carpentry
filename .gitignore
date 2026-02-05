@@ -34,4 +34,3 @@ local_files
 
 # ignore all files/dirs under any "eqy/out" chain
 **/eqy/out/**
-git_exclude
