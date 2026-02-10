@@ -49,9 +49,9 @@ class EqyWrapper:
         """
         template = """[gold]\n{gold_vsources}\n{gold_top_module}\nmemory_map\n\n[gate]\n{gate_vsources}\n{gate_top_module}\nmemory_map\n\n[strategy sat]\nuse sat\ndepth 10"""
         gold_vfiles = '\n'.join(f'read_verilog {p}' for p in gold_vfile_paths)
-        gold_top_module = 'prep -top ' + gold_top_module if gold_top_module else ''
+        gold_top_module = 'prep -top ' + gold_top_module + ' -flatten' if gold_top_module else 'prep -auto-top -flatten'
         gate_vfiles = '\n'.join(f'read_verilog {p}' for p in gate_vfile_paths)
-        gate_top_module = 'prep -top ' + gate_top_module if gate_top_module else ''
+        gate_top_module = 'prep -top ' + gate_top_module + ' -flatten' if gate_top_module else 'prep -auto-top -flatten'
         return template.format(gold_vsources=gold_vfiles, gold_top_module=gold_top_module, gate_vsources=gate_vfiles, gate_top_module=gate_top_module)
 
     def proc(self, gold_path: str, gold_top_module: str, gate_path: str, gate_top_module: str) -> None:

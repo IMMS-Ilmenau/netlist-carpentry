@@ -37,10 +37,10 @@ def test_create_eqy_file() -> None:
     gold_sec = content[: content.find('[gate]')]
     assert 'read_verilog input_file1.v\n' in gold_sec
     assert 'read_verilog input_file2.v\n' in gold_sec
-    assert 'prep -top test_top\n' in gold_sec
+    assert 'prep -top test_top -flatten\n' in gold_sec
     assert '[gate]' in content
     gate_sec = content[content.find('[gate]') : content.find('[strategy sat]')]
-    assert '[gate]\n\n\nmemory_map\n\n' == gate_sec
+    assert '[gate]\n\nprep -auto-top -flatten\nmemory_map\n\n' == gate_sec
     assert '[strategy sat]' in content
     strat_sec = content[content.find('[strategy sat]') :]
     assert '[strategy sat]\nuse sat\ndepth 10' == strat_sec
@@ -55,7 +55,7 @@ def test_decentral_mux_eqy_creation() -> None:
     eqy.create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
     with open(eqy_path) as f:
         found_str = f.read()
-    target_str = '[gold]\nread_verilog tests/files/decentral_mux.v\nprep -top decentral_mux\nmemory_map\n\n[gate]\nread_verilog tests/files/gen/test_write_py2v_examples.test_decentral_mux.v\nprep -top decentral_mux\nmemory_map\n\n[strategy sat]\nuse sat\ndepth 10'
+    target_str = '[gold]\nread_verilog tests/files/decentral_mux.v\nprep -top decentral_mux -flatten\nmemory_map\n\n[gate]\nread_verilog tests/files/gen/test_write_py2v_examples.test_decentral_mux.v\nprep -top decentral_mux -flatten\nmemory_map\n\n[strategy sat]\nuse sat\ndepth 10'
 
     assert target_str == found_str
     # Remove generated file if test passes, so it is only kept for analysis if the test fails
