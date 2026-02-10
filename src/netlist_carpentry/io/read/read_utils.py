@@ -63,10 +63,10 @@ def read(
         out_path = Path(out) if out else Path(tmpdirname)
         script_path = out_path / 'gen_json.sh'
         json_path = out_path / f'{paths[0].stem}.json'
-        LOG.info(f'Generating Yosys netlist from {len(paths)} files...')
+        LOG.debug(f'Generating Yosys netlist from {len(paths)} files...')
         start = time()
         gen_process = build_and_execute(script_path, paths, json_path, verbose=verbose, top=top)
-        LOG.info(f'Generated Yosys netlist from {len(paths)} files in {round(time() - start, 2)}s!')
+        LOG.debug(f'Generated Yosys netlist from {len(paths)} files in {round(time() - start, 2)}s!')
         if gen_process.stderr:
             for err in gen_process.stderr.decode().splitlines():
                 LOG.error(err)

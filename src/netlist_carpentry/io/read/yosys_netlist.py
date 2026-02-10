@@ -199,10 +199,10 @@ class YosysNetlistReader(AbstractReader):
         )
 
     def transform_to_circuit(self, name: str = '') -> Circuit:
-        LOG.info(f'Reading Yosys netlist from file {self.path}...')
+        LOG.debug(f'Reading Yosys netlist from file {self.path}...')
         start = time()
         modules_dict = self.read()
-        LOG.info(f'Read Yosys netlist from file {self.path} in {round(time() - start, 2)}s!')
+        LOG.debug(f'Read Yosys netlist from file {self.path} in {round(time() - start, 2)}s!')
         if not name:
             name = str(self.path)
         self.circuit = Circuit(name=name)
@@ -213,13 +213,13 @@ class YosysNetlistReader(AbstractReader):
         self._module_definitions.update(modules_dict.keys())
         for mname in modules_dict:
             s = time()
-            LOG.info(f'Building module {mname}...')
+            LOG.debug(f'Building module {mname}...')
             circuit.add_module(self._populate_module(Module(raw_path=mname), modules_dict[mname]))
             # TODO check for multiple top modules!
             if 'attributes' in modules_dict[mname] and 'top' in modules_dict[mname]['attributes']:
-                LOG.info(f'Setting module {mname} as new top module as specified in the netlist!')
+                LOG.debug(f'Setting module {mname} as new top module as specified in the netlist!')
                 circuit.set_top(mname)
-            LOG.info(f'Built module {mname} in {round(time() - s, 2)}s!')
+            LOG.debug(f'Built module {mname} in {round(time() - s, 2)}s!')
         return circuit
 
     def _populate_module(self, module: Module, module_dict: YosysModule) -> Module:
