@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import List, Optional
 
 
-class EqyWrapper:
+class EquivalenceChecking:
     """
-    Wrapper class for running Yosys EQY to prove the logical equivalence of two Verilog designs.
-    It generates a .eqy script from a template and executes it using the Yosys EQY tool.
+    Wrapper class for executing equivalence checks (e.g. via Yosys EQY or the equiv_* passes)
+    to prove the logical equivalence of two Verilog designs.
+    It handles all setup and execution of the equivalence checks and provides methods for running them.
     """
 
     def __init__(self, path: str, overwrite: bool = False):

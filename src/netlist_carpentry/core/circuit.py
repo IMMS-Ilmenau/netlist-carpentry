@@ -34,7 +34,7 @@ from netlist_carpentry.core.netlist_elements.segment_base import _Segment
 from netlist_carpentry.core.netlist_elements.wire import Wire
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
 from netlist_carpentry.core.protocols.signals import LogicLevel
-from netlist_carpentry.scripts.eqy_check import EqyWrapper
+from netlist_carpentry.scripts.equivalence_checking import EquivalenceChecking
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.log import LOG
 
@@ -593,7 +593,7 @@ class Circuit(BaseModel):
         generate_script = not eqy_script_path  # If no path is provided, generate the eqy script
         if not eqy_script_path:
             eqy_script_path = out_dir + '/script.eqy'
-        eqy = EqyWrapper(eqy_script_path, overwrite=True)
+        eqy = EquivalenceChecking(eqy_script_path, overwrite=True)
         output_vfile = f'{out_dir}/{self.name}_out.v'
         self.write(output_vfile, overwrite=True)
         if not gold_top_module:

@@ -9,23 +9,23 @@ from netlist_carpentry.core.graph.constraint import CASCADING_OR_CONSTRAINT
 from netlist_carpentry.core.graph.pattern_generator import PatternGenerator
 from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
 from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
-from netlist_carpentry.scripts.eqy_check import EqyWrapper
+from netlist_carpentry.scripts.equivalence_checking import EquivalenceChecking
 
 
 def test_eqy_basics() -> None:
-    eqy = EqyWrapper('some/path')
+    eqy = EquivalenceChecking('some/path')
     assert str(eqy.path) == 'some/path'
 
     eqy._create_eqy_file([], '', [], '')
     with pytest.raises(FileExistsError):
-        EqyWrapper('some/path')
+        EquivalenceChecking('some/path')
     if os.path.exists('some/path'):
         shutil.rmtree('some')
 
 
 def test_create_eqy_file() -> None:
     eqy_path = 'tests/files/gen/test_create_eqy_file.eqy'
-    eqy = EqyWrapper(eqy_path, overwrite=True)
+    eqy = EquivalenceChecking(eqy_path, overwrite=True)
     if os.path.exists(eqy_path):
         os.remove(eqy_path)
     eqy._create_eqy_file(['input_file1.v', 'input_file2.v'], 'test_top', [], None)
@@ -51,7 +51,7 @@ def test_create_eqy_file() -> None:
 def test_decentral_mux_eqy_creation() -> None:
     name = 'decentral_mux'
     eqy_path = f'tests/files/gen/{name}.eqy'
-    eqy = EqyWrapper(eqy_path)
+    eqy = EquivalenceChecking(eqy_path)
     eqy._create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
     with open(eqy_path) as f:
         found_str = f.read()
@@ -68,7 +68,7 @@ def test_decentral_mux_eqy_run() -> None:
     eqy_path = f'tests/files/gen/{name}.eqy'
     eqy_out = f'tests/files/gen/{name}'
     shutil.rmtree(eqy_out, ignore_errors=True)
-    eqy = EqyWrapper(eqy_path)
+    eqy = EquivalenceChecking(eqy_path)
     eqy._create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
 
     return_code = eqy.run_eqy(eqy_out)
@@ -91,7 +91,7 @@ def test_decentral_mux_eqy_run_remove() -> None:
     eqy_path = f'tests/files/gen/{name}.eqy'
     eqy_out = f'tests/files/gen/{name}'
     shutil.rmtree(eqy_out, ignore_errors=True)
-    eqy = EqyWrapper(eqy_path)
+    eqy = EquivalenceChecking(eqy_path)
     eqy._create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
 
     return_code = eqy.run_eqy(eqy_out, True)
@@ -123,7 +123,7 @@ def test_decentral_mux_pattern_replace_eqy() -> None:
     name = 'decentral_mux'
     eqy_path = f'tests/files/gen/{name}_pattern_replace.eqy'
     eqy_out = f'tests/files/gen/{name}_pattern_replace'
-    eqy = EqyWrapper(eqy_path)
+    eqy = EquivalenceChecking(eqy_path)
     eqy._create_eqy_file([f'tests/files/{name}.v'], name, ['tests/files/gen/test_eqy.test_decentral_mux_pattern_replace_eqy.v'], name)
 
     return_code = eqy.run_eqy(eqy_out, True)
