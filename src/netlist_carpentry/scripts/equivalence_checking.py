@@ -135,3 +135,33 @@ class EquivalenceChecking:
                 [f'{dir_path}/eqy.sh', str(self.path.resolve()), str(Path(workdir).resolve())], stdout=stdout, stderr=stderr
             )
         return return_code
+
+
+def run_equiv(
+    gold_vfile_path: str,
+    gate_vfile_path: str,
+    gold_top_module: str,
+    gate_top_module: str,
+    quiet: bool = False,
+) -> subprocess.CompletedProcess[bytes]:
+    """
+    Runs a predefined script using the equiv_* passes from Yosys to prove the logical equivalence of the Verilog designs for the given Verilog designs.
+
+    The gold Verilog file is the golden reference design, while the gate Verilog file is the synthesized (gate-level) design.
+    In the scope of this framework, the gate design refers to the modified or optimized version of the original design.
+
+    Args:
+        gold_vfile_path (str): The file path to the gold Verilog file.
+        gate_vfile_path (str): The file path to the gate Verilog file.
+        gold_top_module (str): The top module name for the gold design.
+        gate_top_module (str): The top module name for the gate design.
+        quiet (bool, optional): If True, suppresses all Yosys output. If False, prints all Yosys output to the console. Defaults to False.
+
+    Returns:
+        subprocess.CompletedProcess: The result of the execution plus some metadata.
+    """
+    dir_path = os.path.dirname(os.path.abspath(__file__))
+    script_path = f'{dir_path}/equiv.sh'
+    stdout = subprocess.PIPE if quiet else None
+    stderr = subprocess.PIPE if quiet else None
+    return subprocess.run([script_path, gold_vfile_path, gold_top_module, gate_vfile_path, gate_top_module], stdout=stdout, stderr=stderr)

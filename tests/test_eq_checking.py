@@ -9,7 +9,7 @@ from netlist_carpentry.core.graph.constraint import CASCADING_OR_CONSTRAINT
 from netlist_carpentry.core.graph.pattern_generator import PatternGenerator
 from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
 from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
-from netlist_carpentry.scripts.equivalence_checking import EquivalenceChecking
+from netlist_carpentry.scripts.equivalence_checking import EquivalenceChecking, run_equiv
 
 
 def test_eqy_basics() -> None:
@@ -130,6 +130,18 @@ def test_decentral_mux_pattern_replace_eqy() -> None:
     assert return_code == 0  # Successful execution
     # Remove generated file and folder if test passes, so it is only kept for analysis if the test fails
     os.remove(eqy_path)
+
+
+def test_run_equiv_simple() -> None:
+    equiv_proc = run_equiv('tests/files/or_pattern_find.v', 'tests/files/or_pattern_replace.v', 'or_pattern_find', 'or_pattern_replace', quiet=False)
+    assert equiv_proc.returncode == 0
+    assert equiv_proc.stdout is None  # No piping, instead shown in the console
+    assert equiv_proc.stderr is None  # No piping, instead shown in the console
+
+    equiv_proc = run_equiv('tests/files/or_pattern_find.v', 'tests/files/simple_or_structure.v', 'or_pattern_find', 'simple_or_structure', quiet=True)
+    assert equiv_proc.returncode == 1
+    assert equiv_proc.stdout is not None  # Output piped to stdout variable
+    assert b'ERROR' in equiv_proc.stderr  # Errors piped to stderr variable
 
 
 if __name__ == '__main__':
