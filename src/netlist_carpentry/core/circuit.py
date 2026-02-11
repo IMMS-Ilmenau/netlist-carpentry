@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
@@ -34,7 +35,7 @@ from netlist_carpentry.core.netlist_elements.segment_base import _Segment
 from netlist_carpentry.core.netlist_elements.wire import Wire
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
 from netlist_carpentry.core.protocols.signals import LogicLevel
-from netlist_carpentry.scripts.equivalence_checking import EquivalenceChecking
+from netlist_carpentry.scripts.equivalence_checking import run_eqy
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.log import LOG
 
@@ -558,11 +559,17 @@ class Circuit(BaseModel):
         write(self, output_path, overwrite)
 
     @overload
-    def prove_equivalence(self, gold_design: List[str], out_dir: str, eqy_script_path: str = '', gold_top_module: str = '') -> int: ...
+    def prove_equivalence(
+        self, gold_design: List[str], out_dir: str, eqy_script_path: str = '', gold_top_module: str = '', quiet: bool = False
+    ) -> subprocess.CompletedProcess[bytes]: ...
     @overload
-    def prove_equivalence(self, gold_design: 'Circuit', out_dir: str, eqy_script_path: str = '', gold_top_module: str = '') -> int: ...
+    def prove_equivalence(
+        self, gold_design: 'Circuit', out_dir: str, eqy_script_path: str = '', gold_top_module: str = '', quiet: bool = False
+    ) -> subprocess.CompletedProcess[bytes]: ...
 
-    def prove_equivalence(self, gold_design: Union[List[str], 'Circuit'], out_dir: str, eqy_script_path: str = '', gold_top_module: str = '') -> int:
+    def prove_equivalence(
+        self, gold_design: Union[List[str], 'Circuit'], out_dir: str, eqy_script_path: str = '', gold_top_module: str = '', quiet: bool = False
+    ) -> subprocess.CompletedProcess[bytes]:
         """
         Proves equivalence of the circuit against a set of gold Verilog files.
 
@@ -580,9 +587,11 @@ class Circuit(BaseModel):
             eqy_script_path (str, optional): The path to the eqy script. If not provided, an eqy script will be generated. Defaults to ''.
             gold_top_module (str, optional): The name of the top module in the gold Verilog files. Defaults to '',
                 in which case the top module will be inferred from this circuit object.
+            quiet (bool, optional): If True, pipes all Yosys output into the subprocess.CompletedProcess object.
+                If False, prints all Yosys output to the console. Defaults to False.
 
         Returns:
-            int: The return code of the eqy tool.
+            subprocess.CompletedProcess: The result of the execution plus some metadata.
         """
         if isinstance(gold_design, Circuit):
             out_file = f'{out_dir}/{gold_design.name}_out.v'
@@ -590,18 +599,13 @@ class Circuit(BaseModel):
             gold_design = [out_file]
         eqy_out = out_dir + '/out'
         Path(eqy_out).mkdir(parents=True, exist_ok=True)
-        generate_script = not eqy_script_path  # If no path is provided, generate the eqy script
         if not eqy_script_path:
             eqy_script_path = out_dir + '/script.eqy'
-        eqy = EquivalenceChecking(eqy_script_path, overwrite=True)
         output_vfile = f'{out_dir}/{self.name}_out.v'
         self.write(output_vfile, overwrite=True)
         if not gold_top_module:
             gold_top_module = self.top_name
-        if generate_script:
-            eqy._create_eqy_file(gold_design, gold_top_module, [output_vfile], self.top_name)
-        eqy.proc(gold_design[0], gold_top_module, output_vfile, self.top_name)
-        return eqy.run_eqy(gold_design, [output_vfile], gold_top_module, self.top_name, eqy_out, overwrite=True)
+        return run_eqy(gold_design, [output_vfile], gold_top_module, self.top_name, eqy_script_path, eqy_out, overwrite=True, quiet=quiet)
 
     def optimize(self) -> bool:
         """

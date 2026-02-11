@@ -4,31 +4,31 @@ import shutil
 import pytest
 from utils import save_results
 
-from netlist_carpentry import read
+from netlist_carpentry import read, run_equiv, run_eqy
 from netlist_carpentry.core.graph.constraint import CASCADING_OR_CONSTRAINT
 from netlist_carpentry.core.graph.pattern_generator import PatternGenerator
 from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
 from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
-from netlist_carpentry.scripts.equivalence_checking import EquivalenceChecking, run_equiv
+from netlist_carpentry.scripts.equivalence_checking import EquivalenceChecking
 
 
 def test_eqy_basics() -> None:
-    eqy = EquivalenceChecking('some/path')
-    assert str(eqy.path) == 'some/path'
+    eqy = EquivalenceChecking([], '', [], '', 'some/path')
+    assert str(eqy.script_path) == 'some/path'
 
-    eqy._create_eqy_file([], '', [], '')
+    eqy._create_eqy_file()
     with pytest.raises(FileExistsError):
-        EquivalenceChecking('some/path')
+        eqy._create_eqy_file()
     if os.path.exists('some/path'):
         shutil.rmtree('some')
 
 
 def test_create_eqy_file() -> None:
     eqy_path = 'tests/files/gen/test_create_eqy_file.eqy'
-    eqy = EquivalenceChecking(eqy_path, overwrite=True)
+    eqy = EquivalenceChecking(['input_file1.v', 'input_file2.v'], 'test_top', [], None, eqy_path)
     if os.path.exists(eqy_path):
         os.remove(eqy_path)
-    eqy._create_eqy_file(['input_file1.v', 'input_file2.v'], 'test_top', [], None)
+    eqy._create_eqy_file(overwrite=True)
     assert os.path.exists(eqy_path)
     with open(eqy_path) as f:
         content = f.read()
@@ -51,8 +51,8 @@ def test_create_eqy_file() -> None:
 def test_decentral_mux_eqy_creation() -> None:
     name = 'decentral_mux'
     eqy_path = f'tests/files/gen/{name}.eqy'
-    eqy = EquivalenceChecking(eqy_path)
-    eqy._create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
+    eqy = EquivalenceChecking([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name, eqy_path)
+    eqy._create_eqy_file()
     with open(eqy_path) as f:
         found_str = f.read()
     target_str = '[gold]\nread_verilog tests/files/decentral_mux.v\nprep -top decentral_mux -flatten\nmemory_map\n\n[gate]\nread_verilog tests/files/gen/test_write_py2v_examples.test_decentral_mux.v\nprep -top decentral_mux -flatten\nmemory_map\n\n[strategy sat]\nuse sat\ndepth 10'
@@ -62,43 +62,29 @@ def test_decentral_mux_eqy_creation() -> None:
     os.remove(eqy_path)
 
 
-@pytest.mark.skip  # @pytest.mark.skipif(os.environ.get('CI_SKIP_EQY') == 'true', reason='EQY missing in CI')
+@pytest.mark.skipif(os.environ.get('CI_SKIP_EQY') == 'true', reason='EQY missing in CI')
 def test_decentral_mux_eqy_run() -> None:
     name = 'decentral_mux'
     eqy_path = f'tests/files/gen/{name}.eqy'
     eqy_out = f'tests/files/gen/{name}'
     shutil.rmtree(eqy_out, ignore_errors=True)
-    eqy = EquivalenceChecking(eqy_path)
-    eqy._create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
+    eqy = EquivalenceChecking([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name, eqy_path)
 
-    return_code = eqy.run_eqy(eqy_out)
-    assert return_code == 0  # Successful execution
+    process = eqy.run_eqy(eqy_out)
+    assert process.returncode == 0  # Successful execution
     assert os.path.exists(eqy_out)
 
-    return_code = eqy.run_eqy(eqy_out, overwrite=True)
-    assert return_code == 0  # Successful execution
+    # Now use "standalone" function, and check overwrite param
+    process = run_eqy(
+        [f'tests/files/{name}.v'], [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name, name, eqy_path, eqy_out, overwrite=True
+    )
+    assert process.returncode == 0  # Successful execution
     assert os.path.exists(eqy_out)
 
     # Remove generated file and folder if test passes, so it is only kept for analysis if the test fails
     os.remove(eqy_path)
     shutil.rmtree(eqy_out, ignore_errors=True)
     assert not os.path.exists(eqy_out)
-
-
-@pytest.mark.skip  # @pytest.mark.skipif(os.environ.get('CI_SKIP_EQY') == 'true', reason='EQY missing in CI')
-def test_decentral_mux_eqy_run_remove() -> None:
-    name = 'decentral_mux'
-    eqy_path = f'tests/files/gen/{name}.eqy'
-    eqy_out = f'tests/files/gen/{name}'
-    shutil.rmtree(eqy_out, ignore_errors=True)
-    eqy = EquivalenceChecking(eqy_path)
-    eqy._create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
-
-    return_code = eqy.run_eqy(eqy_out, True)
-    assert return_code == 0  # Successful execution
-    assert not os.path.exists(eqy_out)
-    # Remove generated file and folder if test passes, so it is only kept for analysis if the test fails
-    os.remove(eqy_path)
 
 
 @pytest.mark.skip  # @pytest.mark.skipif(os.environ.get('CI_SKIP_EQY') == 'true', reason='EQY missing in CI')

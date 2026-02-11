@@ -597,15 +597,13 @@ def test_write(connected_circuit: Circuit) -> None:
 def test_prove_equivalence(connected_circuit: Circuit) -> None:
     vpath = 'tests/files/gen/connected_circuit.v'
     connected_circuit.write(vpath, True)
-    return_code = connected_circuit.prove_equivalence([vpath], 'tests/files/gen/eqy_out')
+    process = connected_circuit.prove_equivalence([vpath], 'tests/files/gen/eqy_out')
 
-    assert return_code == 0
+    assert process.returncode == 0
 
-    return_code = connected_circuit.prove_equivalence([vpath], 'tests/files/gen/eqy_out', 'invalid_path')
-    assert return_code == 2
-
-    return_code = connected_circuit.prove_equivalence([vpath], 'tests/files/gen/eqy_out', gold_top_module='nonexisting_module')
-    assert return_code == 1
+    process = connected_circuit.prove_equivalence([vpath], 'tests/files/gen/eqy_out', gold_top_module='nonexisting_module', quiet=True)
+    assert process.returncode == 1
+    assert b'ERROR: Reading sources failed' in process.stderr
 
 
 @pytest.mark.skipif(os.environ.get('CI_SKIP_EQY') == 'true', reason='EQY missing in CI')
@@ -613,9 +611,9 @@ def test_prove_equivalence_other_circuit(connected_circuit: Circuit) -> None:
     vpath = 'tests/files/gen/connected_circuit.v'
     other_circuit = read(vpath)
     connected_circuit.write(vpath, True)
-    return_code = connected_circuit.prove_equivalence(other_circuit, 'tests/files/gen/eqy_out')
+    process = connected_circuit.prove_equivalence(other_circuit, 'tests/files/gen/eqy_out')
 
-    assert return_code == 0
+    assert process.returncode == 0
 
 
 def test_optimize(connected_circuit: Circuit) -> None:
