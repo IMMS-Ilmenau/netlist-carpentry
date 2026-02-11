@@ -426,6 +426,7 @@ def test_refine_instance(dff_module: Module) -> None:
     assert not isinstance(dff2, DFF)
 
     assert dff.ports == dff2.ports
+    assert dff2.parameters == {'WIDTH': 4}
     for p in dff.ports.values():
         assert p.is_unconnected
     for p in dff2.ports.values():
