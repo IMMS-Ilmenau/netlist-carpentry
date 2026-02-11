@@ -11,8 +11,7 @@ from typing import List, Optional
 
 class EquivalenceChecking:
     """
-    Wrapper class for executing equivalence checks (e.g. via Yosys EQY or the equiv_* passes)
-    to prove the logical equivalence of two Verilog designs.
+    Wrapper class for executing equivalence checks via Yosys EQY to prove the logical equivalence of two Verilog designs.
     It handles all setup and execution of the equivalence checks and provides methods for running them.
     """
 
@@ -25,7 +24,7 @@ class EquivalenceChecking:
         script_path: str,
     ):
         """
-        Initializes the EqyWrapper with the desired file path for the Yosys EQY script.
+        Initializes the EQY Wrapper class with the desired file path for the Yosys EQY script.
 
         Args:
             script_path (str): The path (including the desired file name) to the directory where the .eqy script will be saved.
@@ -68,13 +67,6 @@ class EquivalenceChecking:
         gate_vfiles = '\n'.join(f'read_verilog {p}' for p in self.gate_vfile_paths)
         gate_top_module = 'prep -top ' + self.gate_top_module + ' -flatten' if self.gate_top_module is not None else 'prep -auto-top -flatten'
         return template.format(gold_vsources=gold_vfiles, gold_top_module=gold_top_module, gate_vsources=gate_vfiles, gate_top_module=gate_top_module)
-
-    def proc(self, gold_path: str, gold_top_module: str, gate_path: str, gate_top_module: str) -> None:
-        dir_path = os.path.dirname(os.path.abspath(__file__))
-        script_path = f'{dir_path}/eqy_proc.sh'
-        subprocess.call(['chmod', 'u+x', script_path])
-        subprocess.call([script_path, gold_path, gold_top_module], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.call([script_path, gate_path, gate_top_module], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def _create_eqy_file(self, overwrite: bool = False) -> None:
         """
