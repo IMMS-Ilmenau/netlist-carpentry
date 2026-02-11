@@ -1,13 +1,20 @@
 # Changelog 0.3.3
 
+## ADDED
+- `netlist_carpentry.scripts.equivalence_checking.run_equiv()` to execute an equivalence check via Yosys equiv_* passes, as a more stable alternative to EQY (import via `from netlist_carpentry import run_equiv`)
+- `netlist_carpentry.scripts.equivalence_checking.run_eqy()` as a standalone function to skip the creation of the Wrapper class (import via `from netlist_carpentry import run_eqy`)
+
 ## CHANGED
 - `netlist_carpentry.Module.change_instance_type()` → `netlist_carpentry.Module.refine_instance()`
 - `netlist_carpentry.Module.replace()` → `netlist_carpentry.Module.substitute_instance()`
+- `netlist_carpentry.scripts.eqy_check` → `netlist_carpentry.scripts.equivalence_checking`
+- `netlist_carpentry.scripts.eqy_check.EqyWrapper` → `netlist_carpentry.scripts.equivalence_checking.EquivalenceChecking`
+- Whole interface of `netlist_carpentry.scripts.equivalence_checking.EquivalenceChecking` has been rewritten, the methods still mainly exist, but now use `netlist_carpentry.run_eqy()` instead of the class-related methods - this is far more convenient
 
 ## FIXED
 - Fixed renaming issues that occurred for wires when renaming a modules
 - Fixed issue with black-box instances losing all connection data if no port direction is specified for the instance
-
+- Fixed some issues with EQY by flattening the design inside the EQY process
 
 # Older Versions
 
