@@ -2,4 +2,8 @@
 
 import os
 
+from .equivalence_checking import run_equiv
+
 NC_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+__all__ = ['NC_SCRIPTS_DIR', 'run_equiv']
