@@ -599,9 +599,9 @@ class Circuit(BaseModel):
         if not gold_top_module:
             gold_top_module = self.top_name
         if generate_script:
-            eqy.create_eqy_file(gold_design, gold_top_module, [output_vfile], self.top_name)
+            eqy._create_eqy_file(gold_design, gold_top_module, [output_vfile], self.top_name)
         eqy.proc(gold_design[0], gold_top_module, output_vfile, self.top_name)
-        return eqy.run_eqy(eqy_out, overwrite=True)
+        return eqy.run_eqy(gold_design, [output_vfile], gold_top_module, self.top_name, eqy_out, overwrite=True)
 
     def optimize(self) -> bool:
         """

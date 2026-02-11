@@ -16,7 +16,7 @@ def test_eqy_basics() -> None:
     eqy = EqyWrapper('some/path')
     assert str(eqy.path) == 'some/path'
 
-    eqy.create_eqy_file([], '', [], '')
+    eqy._create_eqy_file([], '', [], '')
     with pytest.raises(FileExistsError):
         EqyWrapper('some/path')
     if os.path.exists('some/path'):
@@ -28,7 +28,7 @@ def test_create_eqy_file() -> None:
     eqy = EqyWrapper(eqy_path, overwrite=True)
     if os.path.exists(eqy_path):
         os.remove(eqy_path)
-    eqy.create_eqy_file(['input_file1.v', 'input_file2.v'], 'test_top', [], '')
+    eqy._create_eqy_file(['input_file1.v', 'input_file2.v'], 'test_top', [], None)
     assert os.path.exists(eqy_path)
     with open(eqy_path) as f:
         content = f.read()
@@ -52,7 +52,7 @@ def test_decentral_mux_eqy_creation() -> None:
     name = 'decentral_mux'
     eqy_path = f'tests/files/gen/{name}.eqy'
     eqy = EqyWrapper(eqy_path)
-    eqy.create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
+    eqy._create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
     with open(eqy_path) as f:
         found_str = f.read()
     target_str = '[gold]\nread_verilog tests/files/decentral_mux.v\nprep -top decentral_mux -flatten\nmemory_map\n\n[gate]\nread_verilog tests/files/gen/test_write_py2v_examples.test_decentral_mux.v\nprep -top decentral_mux -flatten\nmemory_map\n\n[strategy sat]\nuse sat\ndepth 10'
@@ -69,7 +69,7 @@ def test_decentral_mux_eqy_run() -> None:
     eqy_out = f'tests/files/gen/{name}'
     shutil.rmtree(eqy_out, ignore_errors=True)
     eqy = EqyWrapper(eqy_path)
-    eqy.create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
+    eqy._create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
 
     return_code = eqy.run_eqy(eqy_out)
     assert return_code == 0  # Successful execution
@@ -92,7 +92,7 @@ def test_decentral_mux_eqy_run_remove() -> None:
     eqy_out = f'tests/files/gen/{name}'
     shutil.rmtree(eqy_out, ignore_errors=True)
     eqy = EqyWrapper(eqy_path)
-    eqy.create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
+    eqy._create_eqy_file([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name)
 
     return_code = eqy.run_eqy(eqy_out, True)
     assert return_code == 0  # Successful execution
@@ -124,7 +124,7 @@ def test_decentral_mux_pattern_replace_eqy() -> None:
     eqy_path = f'tests/files/gen/{name}_pattern_replace.eqy'
     eqy_out = f'tests/files/gen/{name}_pattern_replace'
     eqy = EqyWrapper(eqy_path)
-    eqy.create_eqy_file([f'tests/files/{name}.v'], name, ['tests/files/gen/test_eqy.test_decentral_mux_pattern_replace_eqy.v'], name)
+    eqy._create_eqy_file([f'tests/files/{name}.v'], name, ['tests/files/gen/test_eqy.test_decentral_mux_pattern_replace_eqy.v'], name)
 
     return_code = eqy.run_eqy(eqy_out, True)
     assert return_code == 0  # Successful execution
