@@ -6,7 +6,7 @@ import copy
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union, overload
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union, overload
 from uuid import uuid4
 
 from dash import Dash
@@ -47,16 +47,12 @@ from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2O
 from netlist_carpentry.utils.cfg import CFG
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.custom_list import CustomList
-from netlist_carpentry.utils.gate_lib_dataclasses import TypedParams
 
 T_NETLIST_ELEMENT = TypeVar('T_NETLIST_ELEMENT', bound=NetlistElement)
 T_INSTANCE = TypeVar('T_INSTANCE', bound=Instance)
 T_PORT = Union[Port['Module'], Port[Instance]]
 ANY_SIGNAL_SOURCE = Union[PortSegmentPath, PortPath, PortSegment, T_PORT, WireSegmentPath, WireSegment, Wire]
 ANY_SIGNAL_TARGET = Union[PortSegmentPath, PortPath, PortSegment, T_PORT]
-
-if TYPE_CHECKING:
-    pass
 
 
 class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin, NetlistElement, BaseModel):
@@ -90,19 +86,19 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         instance.module = self
         if self.has_circuit:
             self.circuit.instances[instance.instance_type].append(instance.path)
-        return self.instances.add(instance.name, instance, locked=self.locked)
+        return self.instances.add(instance.name, instance, locked=self.locked)  # type: ignore[return-value]
 
     @overload
     def create_instance(
-        self, interface_definition: Type[T_INSTANCE], instance_name: Optional[str] = None, params: Optional[TypedParams] = None
+        self, interface_definition: Type[T_INSTANCE], instance_name: Optional[str] = None, params: Optional[Dict[str, object]] = None
     ) -> T_INSTANCE: ...
     @overload
     def create_instance(
-        self, interface_definition: Module, instance_name: Optional[str] = None, params: Optional[TypedParams] = None
+        self, interface_definition: Module, instance_name: Optional[str] = None, params: Optional[Dict[str, object]] = None
     ) -> Instance: ...
 
     def create_instance(
-        self, interface_definition: Union[Module, Type[T_INSTANCE]], instance_name: Optional[str] = None, params: Optional[TypedParams] = None
+        self, interface_definition: Union[Module, Type[T_INSTANCE]], instance_name: Optional[str] = None, params: Optional[Dict[str, object]] = None
     ) -> Instance:
         """
         Creates an instance within this module based on the given interface definition, instance name and parameters.
@@ -131,11 +127,11 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             instance_name = self._get_generic_inst_name(interface_definition)
         if isinstance(interface_definition, Module):
             inst = Instance(raw_path=self.raw_path + self.path.sep + instance_name, instance_type=interface_definition.name, module=self)
-            inst.parameters = params
+            inst.parameters = params  # type: ignore
             for pname, p in interface_definition.ports.items():
                 inst.connect(pname, ws_path=None, direction=p.direction, width=p.width)
         else:
-            inst = interface_definition(raw_path=self.raw_path + self.path.sep + instance_name, module=self, parameters=params)
+            inst = interface_definition(raw_path=self.raw_path + self.path.sep + instance_name, module=self, parameters=params)  # type: ignore
         return self.add_instance(inst)
 
     def _get_generic_inst_name(self, module_or_inst_cls: Union[Module, Type[Instance]]) -> str:
