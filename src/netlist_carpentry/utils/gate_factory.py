@@ -479,6 +479,39 @@ def demultiplexer(
     return gate
 
 
+def adder(
+    module: M,
+    inst_name: Optional[str] = None,
+    A: Optional[PORT] = None,
+    B: Optional[PORT] = None,
+    Y: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.Adder:
+    return _bin_gate(g.Adder, module, inst_name, A, B, Y, params)
+
+
+def subtractor(
+    module: M,
+    inst_name: Optional[str] = None,
+    A: Optional[PORT] = None,
+    B: Optional[PORT] = None,
+    Y: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.Subtractor:
+    return _bin_gate(g.Subtractor, module, inst_name, A, B, Y, params)
+
+
+def multiplier(
+    module: M,
+    inst_name: Optional[str] = None,
+    A: Optional[PORT] = None,
+    B: Optional[PORT] = None,
+    Y: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.Multiplier:
+    return _bin_gate(g.Multiplier, module, inst_name, A, B, Y, params)
+
+
 ### ARITHMETIC GATES !!!
 
 

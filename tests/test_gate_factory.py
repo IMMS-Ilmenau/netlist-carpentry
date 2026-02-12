@@ -498,6 +498,24 @@ def test_demultiplexer(module: Module) -> None:
     assert g.ports['Y3'].connected_wires == module.ports['Y3'].connected_wires
 
 
+def test_adder(module: Module) -> None:
+    g = factory.adder(module)
+    assert isinstance(g, lib.Adder)
+    assert g.name == '_Adder_0_'
+
+
+def test_subtractor(module: Module) -> None:
+    g = factory.subtractor(module)
+    assert isinstance(g, lib.Subtractor)
+    assert g.name == '_Subtractor_0_'
+
+
+def test_multiplier(module: Module) -> None:
+    g = factory.multiplier(module)
+    assert isinstance(g, lib.Multiplier)
+    assert g.name == '_Multiplier_0_'
+
+
 def test_dff_gate(module: Module) -> None:
     module.create_port('P4', direction=Direction.OUT)
     with pytest.raises(WidthMismatchError):
