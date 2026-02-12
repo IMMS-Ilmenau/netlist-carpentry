@@ -14,6 +14,7 @@ from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
 from netlist_carpentry import CFG, LOG, Direction, Instance, Module, Port, Signal
+from netlist_carpentry.core.exceptions import EvaluationError
 from netlist_carpentry.core.netlist_elements.port import ANY_PORT
 from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2OBJ, WIRE_SEGMENT_X, WireSegment
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
@@ -500,6 +501,26 @@ class ArithmeticGate(PrimitiveGate, BaseModel):
     parameters: BinaryParams = {}
 
     @property
+    def input_ports(self) -> Tuple[Port[Instance], Port[Instance]]:
+        """
+        The input ports of the gate.
+
+        Returns:
+            Tuple[Port, Port]: The input ports of the gate.
+        """
+        return (self.ports['A'], self.ports['B'])
+
+    @property
+    def output_port(self) -> Port[Instance]:
+        """
+        The output port of the gate.
+
+        Returns:
+            Port: The output port of the gate.
+        """
+        return self.ports['Y']
+
+    @property
     def a_signed(self) -> bool:
         """The signedness of input port A."""
         return self._fix_signedness_mismatch('A', 'A_SIGNED')
@@ -572,6 +593,14 @@ class ArithmeticGate(PrimitiveGate, BaseModel):
         self.parameters['B_SIGNED'] = self.ports['B'].signed
         self.parameters['Y_WIDTH'] = self.data_width
         return self.parameters
+
+    def inputs_int(self) -> Tuple[int, int]:
+        if self.input_ports[0].has_undefined_signals or self.input_ports[1].has_undefined_signals:
+            err = f'Cannot calculate output signal for {self.__class__.__name__} {self.raw_path}: one of the inputs contain undefined signal values!'
+            raise EvaluationError(err)
+        sig1_int = Signal.dict_to_int(self.input_ports[0].signal_array, signed=self.a_signed)
+        sig2_int = Signal.dict_to_int(self.input_ports[1].signal_array, signed=self.b_signed)
+        return sig1_int, sig2_int
 
 
 class BinaryNto1Gate(BinaryGate, BaseModel):

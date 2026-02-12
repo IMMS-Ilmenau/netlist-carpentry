@@ -18,7 +18,6 @@ from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
 from netlist_carpentry import CFG, Direction, Instance, Port, Signal
-from netlist_carpentry.core.exceptions import EvaluationError
 from netlist_carpentry.utils.gate_lib_base_classes import (
     ArithmeticGate,
     BinaryGate,
@@ -1309,26 +1308,6 @@ class Adder(ArithmeticGate, BaseModel):
     instance_type: str = f'{CFG.id_internal}add'
 
     @property
-    def input_ports(self) -> Tuple[Port[Instance], Port[Instance]]:
-        """
-        The input ports of the gate.
-
-        Returns:
-            Tuple[Port, Port]: The input ports of the gate.
-        """
-        return (self.ports['A'], self.ports['B'])
-
-    @property
-    def output_port(self) -> Port[Instance]:
-        """
-        The output port of the gate.
-
-        Returns:
-            Port: The output port of the gate.
-        """
-        return self.ports['Y']
-
-    @property
     def verilog_template(self) -> str:
         return 'assign {out} = {in1} + {in2};'
 
@@ -1338,38 +1317,13 @@ class Adder(ArithmeticGate, BaseModel):
 
         For an ADD gate, the output signal is the sum of both input signals.
         """
-        if self.input_ports[0].has_undefined_signals or self.input_ports[1].has_undefined_signals:
-            err = f'Cannot calculate output signal for {self.__class__.__name__} {self.raw_path}: one of the inputs contain undefined signal values!'
-            raise EvaluationError(err)
-        sig1_int = Signal.dict_to_int(self.input_ports[0].signal_array, signed=self.a_signed)
-        sig2_int = Signal.dict_to_int(self.input_ports[1].signal_array, signed=self.b_signed)
+        sig1_int, sig2_int = self.inputs_int()
 
-        sig_sum = Signal.from_int(sig1_int + sig2_int, fixed_width=self.output_port.width)
-        return sig_sum
+        return Signal.from_int(sig1_int + sig2_int, fixed_width=self.output_port.width)
 
 
 class Subtractor(ArithmeticGate, BaseModel):
     instance_type: str = f'{CFG.id_internal}sub'
-
-    @property
-    def input_ports(self) -> Tuple[Port[Instance], Port[Instance]]:
-        """
-        The input ports of the gate.
-
-        Returns:
-            Tuple[Port, Port]: The input ports of the gate.
-        """
-        return (self.ports['A'], self.ports['B'])
-
-    @property
-    def output_port(self) -> Port[Instance]:
-        """
-        The output port of the gate.
-
-        Returns:
-            Port: The output port of the gate.
-        """
-        return self.ports['Y']
 
     @property
     def verilog_template(self) -> str:
@@ -1381,38 +1335,13 @@ class Subtractor(ArithmeticGate, BaseModel):
 
         For an SUB gate, the output signal is the first input signal minus the second input signal.
         """
-        if self.input_ports[0].has_undefined_signals or self.input_ports[1].has_undefined_signals:
-            err = f'Cannot calculate output signal for {self.__class__.__name__} {self.raw_path}: one of the inputs contain undefined signal values!'
-            raise EvaluationError(err)
-        sig1_int = Signal.dict_to_int(self.input_ports[0].signal_array, signed=self.a_signed)
-        sig2_int = Signal.dict_to_int(self.input_ports[1].signal_array, signed=self.b_signed)
+        sig1_int, sig2_int = self.inputs_int()
 
-        sig_sum = Signal.from_int(sig1_int - sig2_int, fixed_width=self.output_port.width)
-        return sig_sum
+        return Signal.from_int(sig1_int - sig2_int, fixed_width=self.output_port.width)
 
 
 class Multiplier(ArithmeticGate, BaseModel):
     instance_type: str = f'{CFG.id_internal}mul'
-
-    @property
-    def input_ports(self) -> Tuple[Port[Instance], Port[Instance]]:
-        """
-        The input ports of the gate.
-
-        Returns:
-            Tuple[Port, Port]: The input ports of the gate.
-        """
-        return (self.ports['A'], self.ports['B'])
-
-    @property
-    def output_port(self) -> Port[Instance]:
-        """
-        The output port of the gate.
-
-        Returns:
-            Port: The output port of the gate.
-        """
-        return self.ports['Y']
 
     @property
     def verilog_template(self) -> str:
@@ -1424,38 +1353,13 @@ class Multiplier(ArithmeticGate, BaseModel):
 
         For a MUL gate, the output signal is the product of both input signals.
         """
-        if self.input_ports[0].has_undefined_signals or self.input_ports[1].has_undefined_signals:
-            err = f'Cannot calculate output signal for {self.__class__.__name__} {self.raw_path}: one of the inputs contain undefined signal values!'
-            raise EvaluationError(err)
-        sig1_int = Signal.dict_to_int(self.input_ports[0].signal_array, signed=self.a_signed)
-        sig2_int = Signal.dict_to_int(self.input_ports[1].signal_array, signed=self.b_signed)
+        sig1_int, sig2_int = self.inputs_int()
 
-        sig_sum = Signal.from_int(sig1_int * sig2_int, fixed_width=self.output_port.width)
-        return sig_sum
+        return Signal.from_int(sig1_int * sig2_int, fixed_width=self.output_port.width)
 
 
 class Divider(ArithmeticGate, BaseModel):
     instance_type: str = f'{CFG.id_internal}div'
-
-    @property
-    def input_ports(self) -> Tuple[Port[Instance], Port[Instance]]:
-        """
-        The input ports of the gate.
-
-        Returns:
-            Tuple[Port, Port]: The input ports of the gate.
-        """
-        return (self.ports['A'], self.ports['B'])
-
-    @property
-    def output_port(self) -> Port[Instance]:
-        """
-        The output port of the gate.
-
-        Returns:
-            Port: The output port of the gate.
-        """
-        return self.ports['Y']
 
     @property
     def verilog_template(self) -> str:
@@ -1467,38 +1371,13 @@ class Divider(ArithmeticGate, BaseModel):
 
         For a DIV gate, the output signal is the truncated division of both input signals.
         """
-        if self.input_ports[0].has_undefined_signals or self.input_ports[1].has_undefined_signals:
-            err = f'Cannot calculate output signal for {self.__class__.__name__} {self.raw_path}: one of the inputs contain undefined signal values!'
-            raise EvaluationError(err)
-        sig1_int = Signal.dict_to_int(self.input_ports[0].signal_array, signed=self.a_signed)
-        sig2_int = Signal.dict_to_int(self.input_ports[1].signal_array, signed=self.b_signed)
+        sig1_int, sig2_int = self.inputs_int()
 
-        sig_sum = Signal.from_int(int(sig1_int / sig2_int), fixed_width=self.output_port.width)
-        return sig_sum
+        return Signal.from_int(int(sig1_int / sig2_int), fixed_width=self.output_port.width)
 
 
 class Modulo(ArithmeticGate, BaseModel):
     instance_type: str = f'{CFG.id_internal}mod'
-
-    @property
-    def input_ports(self) -> Tuple[Port[Instance], Port[Instance]]:
-        """
-        The input ports of the gate.
-
-        Returns:
-            Tuple[Port, Port]: The input ports of the gate.
-        """
-        return (self.ports['A'], self.ports['B'])
-
-    @property
-    def output_port(self) -> Port[Instance]:
-        """
-        The output port of the gate.
-
-        Returns:
-            Port: The output port of the gate.
-        """
-        return self.ports['Y']
 
     @property
     def verilog_template(self) -> str:
@@ -1510,14 +1389,9 @@ class Modulo(ArithmeticGate, BaseModel):
 
         For a MOD gate, the output signal is the modulo (remainder) of a truncating division.
         """
-        if self.input_ports[0].has_undefined_signals or self.input_ports[1].has_undefined_signals:
-            err = f'Cannot calculate output signal for {self.__class__.__name__} {self.raw_path}: one of the inputs contain undefined signal values!'
-            raise EvaluationError(err)
-        sig1_int = Signal.dict_to_int(self.input_ports[0].signal_array, signed=self.a_signed)
-        sig2_int = Signal.dict_to_int(self.input_ports[1].signal_array, signed=self.b_signed)
+        sig1_int, sig2_int = self.inputs_int()
 
-        sig_sum = Signal.from_int(sig1_int % sig2_int, fixed_width=self.output_port.width)
-        return sig_sum
+        return Signal.from_int(sig1_int % sig2_int, fixed_width=self.output_port.width)
 
 
 class DFF(ClkMixin, BaseModel):
