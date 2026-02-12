@@ -6,7 +6,7 @@ from typing import ClassVar
 
 import pytest
 
-import netlist_carpentry.routines.floodfill.chain_optimizer as co
+import netlist_carpentry.routines.opt.floodfill.chain_optimizer as co
 from netlist_carpentry import Circuit, Module, ModuleGraph
 from netlist_carpentry.core.enums.direction import Direction as Dir
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath

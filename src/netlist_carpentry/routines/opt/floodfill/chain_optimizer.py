@@ -22,7 +22,7 @@ from netlist_carpentry import Circuit, Direction, Instance, Module, ModuleGraph,
 from netlist_carpentry import read as nc_read
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.core.netlist_elements.segment_base import _Segment
-from netlist_carpentry.routines.floodfill.chain_metrics import (
+from netlist_carpentry.routines.opt.floodfill.chain_metrics import (
     ChainBoundary,
     ChainInfo,
     ChainStatus,
