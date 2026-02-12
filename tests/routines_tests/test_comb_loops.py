@@ -113,6 +113,17 @@ def test_combinational_subgraph(comb_loop_module: Module) -> None:
     assert 'dff_inst' not in subgraph.nodes
 
 
+def test_report(comb_loop_module: Module) -> None:
+    from netlist_carpentry.routines.check.report import CheckReport
+
+    rep = CheckReport(comb_loops={}, fanouts={})
+
+    assert not rep
+
+    rep = CheckReport(comb_loops={comb_loop_module.name: find_comb_loops(comb_loop_module)}, fanouts={})
+    assert rep
+
+
 if __name__ == '__main__':
     file_name = os.path.basename(__file__)
     pytest.main(args=['-k', file_name])

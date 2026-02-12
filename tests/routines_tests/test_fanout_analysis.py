@@ -115,6 +115,17 @@ def test_fanout_by_number(connected_circuit: Circuit) -> None:
     assert m.wires['in1'][3].path in fanout[0]
 
 
+def test_report(connected_circuit: Circuit) -> None:
+    from netlist_carpentry.routines.check.report import CheckReport
+
+    rep = CheckReport(comb_loops={}, fanouts={1: ['a.b.c']})
+
+    assert not rep
+
+    rep = CheckReport(comb_loops={}, fanouts=fa.fanout(connected_circuit, sort_by='number'))
+    assert rep  # EN wire has no loads
+
+
 if __name__ == '__main__':
     file_name = os.path.basename(__file__)
     pytest.main(args=['-k', file_name])
