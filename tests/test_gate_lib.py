@@ -80,7 +80,7 @@ def test_gate_lib_map(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import _build_gate_lib_map, _gate_lib_map
 
     _build_gate_lib_map()
-    assert len(_gate_lib_map) == 41  # Currently 41 gates in library
+    assert len(_gate_lib_map) == 43  # Currently 43 gates in library
 
 
 def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
@@ -1813,6 +1813,159 @@ def test_multiplier_behavior(simple_module: Module) -> None:
     m.tie_port('B', 3, '1')  # 1101 in two's complement: -3
     m.evaluate()  # 4 * (-3) = -12 ==> 10100 in two's complement
     assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.HIGH, 3: Signal.LOW, 4: Signal.HIGH}
+    m.tie_port('A', 3, 'Z')
+    with pytest.raises(EvaluationError):
+        m.evaluate()
+
+
+def test_divider_structure(simple_module: Module) -> None:
+    from netlist_carpentry.utils.gate_lib import Divider
+
+    d = Divider(raw_path='a.divider_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+
+    assert 'A' in d.ports
+    assert 'B' in d.ports
+    assert 'Y' in d.ports
+    assert d.ports['A'].width == 4
+    assert d.ports['B'].width == 4
+    assert d.ports['Y'].width == 4
+    assert d.input_ports == (d.ports['A'], d.ports['B'])
+    assert d.output_port == d.ports['Y']
+    assert d.verilog_template == 'assign {out} = {in1} / {in2};'
+    d.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
+    d.tie_port('A', index=1, sig_value='1')
+    # 2nd is missing on purpose: a.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
+    d.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
+
+    d.modify_connection('B', WireSegmentPath(raw='a.wireB.0'), index=0)
+    d.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
+    # 2nd is missing on purpose: a.modify_connection('B', WireSegmentPath(raw='a.wireB.2'), index=2)
+    d.modify_connection('B', WireSegmentPath(raw='a.wireB.3'), index=3)
+
+    d.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
+    d.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
+    # 2nd is missing on purpose: a.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
+    d.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
+    d.modify_connection('Y', WireSegmentPath(raw='a.carry.0'), index=4)
+    assert d.ports['Y'].width == 5
+    with pytest.raises(ValueError):
+        d.verilog
+    d.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
+    target_str = "assign {carry, wire} = {wireA2, 2'bx1, wireA1[0]} / {wireB[3], 1'bx, wireB[1:0]};"
+    assert d.verilog == target_str
+
+
+def test_divider_behavior(simple_module: Module) -> None:
+    from netlist_carpentry.utils.gate_lib import Divider
+
+    d = Divider(raw_path='a.divider_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+
+    d.tie_port('A', 0, '0')
+    d.tie_port('A', 1, '0')
+    d.tie_port('A', 2, '0')
+    d.tie_port('A', 3, '0')
+    d.tie_port('B', 0, '0')
+    d.tie_port('B', 1, '1')
+    d.tie_port('B', 2, '1')
+    d.tie_port('B', 3, '0')
+    assert d.ports['Y'].width == 4
+
+    d.evaluate()  # 0 / 6 = 0
+    assert d.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    d.tie_port('A', 2, '1')
+    d.tie_port('B', 1, '0')
+    d.evaluate()  # 4 / 4 = 1
+    assert d.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+
+    d.tie_port('B', 0, '1')
+    d.evaluate()  # 4 / 5 = 0 (truncating division)
+    assert d.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+
+    d.ports['B'].set_signed(True)
+    d.tie_port('B', 0, '1')
+    d.tie_port('B', 1, '0')
+    d.tie_port('B', 2, '1')
+    d.tie_port('B', 3, '1')  # 1101 in two's complement: -3
+    d.tie_port('A', 1, '1')  # A is now 6
+    d.evaluate()  # 6 / (-3) = -2 ==> 1110 in two's complement
+    assert d.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
+    d.tie_port('A', 3, 'Z')
+    with pytest.raises(EvaluationError):
+        d.evaluate()
+
+
+def test_modulo_structure(simple_module: Module) -> None:
+    from netlist_carpentry.utils.gate_lib import Modulo
+
+    m = Modulo(raw_path='a.modulo_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+
+    assert 'A' in m.ports
+    assert 'B' in m.ports
+    assert 'Y' in m.ports
+    assert m.ports['A'].width == 4
+    assert m.ports['B'].width == 4
+    assert m.ports['Y'].width == 4
+    assert m.input_ports == (m.ports['A'], m.ports['B'])
+    assert m.output_port == m.ports['Y']
+    assert m.verilog_template == 'assign {out} = {in1} % {in2};'
+    m.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
+    m.tie_port('A', index=1, sig_value='1')
+    # 2nd is missing on purpose: a.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
+    m.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
+
+    m.modify_connection('B', WireSegmentPath(raw='a.wireB.0'), index=0)
+    m.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
+    # 2nd is missing on purpose: a.modify_connection('B', WireSegmentPath(raw='a.wireB.2'), index=2)
+    m.modify_connection('B', WireSegmentPath(raw='a.wireB.3'), index=3)
+
+    m.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
+    m.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
+    # 2nd is missing on purpose: a.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
+    m.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
+    m.modify_connection('Y', WireSegmentPath(raw='a.carry.0'), index=4)
+    assert m.ports['Y'].width == 5
+    with pytest.raises(ValueError):
+        m.verilog
+    m.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
+    target_str = "assign {carry, wire} = {wireA2, 2'bx1, wireA1[0]} % {wireB[3], 1'bx, wireB[1:0]};"
+    assert m.verilog == target_str
+
+
+def test_modulo_behavior(simple_module: Module) -> None:
+    from netlist_carpentry.utils.gate_lib import Modulo
+
+    m = Modulo(raw_path='a.modulo_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+
+    m.tie_port('A', 0, '0')
+    m.tie_port('A', 1, '0')
+    m.tie_port('A', 2, '0')
+    m.tie_port('A', 3, '0')
+    m.tie_port('B', 0, '0')
+    m.tie_port('B', 1, '1')
+    m.tie_port('B', 2, '1')
+    m.tie_port('B', 3, '0')
+    assert m.ports['Y'].width == 4
+
+    m.evaluate()  # 0 % 6 = 0
+    assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    m.tie_port('A', 2, '1')
+    m.tie_port('B', 1, '0')
+    m.evaluate()  # 4 % 4 = 0
+    assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+
+    m.tie_port('B', 0, '1')
+    m.evaluate()  # 4 % 5 = 4
+    assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.HIGH, 3: Signal.LOW}
+
+    m.ports['B'].set_signed(True)
+    m.tie_port('B', 0, '1')
+    m.tie_port('B', 1, '0')
+    m.tie_port('B', 2, '1')
+    m.tie_port('B', 3, '1')  # 1101 in two's complement: -3
+    m.tie_port('A', 0, '1')
+    m.tie_port('A', 1, '1')  # A is now 7
+    m.evaluate()  # 7 % (-3) = -2 ==> 1110 in two's complement
+    assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
     m.tie_port('A', 3, 'Z')
     with pytest.raises(EvaluationError):
         m.evaluate()
