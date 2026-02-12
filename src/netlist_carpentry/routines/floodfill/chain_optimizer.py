@@ -758,11 +758,6 @@ class GateChainScanner:
         return chains
 
 
-def invalidate_graph_cache(module: Module) -> None:
-    if hasattr(module, '_graph'):
-        module._graph = None
-
-
 def fix_invalid_verilog(filepath: str) -> int:
     with open(filepath, 'r') as f:
         lines = f.readlines()
@@ -831,7 +826,6 @@ class CircuitOptimizer:
             mod.optimize()
             for cfg in configs:
                 mod.split_all(cfg.nsubtype)
-            invalidate_graph_cache(mod)
 
     def _scan_all_chains(
         self,
@@ -882,8 +876,6 @@ class CircuitOptimizer:
 
             for cfg, chains in mod_chain_list:
                 self._replace_for_cfg(result, mod, mod_name, cfg, chains, ts)
-
-            invalidate_graph_cache(mod)
             gc.collect()
 
     def _replace_for_cfg(

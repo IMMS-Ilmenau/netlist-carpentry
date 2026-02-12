@@ -981,15 +981,6 @@ def test_replace_chain_success_integration(module_with_or_chain, or_config):
     assert info.num_inputs == 4
 
 
-def test_invalidate_graph_cache(module_with_or_chain):
-    _ = module_with_or_chain.graph()
-    co.invalidate_graph_cache(module_with_or_chain)
-
-
-def test_invalidate_graph_cache_no_graph(empty_module):
-    co.invalidate_graph_cache(empty_module)
-
-
 def test_fix_invalid_verilog(tmp_path):
     f = tmp_path / 't.v'
     f.write_text("module t;\n  assign 1'bx = c;\n  assign a = b;\n  assign 1'b0 = d;\nendmodule\n")
