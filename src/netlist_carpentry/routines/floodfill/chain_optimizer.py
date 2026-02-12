@@ -16,11 +16,10 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type, Union
 
-import networkx as nx
-
-from netlist_carpentry import Instance, Module
+from netlist_carpentry import Circuit, Direction, Instance, Module, ModuleGraph, PortSegment
 from netlist_carpentry import read as nc_read
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
+from netlist_carpentry.core.netlist_elements.segment_base import _Segment
 from netlist_carpentry.routines.floodfill.chain_metrics import (
     ChainBoundary,
     ChainInfo,
@@ -30,6 +29,7 @@ from netlist_carpentry.routines.floodfill.chain_metrics import (
     ModuleReport,
     ReplacementResult,
 )
+from netlist_carpentry.utils.gate_lib_base_classes import PrimitiveGate
 from netlist_carpentry.utils.log import LOG
 
 
@@ -38,30 +38,27 @@ class GateConfig:
     """Configuration for a 2-input gate type."""
 
     name: str
-    ntype_info: str
+    nsubtype: str
     chain_prefix: str
-    gate_cls: Type
+    gate_cls: Type[PrimitiveGate]
 
 
 def get_gate_config(gate: str) -> GateConfig:
     """Resolve gate string ("or" or "§or") into GateConfig."""
-    import netlist_carpentry.utils.gate_lib as gate_lib
+    from netlist_carpentry.utils.gate_lib import get
 
-    gate_name = gate.lstrip("§").strip().lower()
+    gate_name = gate.lstrip('§').strip().lower()
     if not gate_name:
-        raise ValueError("Gate must not be empty")
+        raise ValueError('Gate must not be empty')
 
-    cls_name = gate_name.capitalize() + "Gate"
-    gate_cls = getattr(gate_lib, cls_name, None)
+    gate_cls = get('§' + gate_name)
     if gate_cls is None:
-        raise ValueError(
-            f"Unsupported gate '{gate_name}'. Expected '{cls_name}' in netlist_carpentry.utils.gate_lib."
-        )
+        raise ValueError(f"Unsupported gate '{gate_name}'. Expected '{gate_name}' in netlist_carpentry.utils.gate_lib.")
 
     return GateConfig(
         name=gate_name,
-        ntype_info=f"§{gate_name}",
-        chain_prefix=f"{gate_name}_chain",
+        nsubtype=f'§{gate_name}',
+        chain_prefix=f'{gate_name}_chain',
         gate_cls=gate_cls,
     )
 
@@ -71,29 +68,27 @@ def _normalize_gates(gates: Union[str, List[str]]) -> List[str]:
     return [gates] if isinstance(gates, str) else list(gates)
 
 
-def is_gate(graph: nx.DiGraph, node: str, cfg: GateConfig, *, exclude_chains: bool = True) -> bool:
+def is_gate(graph: ModuleGraph, node: str, cfg: GateConfig, *, exclude_chains: bool = True) -> bool:
     """Check if node is a gate instance of the configured type."""
-    node_data = graph.nodes.get(node, {})
-    if node_data.get("ntype") != "INSTANCE":
+    if graph.node_type(node) != 'INSTANCE':
         return False
-    node_subtype = node_data.get("nsubtype") or node_data.get("ntype_info")
-    if node_subtype != cfg.ntype_info:
+    if graph.node_subtype(node) != cfg.nsubtype:
         return False
     if exclude_chains:
-        instance_name = str(node).split(".")[-1]
+        instance_name = str(node).split('.')[-1]
         if instance_name.startswith(cfg.chain_prefix):
             return False
     return True
 
 
-def is_chain_head(graph: nx.DiGraph, node: str, gate_nodes: Set[str]) -> bool:
+def is_chain_head(graph: ModuleGraph, node: str, gate_nodes: Set[str]) -> bool:
     """Check if node is start of a chain (no gate predecessors)."""
     if node not in gate_nodes:
         return False
     return not any(pred in gate_nodes for pred in graph.predecessors(node))
 
 
-def build_chain(graph: nx.DiGraph, start: str, gate_nodes: Set[str]) -> List[str]:
+def build_chain(graph: ModuleGraph, start: str, gate_nodes: Set[str]) -> List[str]:
     """Build chain by following single gate successors."""
     chain = [start]
     current = start
@@ -106,7 +101,7 @@ def build_chain(graph: nx.DiGraph, start: str, gate_nodes: Set[str]) -> List[str
     return chain
 
 
-def find_gate_chains(graph: nx.DiGraph, cfg: GateConfig) -> List[List[str]]:
+def find_gate_chains(graph: ModuleGraph, cfg: GateConfig) -> List[List[str]]:
     """Find all gate chains (length >= 2) in graph."""
     gate_nodes = {n for n in graph.nodes if is_gate(graph, n, cfg)}
     visited: Set[str] = set()
@@ -123,17 +118,17 @@ def find_gate_chains(graph: nx.DiGraph, cfg: GateConfig) -> List[List[str]]:
     return chains
 
 
-def extract_instance_key(graph: nx.DiGraph, node: str) -> str:
+def extract_instance_key(graph: ModuleGraph, node: str) -> str:
     """Extract instance identifier from node attributes."""
     node_data = graph.nodes.get(node, {})
-    for key in ("raw_path", "path", "instance_path", "raw", "name"):
+    for key in ('raw_path', 'path', 'instance_path', 'raw', 'name'):
         value = node_data.get(key)
         if isinstance(value, str) and value:
             return value
     return str(node)
 
 
-def safe_get_driver(segment) -> Any:
+def safe_get_driver(segment: _Segment) -> Any:
     """Safely get wire segment driver."""
     try:
         return segment.driver()
@@ -141,7 +136,7 @@ def safe_get_driver(segment) -> Any:
         return None
 
 
-def safe_get_wire_path(segment) -> Optional[WireSegmentPath]:
+def safe_get_wire_path(segment: PortSegment) -> Optional[WireSegmentPath]:
     """Safely get wire segment path."""
     try:
         return segment.ws_path
@@ -153,18 +148,18 @@ def is_valid_wire_path(wire_path: Optional[WireSegmentPath]) -> bool:
     """Check if wire path is valid."""
     if wire_path is None:
         return False
-    raw = getattr(wire_path, "raw", "")
-    return bool(raw) and raw != "0"
+    raw = getattr(wire_path, 'raw', '')
+    return bool(raw) and raw != '0'
 
 
 def is_constant_wire(wire_path: Optional[WireSegmentPath]) -> bool:
     """Check if wire path is a constant (0, 1, x, z, 1'b0, etc.)."""
     if wire_path is None:
         return True
-    raw = getattr(wire_path, "raw", "")
+    raw = getattr(wire_path, 'raw', '')
     if not raw:
         return True
-    if raw in ("0", "1", "x", "z", "X", "Z"):
+    if raw in ('0', '1', 'x', 'z', 'X', 'Z'):
         return True
     if raw.startswith("1'b") or raw.startswith("1'B"):
         return True
@@ -177,9 +172,9 @@ def _driver_in_chain(segment, chain_ids: Set[str]) -> bool:
     if not driver:
         return False
 
-    port = getattr(driver, "port", None)
-    parent = getattr(port, "parent", None) if port else None
-    raw_path = getattr(parent, "raw_path", None) if parent else None
+    port = getattr(driver, 'port', None)
+    parent = getattr(port, 'parent', None) if port else None
+    raw_path = getattr(parent, 'raw_path', None) if parent else None
     return bool(raw_path and raw_path in chain_ids)
 
 
@@ -200,7 +195,7 @@ def _should_include_external_wire(
     if not is_valid_wire_path(wire_path):
         return False, False
 
-    raw = getattr(wire_path, "raw", "")
+    raw = getattr(wire_path, 'raw', '')
     if not raw:
         return False, False
 
@@ -215,11 +210,10 @@ def _should_include_external_wire(
 
 def is_target_gate(instance: Instance, cfg: GateConfig, *, exclude_chains: bool = True) -> bool:
     """Check if instance is a gate of the configured type."""
-    inst_type = getattr(instance, "instance_type", None) or getattr(instance, "nsubtype", None)
-    if inst_type != cfg.ntype_info:
+    if instance.instance_type != cfg.nsubtype:
         return False
     if exclude_chains:
-        name = instance.raw_path.split(".")[-1] if instance.raw_path else ""
+        name = instance.raw_path.split('.')[-1] if instance.raw_path else ''
         if name.startswith(cfg.chain_prefix):
             return False
     return True
@@ -232,12 +226,12 @@ def _collect_target_gates(module: Module, cfg: GateConfig) -> Dict[str, Instance
 def _build_wire_to_driver(gates: Dict[str, Instance]) -> Dict[str, str]:
     wire_to_driver: Dict[str, str] = {}
     for path, inst in gates.items():
-        port_y = inst.ports.get("Y")
+        port_y = inst.ports.get('Y')
         if port_y is None:
             continue
         for _, segment in port_y:
             wire_path = safe_get_wire_path(segment)
-            raw = getattr(wire_path, "raw", "") if wire_path else ""
+            raw = getattr(wire_path, 'raw', '') if wire_path else ''
             if raw:
                 wire_to_driver[raw] = path
     return wire_to_driver
@@ -251,13 +245,13 @@ def _build_predecessors_successors(
     successors: Dict[str, Set[str]] = {path: set() for path in gates}
 
     for path, inst in gates.items():
-        for port_name in ("A", "B"):
+        for port_name in ('A', 'B'):
             port = inst.ports.get(port_name)
             if port is None:
                 continue
             for _, segment in port:
                 wire_path = safe_get_wire_path(segment)
-                raw = getattr(wire_path, "raw", "") if wire_path else ""
+                raw = wire_path.raw if wire_path else ''
                 if not raw:
                     continue
 
@@ -325,14 +319,13 @@ def analyze_module_gates(module: Module, cfg: GateConfig) -> GateAnalysis:
     analysis = GateAnalysis()
 
     for instance in module.instances.values():
-        inst_type = getattr(instance, "instance_type", None) or getattr(instance, "nsubtype", None)
-        if inst_type != cfg.ntype_info:
+        if instance.instance_type != cfg.nsubtype:
             continue
 
         real_inputs = 0
         has_constant = False
 
-        for port_name in ("A", "B"):
+        for port_name in ('A', 'B'):
             port = instance.ports.get(port_name)
             if port is None:
                 continue
@@ -376,16 +369,16 @@ class GateTreeBuilder:
         return outputs
 
     def _create_gate(self, a: WireSegmentPath, b: WireSegmentPath, idx: int, is_final: bool) -> WireSegmentPath:
-        name = f"{self.prefix}_L{self.level}_N{idx}"
-        path = f"{self.module.name}.{name}"
+        name = f'{self.prefix}_L{self.level}_N{idx}'
+        path = f'{self.module.name}.{name}'
 
         gate = self.cfg.gate_cls(raw_path=path)
         self.module.add_instance(gate)
-        gate.connect_modify("A", ws_path=a, direction="input", index=0)
-        gate.connect_modify("B", ws_path=b, direction="input", index=0)
+        gate.connect_modify('A', ws_path=a, direction=Direction.IN, index=0)
+        gate.connect_modify('B', ws_path=b, direction=Direction.IN, index=0)
 
         out_wire = self._alloc_output(is_final, name)
-        gate.connect_modify("Y", ws_path=out_wire, direction="output", index=0)
+        gate.connect_modify('Y', ws_path=out_wire, direction=Direction.OUT, index=0)
         return out_wire
 
     def _alloc_output(self, is_final: bool, name: str) -> WireSegmentPath:
@@ -393,8 +386,8 @@ class GateTreeBuilder:
             return self.boundary.output
         if self.available_wires:
             return self.available_wires.pop(0)
-        wire = self.module.create_wire(wire_name=f"{name}_Y", width=1)
-        return WireSegmentPath(raw=f"{self.module.name}.{wire.name}.0")
+        wire = self.module.create_wire(wire_name=f'{name}_Y', width=1)
+        return WireSegmentPath(raw=f'{self.module.name}.{wire.name}.0')
 
 
 class ChainBoundaryExtractor:
@@ -412,16 +405,14 @@ class ChainBoundaryExtractor:
         constant_count = 0
 
         for instance in chain_instances:
-            for port_name in ("A", "B"):
+            for port_name in ('A', 'B'):
                 port = instance.ports.get(port_name)
                 if port is None:
                     continue
 
                 for _, segment in port:
                     wire_path = safe_get_wire_path(segment)
-                    include, is_const = _should_include_external_wire(
-                        wire_path, segment, chain_ids, internal_wire_paths
-                    )
+                    include, is_const = _should_include_external_wire(wire_path, segment, chain_ids, internal_wire_paths)
                     if is_const:
                         constant_count += 1
                         continue
@@ -437,16 +428,16 @@ class ChainBoundaryExtractor:
         output_wire: Optional[WireSegmentPath] = None
 
         for instance in chain_instances:
-            port = instance.ports.get("Y")
+            port = instance.ports.get('Y')
             if port is None:
-                raise RuntimeError(f"{instance.raw_path}: missing port Y")
+                raise RuntimeError(f'{instance.raw_path}: missing port Y')
             segments = list(port)
             if len(segments) != 1:
-                raise RuntimeError(f"{instance.raw_path}: expected 1 output segment")
+                raise RuntimeError(f'{instance.raw_path}: expected 1 output segment')
             _, segment = segments[0]
             wire_path = safe_get_wire_path(segment)
             if not is_valid_wire_path(wire_path):
-                raise RuntimeError(f"{instance.raw_path}: invalid output wire")
+                raise RuntimeError(f'{instance.raw_path}: invalid output wire')
 
             if instance is tail:
                 output_wire = wire_path
@@ -454,14 +445,14 @@ class ChainBoundaryExtractor:
                 internal_wires.append(wire_path)
 
         if output_wire is None:
-            raise RuntimeError("Could not determine chain output")
+            raise RuntimeError('Could not determine chain output')
 
         return output_wire, internal_wires
 
     def extract_boundary(self, chain_instances: Sequence[Instance]) -> Tuple[ChainBoundary, int, bool]:
         """Extract boundary info. Returns (boundary, constant_count, is_degenerate)."""
         if not chain_instances:
-            raise ValueError("Empty chain")
+            raise ValueError('Empty chain')
 
         chain_ids = {inst.raw_path for inst in chain_instances}
         output, internal_wires = self.collect_output_wires(chain_instances)
@@ -493,7 +484,7 @@ def build_instance_lookup(module: Module) -> Dict[str, Any]:
     for key in module.instances.keys():
         key_str = str(key)
         lookup[key_str] = key
-        lookup[key_str.split(".")[-1]] = key
+        lookup[key_str.split('.')[-1]] = key
     return lookup
 
 
@@ -519,20 +510,15 @@ def resolve_chain_instances(module: Module, keys: Sequence[str]) -> List[Instanc
 
     for key in keys:
         key_str = str(key)
-        short = key_str.split(".")[-1]
-        prefixed = f"{module.name}.{key_str}"
-        prefixed_short = f"{module.name}.{short}"
+        short = key_str.split('.')[-1]
+        prefixed = f'{module.name}.{key_str}'
+        prefixed_short = f'{module.name}.{short}'
 
-        inst_key = (
-            lookup.get(key_str)
-            or lookup.get(short)
-            or lookup.get(prefixed)
-            or lookup.get(prefixed_short)
-        )
+        inst_key = lookup.get(key_str) or lookup.get(short) or lookup.get(prefixed) or lookup.get(prefixed_short)
         if inst_key is None:
             inst_key = fuzzy_find_instance(module, key_str) or fuzzy_find_instance(module, short)
         if inst_key is None:
-            raise KeyError(f"Could not resolve: {key_str}")
+            raise KeyError(f'Could not resolve: {key_str}')
 
         resolved.append(module.instances[inst_key])
 
@@ -544,18 +530,18 @@ def _remove_instance_and_log(module: Module, inst_key: str, instance: Instance, 
     try:
         module.remove_instance(instance)
     except Exception as e:
-        LOG.debug(f"Could not remove {inst_key}: {e}")
+        LOG.debug(f'Could not remove {inst_key}: {e}')
         return False
 
-    LOG.debug(f"Removed degenerate gate {inst_key} (output={const_output})")
+    LOG.debug(f'Removed degenerate gate {inst_key} (output={const_output})')
     return True
 
 
 def _gate_constant_output(cfg: GateConfig, has_one: bool, has_zero: bool) -> Optional[str]:
     gate_name = cfg.name.lower()
-    if gate_name == "or":
+    if gate_name == 'or':
         return "1'b1" if has_one else "1'b0"
-    if gate_name == "and":
+    if gate_name == 'and':
         return "1'b0" if has_zero else "1'b1"
     return None
 
@@ -566,15 +552,15 @@ def _analyze_gate_inputs(instance: Instance) -> Tuple[int, bool, bool]:
     has_one = False
     has_zero = False
 
-    for port_name in ("A", "B"):
+    for port_name in ('A', 'B'):
         port = instance.ports.get(port_name)
         if port is None:
             continue
         for _, segment in port:
             wire_path = safe_get_wire_path(segment)
             if is_constant_wire(wire_path):
-                raw = getattr(wire_path, "raw", "") if wire_path else ""
-                if raw in ("1", "1'b1"):
+                raw = getattr(wire_path, 'raw', '') if wire_path else ''
+                if raw in ('1', "1'b1"):
                     has_one = True
                 else:
                     has_zero = True
@@ -586,7 +572,7 @@ def _analyze_gate_inputs(instance: Instance) -> Tuple[int, bool, bool]:
 
 def _has_valid_single_output(instance: Instance) -> bool:
     """True if instance has Y with exactly one segment and valid wire."""
-    output_port = instance.ports.get("Y")
+    output_port = instance.ports.get('Y')
     if output_port is None:
         return False
 
@@ -604,8 +590,7 @@ def _collect_degenerate_gate_removal(
     instance: Instance,
     cfg: GateConfig,
 ) -> Optional[Tuple[str, Instance, str]]:
-    inst_type = getattr(instance, "instance_type", None) or getattr(instance, "nsubtype", None)
-    if inst_type != cfg.ntype_info:
+    if instance.instance_type != cfg.nsubtype:
         return None
 
     real_inputs, has_one, has_zero = _analyze_gate_inputs(instance)
@@ -675,7 +660,7 @@ class ChainReplacer:
     ) -> Optional[List[Instance]]:
         if not chain_keys:
             info.status = ChainStatus.SKIPPED_RESOLUTION_FAILED
-            info.error_message = "Empty chain"
+            info.error_message = 'Empty chain'
             return None
 
         try:
@@ -683,7 +668,7 @@ class ChainReplacer:
         except KeyError as e:
             info.status = ChainStatus.SKIPPED_RESOLUTION_FAILED
             info.error_message = str(e)
-            LOG.info(f"Skipping {prefix}: {e}")
+            LOG.info(f'Skipping {prefix}: {e}')
             return None
 
     def _extract_boundary(self, instances: List[Instance], info: ChainInfo, prefix: str) -> Optional[ChainBoundary]:
@@ -697,13 +682,13 @@ class ChainReplacer:
 
             if is_degenerate:
                 info.status = ChainStatus.SKIPPED_DEGENERATE
-                info.error_message = f"Degenerate chain: {info.num_inputs} real inputs, {const_count} constants"
-                LOG.debug(f"Skipping degenerate {prefix}: {info.num_inputs} inputs, {const_count} constants")
+                info.error_message = f'Degenerate chain: {info.num_inputs} real inputs, {const_count} constants'
+                LOG.debug(f'Skipping degenerate {prefix}: {info.num_inputs} inputs, {const_count} constants')
             return boundary
         except Exception as e:
             info.status = ChainStatus.SKIPPED_BOUNDARY_FAILED
             info.error_message = str(e)
-            LOG.info(f"Skipping {prefix}: {e}")
+            LOG.info(f'Skipping {prefix}: {e}')
             return None
 
     @staticmethod
@@ -714,7 +699,7 @@ class ChainReplacer:
         except Exception as e:
             info.status = ChainStatus.SKIPPED_DISCONNECT_FAILED
             info.error_message = str(e)
-            LOG.info(f"Skipping {prefix}: {e}")
+            LOG.info(f'Skipping {prefix}: {e}')
             return False
 
     @staticmethod
@@ -724,12 +709,12 @@ class ChainReplacer:
         except Exception as e:
             info.status = ChainStatus.FAILED_TREE_BUILD
             info.error_message = str(e)
-            raise RuntimeError(f"Tree build failed: {e}") from e
+            raise RuntimeError(f'Tree build failed: {e}') from e
 
     @staticmethod
     def _log_success(prefix: str, instances: List[Instance], boundary: ChainBoundary, const_count: int) -> None:
-        const_msg = f" ({const_count} constants)" if const_count else ""
-        LOG.info(f"{prefix}: {len(instances)} gates → tree ({len(boundary.inputs)} inputs){const_msg}")
+        const_msg = f' ({const_count} constants)' if const_count else ''
+        LOG.info(f'{prefix}: {len(instances)} gates → tree ({len(boundary.inputs)} inputs){const_msg}')
 
 
 class GateChainScanner:
@@ -743,13 +728,13 @@ class GateChainScanner:
         cmd = [
             self.python,
             self.script_path,
-            "--scan-module",
+            '--scan-module',
             module,
-            "--input",
+            '--input',
             input_path,
-            "--top",
+            '--top',
             top,
-            "--gate",
+            '--gate',
             gate,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -760,33 +745,33 @@ class GateChainScanner:
     def collect_chains(self, input_path: str, top: str, modules: List[str], gate: str) -> Dict[str, List[List[str]]]:
         chains: Dict[str, List[List[str]]] = {}
 
-        LOG.info(f"Scanning {len(modules)} modules for {gate}-chains...")
+        LOG.info(f'Scanning {len(modules)} modules for {gate}-chains...')
         for i, name in enumerate(modules, 1):
-            LOG.debug(f"[{i}/{len(modules)}] {name}")
+            LOG.debug(f'[{i}/{len(modules)}] {name}')
             found = self.scan_module(input_path, top, name, gate)
             if found:
                 chains[name] = found
-                LOG.debug(f"  Found {len(found)} chain(s)")
+                LOG.debug(f'  Found {len(found)} chain(s)')
 
         total = sum(len(c) for c in chains.values())
-        LOG.info(f"Total: {total} chains in {len(chains)} modules")
+        LOG.info(f'Total: {total} chains in {len(chains)} modules')
         return chains
 
 
 def invalidate_graph_cache(module: Module) -> None:
-    if hasattr(module, "_graph"):
+    if hasattr(module, '_graph'):
         module._graph = None
 
 
 def fix_invalid_verilog(filepath: str) -> int:
-    with open(filepath, "r") as f:
+    with open(filepath, 'r') as f:
         lines = f.readlines()
 
     valid_lines = [line for line in lines if not line.strip().startswith("assign 1'b")]
     removed = len(lines) - len(valid_lines)
 
     if removed > 0:
-        with open(filepath, "w") as f:
+        with open(filepath, 'w') as f:
             f.writelines(valid_lines)
 
     return removed
@@ -812,8 +797,8 @@ class CircuitOptimizer:
         result = CircuitOptimizationResult()
 
         circuit = nc_read(input_path, top=top_module)
-        gate_names = ", ".join(cfg.name.upper() for cfg in configs)
-        LOG.info_highlighted(f"{gate_names}-Chain Optimization: {circuit.name}")
+        gate_names = ', '.join(cfg.name.upper() for cfg in configs)
+        LOG.info_highlighted(f'{gate_names}-Chain Optimization: {circuit.name}')
 
         if remove_degenerate:
             self._phase0_remove_degenerate(circuit, configs)
@@ -832,20 +817,20 @@ class CircuitOptimizer:
         return result
 
     @staticmethod
-    def _phase0_remove_degenerate(circuit, configs: List[GateConfig]) -> None:
-        LOG.info("Phase 0: Removing degenerate gates (only constant inputs)...")
+    def _phase0_remove_degenerate(circuit: Circuit, configs: List[GateConfig]) -> None:
+        LOG.info('Phase 0: Removing degenerate gates (only constant inputs)...')
         total_removed = 0
-        for mod in circuit.modules.values():
+        for mod in circuit:
             for cfg in configs:
                 total_removed += remove_degenerate_gates(mod, cfg)
-        LOG.info(f"Removed {total_removed} degenerate gates")
+        LOG.info(f'Removed {total_removed} degenerate gates')
 
     @staticmethod
-    def _prepare_modules(circuit, configs: List[GateConfig]) -> None:
-        for mod in circuit.modules.values():
+    def _prepare_modules(circuit: Circuit, configs: List[GateConfig]) -> None:
+        for mod in circuit:
             mod.optimize()
             for cfg in configs:
-                mod.split_all(cfg.ntype_info)
+                mod.split_all(cfg.nsubtype)
             invalidate_graph_cache(mod)
 
     def _scan_all_chains(
@@ -855,47 +840,45 @@ class CircuitOptimizer:
         module_names: List[str],
         configs: List[GateConfig],
     ) -> Dict[str, List[Tuple[GateConfig, List[List[str]]]]]:
-        LOG.info("Phase 1: Scanning...")
+        LOG.info('Phase 1: Scanning...')
 
         all_chains_by_module: Dict[str, List[Tuple[GateConfig, List[List[str]]]]] = defaultdict(list)
 
         for cfg in configs:
-            LOG.info(f"  Scanning for {cfg.name.upper()} chains...")
+            LOG.info(f'  Scanning for {cfg.name.upper()} chains...')
             chains_by_module = self.scanner.collect_chains(input_path, top_module, module_names, cfg.name)
 
             for mod_name, chains in chains_by_module.items():
                 all_chains_by_module[mod_name].append((cfg, chains))
 
             total = sum(len(c) for c in chains_by_module.values())
-            LOG.info(f"    Found {total} {cfg.name.upper()} chains in {len(chains_by_module)} modules")
+            LOG.info(f'    Found {total} {cfg.name.upper()} chains in {len(chains_by_module)} modules')
 
         return dict(all_chains_by_module)
 
     @staticmethod
     def _update_detection_stats(
         result: CircuitOptimizationResult,
-        circuit,
+        circuit: Circuit,
         all_chains_by_module: Dict[str, List[Tuple[GateConfig, List[List[str]]]]],
     ) -> None:
         result.modules_processed = len(circuit.modules)
         result.modules_with_chains = len(all_chains_by_module)
-        result.total_chains_detected = sum(
-            len(chains) for mod_chains in all_chains_by_module.values() for _, chains in mod_chains
-        )
+        result.total_chains_detected = sum(len(chains) for mod_chains in all_chains_by_module.values() for _, chains in mod_chains)
 
     def _replace_all(
         self,
         result: CircuitOptimizationResult,
-        circuit,
+        circuit: Circuit,
         all_chains_by_module: Dict[str, List[Tuple[GateConfig, List[List[str]]]]],
     ) -> None:
-        LOG.info(f"Phase 2: Replacing {result.total_chains_detected} chains...")
+        LOG.info(f'Phase 2: Replacing {result.total_chains_detected} chains...')
         ts = int(time.time() * 1000)
 
         for mod_name, mod_chain_list in all_chains_by_module.items():
             mod = circuit.modules[mod_name]
             total_chains_in_mod = sum(len(chains) for _, chains in mod_chain_list)
-            LOG.info(f"Module: {mod_name} ({total_chains_in_mod} chains)")
+            LOG.info(f'Module: {mod_name} ({total_chains_in_mod} chains)')
 
             for cfg, chains in mod_chain_list:
                 self._replace_for_cfg(result, mod, mod_name, cfg, chains, ts)
@@ -913,14 +896,14 @@ class CircuitOptimizer:
         ts: int,
     ) -> None:
         analysis = analyze_module_gates(mod, cfg)
-        report = ModuleReport(module_name=f"{mod_name}_{cfg.name}", gate_analysis=analysis, chains_detected=len(chains))
+        report = ModuleReport(module_name=f'{mod_name}_{cfg.name}', gate_analysis=analysis, chains_detected=len(chains))
         mod_result = ReplacementResult(chains_detected=chains)
 
         for idx, keys in enumerate(chains, 1):
-            prefix = f"{mod.name}_{cfg.chain_prefix}{idx}_{ts}"
+            prefix = f'{mod.name}_{cfg.chain_prefix}{idx}_{ts}'
             self._replace_one_chain(result, report, mod_result, mod, cfg, keys, prefix)
 
-        key = f"{mod_name}_{cfg.name}"
+        key = f'{mod_name}_{cfg.name}'
         result.module_results[key] = mod_result
         result.module_reports[key] = report
 
@@ -952,8 +935,8 @@ class CircuitOptimizer:
             report.chains_failed += 1
             result.total_chains_failed += 1
 
-            report.failed_details.append({"num_gates": len(keys), "error": err, "keys": list(keys)})
-            LOG.error(f"{prefix}: {e}")
+            report.failed_details.append({'num_gates': len(keys), 'error': err, 'keys': list(keys)})
+            LOG.error(f'{prefix}: {e}')
 
     @staticmethod
     def _apply_chain_outcome(
@@ -974,12 +957,12 @@ class CircuitOptimizer:
             result.total_chains_skipped += 1
             report.skipped_details.append(
                 {
-                    "num_gates": info.num_gates,
-                    "num_inputs": info.num_inputs,
-                    "num_constants": info.num_constant_inputs,
-                    "status": info.status.name,
-                    "error": info.error_message,
-                    "keys": info.chain_keys,
+                    'num_gates': info.num_gates,
+                    'num_inputs': info.num_inputs,
+                    'num_constants': info.num_constant_inputs,
+                    'status': info.status.name,
+                    'error': info.error_message,
+                    'keys': info.chain_keys,
                 }
             )
             return
@@ -989,20 +972,20 @@ class CircuitOptimizer:
         result.total_chains_failed += 1
 
     @staticmethod
-    def _write_output_if_requested(circuit, output_path: Optional[str]) -> None:
+    def _write_output_if_requested(circuit: Circuit, output_path: Optional[str]) -> None:
         if not output_path:
             return
         circuit.write(output_path, overwrite=True)
         removed = fix_invalid_verilog(output_path)
         if removed > 0:
-            LOG.warn(f"Removed {removed} invalid lines")
+            LOG.warn(f'Removed {removed} invalid lines')
 
 
 # Main Entry Point
 def optimize_circuit(
     input_path: str,
     top_module: str,
-    gates: Union[str, List[str]] = "or",
+    gates: Union[str, List[str]] = 'or',
     output_path: Optional[str] = None,
     skip_modules: Optional[Set[str]] = None,
     remove_degenerate: bool = False,
@@ -1024,14 +1007,15 @@ def optimize_circuit(
         remove_degenerate=remove_degenerate,
     )
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--scan-module", dest="module_name")
-    parser.add_argument("--input", dest="input_path")
-    parser.add_argument("--top", dest="top_module")
-    parser.add_argument("--gate", dest="gate")
+    parser.add_argument('--scan-module', dest='module_name')
+    parser.add_argument('--input', dest='input_path')
+    parser.add_argument('--top', dest='top_module')
+    parser.add_argument('--gate', dest='gate')
     args = parser.parse_args()
 
     if args.module_name:
@@ -1040,9 +1024,9 @@ if __name__ == "__main__":
 
         module = circuit.modules.get(args.module_name)
         if module is None:
-            print("[]")
+            print('[]')
         else:
             module.optimize()
-            module.split_all(cfg.ntype_info)
+            module.split_all(cfg.nsubtype)
             chains = find_gate_chains_netlist(module, cfg)
             print(json.dumps(chains))
