@@ -596,6 +596,28 @@ def test_set_signed(standard_port_out: Port[Module]) -> None:
     assert not standard_port_out.signed
 
 
+def test_set_signed_update_signedness() -> None:
+    from netlist_carpentry.utils.gate_factory import and_gate
+
+    m = Module(raw_path='m')
+    A = m.create_port('A', Direction.IN)
+    B = m.create_port('B', Direction.IN)
+    Y = m.create_port('Y', Direction.OUT)
+    and_inst = and_gate(m, 'and_inst', A=A, B=B, Y=Y)
+    assert not and_inst.ports['A'].signed
+    assert not and_inst.ports['B'].signed
+    assert not and_inst.a_signed
+    assert not and_inst.b_signed
+
+    and_inst.ports['A'].set_signed(True)
+    assert and_inst.ports['A'].signed
+    assert and_inst.a_signed
+
+    and_inst.ports['B'].set_signed(1)
+    assert and_inst.ports['B'].signed
+    assert and_inst.b_signed
+
+
 def test_change_connection(standard_port_in: Port[Instance], standard_port_out: Port[Module]) -> None:
     standard_port_in.change_connection(WIRE_SEGMENT_X.path)
     assert standard_port_in[0].raw_ws_path == 'X'

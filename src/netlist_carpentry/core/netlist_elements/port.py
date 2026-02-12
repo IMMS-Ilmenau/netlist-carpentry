@@ -674,6 +674,8 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
     def set_signed(self, signed: bool) -> bool:
         prev = self.signed
         self.parameters['signed'] = int(signed)
+        if self.is_instance_port:
+            self.parent.update_signedness(self.name)  # type: ignore
         return prev != self.signed
 
     def change_connection(self, new_wire_segment_path: WireSegmentPath, index: Optional[NonNegativeInt] = 0) -> None:

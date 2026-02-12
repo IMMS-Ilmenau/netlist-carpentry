@@ -462,6 +462,20 @@ def test_set_name(standard_instance_with_ports: Instance) -> None:
     assert 'SOME_INST' in standard_instance_with_ports.parent.instances
 
 
+def test_update_signedness(standard_instance_with_ports: Instance) -> None:
+    assert not standard_instance_with_ports.ports['PortA'].signed
+    assert 'PortA_SIGNED' not in standard_instance_with_ports.parameters
+    standard_instance_with_ports.ports['PortA'].parameters['signed'] = True
+    assert standard_instance_with_ports.ports['PortA'].signed
+    assert 'PortA_SIGNED' not in standard_instance_with_ports.parameters
+    standard_instance_with_ports.update_signedness('PortA')
+    assert standard_instance_with_ports.ports['PortA'].signed
+    assert standard_instance_with_ports.parameters['PortA_SIGNED']
+
+    with pytest.raises(ObjectNotFoundError):
+        standard_instance_with_ports.update_signedness('abc')
+
+
 def test_split(standard_instance_with_ports: Instance) -> None:
     with pytest.raises(SplittingUnsupportedError):
         standard_instance_with_ports.split()

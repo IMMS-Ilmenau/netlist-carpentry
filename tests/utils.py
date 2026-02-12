@@ -68,6 +68,7 @@ def locked_instance() -> Instance:
 def standard_port_in(init_module: bool = True) -> Port[Instance]:
     inst = Instance(raw_path='test_module1.some_test_inst', instance_type='some_type')
     p = Port(raw_path='test_module1.test_port1', direction=Direction.IN, module_or_instance=inst)
+    inst.ports[p.name] = p
     p.create_port_segment(0)
     if not init_module:
         p.module_or_instance = None

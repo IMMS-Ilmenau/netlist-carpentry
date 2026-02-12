@@ -562,6 +562,16 @@ class Instance(NetlistElement, BaseModel):
                 ps.raw_path = ps.path.replace(old_name, new_name).raw
                 ps.set_ws_path(ps.ws_path.replace(old_name, new_name))
 
+    def update_signedness(self, port_name: str) -> None:
+        """Retrieves the signedness of the given port and updates it in this gate instance's parameter dictionary.
+
+        Args:
+            port_name (str): The name of the port, of which the signedness value is retrieved.
+        """
+        if port_name not in self.ports:
+            raise ObjectNotFoundError(f'No port {port_name} exists in {self.__class__.__name__} {self.raw_path}!')
+        self.parameters[f'{port_name}_SIGNED'] = self.ports[port_name].parameters.get('signed', False)  # type: ignore
+
     def split(self) -> Dict[NonNegativeInt, Self]:
         """
         Performs a bit-wise split on this instance.
