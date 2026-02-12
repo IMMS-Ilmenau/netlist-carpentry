@@ -616,12 +616,13 @@ class Circuit(BaseModel):
         Returns:
             bool: True if at least one optimization was applied to at least one module. False otherwise.
         """
-        from netlist_carpentry.routines.opt import clean_circuit
+        from netlist_carpentry.routines.opt import clean_circuit, opt_chains
 
         any_optimized = False
         for mname, m in self.modules.items():
             LOG.info(f'Optimizing module {mname}...')
             any_optimized |= m.optimize()
+        any_optimized |= bool(opt_chains(self).total_chains_replaced)
         any_optimized |= clean_circuit(self)
         return any_optimized
 
