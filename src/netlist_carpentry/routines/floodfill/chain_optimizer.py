@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import gc
 import json
+import os
 import subprocess
 import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type, Union
+from tempfile import TemporaryDirectory
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type
 
 from netlist_carpentry import Circuit, Direction, Instance, Module, ModuleGraph, PortSegment
 from netlist_carpentry import read as nc_read
@@ -61,11 +63,6 @@ def get_gate_config(gate: str) -> GateConfig:
         chain_prefix=f'{gate_name}_chain',
         gate_cls=gate_cls,
     )
-
-
-def _normalize_gates(gates: Union[str, List[str]]) -> List[str]:
-    """Normalize gates input to a list."""
-    return [gates] if isinstance(gates, str) else list(gates)
 
 
 def is_gate(graph: ModuleGraph, node: str, cfg: GateConfig, *, exclude_chains: bool = True) -> bool:
@@ -781,8 +778,7 @@ class CircuitOptimizer:
 
     def optimize(
         self,
-        input_path: str,
-        top_module: str,
+        circuit: Circuit,
         configs: List[GateConfig],
         *,
         output_path: Optional[str],
@@ -790,8 +786,6 @@ class CircuitOptimizer:
         remove_degenerate: bool,
     ) -> CircuitOptimizationResult:
         result = CircuitOptimizationResult()
-
-        circuit = nc_read(input_path, top=top_module)
         gate_names = ', '.join(cfg.name.upper() for cfg in configs)
         LOG.info_highlighted(f'{gate_names}-Chain Optimization: {circuit.name}')
 
@@ -801,7 +795,10 @@ class CircuitOptimizer:
         self._prepare_modules(circuit, configs)
 
         module_names = [name for name in circuit.modules.keys() if name not in skip_modules]
-        all_chains_by_module = self._scan_all_chains(input_path, top_module, module_names, configs)
+        with TemporaryDirectory() as tmpdir:
+            file_path = os.path.join(tmpdir, 'circuit.v')
+            circuit.write(file_path)
+            all_chains_by_module = self._scan_all_chains(file_path, circuit.top.name, module_names, configs)
 
         self._update_detection_stats(result, circuit, all_chains_by_module)
         self._replace_all(result, circuit, all_chains_by_module)
@@ -973,26 +970,36 @@ class CircuitOptimizer:
             LOG.warn(f'Removed {removed} invalid lines')
 
 
+def _generic_optimizer() -> CircuitOptimizer:
+    scanner = GateChainScanner(script_path=__file__)
+    replacer = ChainReplacer(boundary_extractor=ChainBoundaryExtractor())
+    return CircuitOptimizer(scanner=scanner, replacer=replacer)
+
+
 # Main Entry Point
-def optimize_circuit(
-    input_path: str,
-    top_module: str,
-    gates: Union[str, List[str]] = 'or',
+def opt_chains(
+    circuit: Optional[Circuit] = None,
+    input_path: Optional[str] = None,
+    top_module: Optional[str] = None,
+    *,
+    gates: Optional[List[str]] = None,
     output_path: Optional[str] = None,
     skip_modules: Optional[Set[str]] = None,
     remove_degenerate: bool = False,
 ) -> CircuitOptimizationResult:
     """Optimize circuit by replacing gate chains with balanced trees."""
-    gate_list = _normalize_gates(gates)
-    configs = [get_gate_config(g) for g in gate_list]
+    if all(o is None for o in [circuit, input_path, top_module]) or all(o is not None for o in [circuit, input_path, top_module]):
+        raise ValueError('Either a circuit object, or a Verilog file plus top module must be specified!')
+    if (input_path is None) != (top_module is None):
+        raise ValueError('Both Verilog file path and top module must be specified!')
+    if input_path and top_module:
+        circuit = nc_read(input_path, top=top_module)
+    if gates is None:
+        gates = []
+    configs = [get_gate_config(g) for g in gates]
 
-    scanner = GateChainScanner(script_path=__file__)
-    replacer = ChainReplacer(boundary_extractor=ChainBoundaryExtractor())
-    optimizer = CircuitOptimizer(scanner=scanner, replacer=replacer)
-
-    return optimizer.optimize(
-        input_path=input_path,
-        top_module=top_module,
+    return _generic_optimizer().optimize(
+        circuit=circuit,  # type: ignore[arg-type]
         configs=configs,
         output_path=output_path,
         skip_modules=skip_modules or set(),

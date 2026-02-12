@@ -7,7 +7,7 @@ from typing import ClassVar
 import pytest
 
 import netlist_carpentry.routines.floodfill.chain_optimizer as co
-from netlist_carpentry import Module, ModuleGraph
+from netlist_carpentry import Circuit, Module, ModuleGraph
 from netlist_carpentry.core.enums.direction import Direction as Dir
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.utils.gate_lib import AndGate, OrGate, XorGate
@@ -1250,31 +1250,51 @@ def _noop_log_report(self, _log):
     return None
 
 
-def test_optimize_circuit_gates_as_string(monkeypatch):
-    circ = DummyCircuitOpt('C', {'m1': DummyModOpt('m1')})
+def test_optimize_circuit_gates(monkeypatch):
+    circ = Circuit(name='c')
+    circ.set_top(circ.create_module('m1'))
     monkeypatch.setattr(co, 'nc_read', lambda input_path, top: circ)
 
     monkeypatch.setattr(co.GateChainScanner, 'collect_chains', lambda *a, **k: {})
     monkeypatch.setattr(co.CircuitOptimizationResult, '_log_report', _noop_log_report)
 
-    res = co.optimize_circuit('dummy.v', 'TOP', gates='or')
+    res = co.opt_chains(circ, gates=['or', 'and'])
     assert res.modules_processed == 1
 
 
-def test_optimize_circuit_gates_as_list(monkeypatch):
-    circ = DummyCircuitOpt('C', {'m1': DummyModOpt('m1')})
+def test_optimize_circuit_file(monkeypatch):
+    circ = Circuit(name='c')
+    circ.set_top(circ.create_module('m1'))
     monkeypatch.setattr(co, 'nc_read', lambda input_path, top: circ)
 
     monkeypatch.setattr(co.GateChainScanner, 'collect_chains', lambda *a, **k: {})
     monkeypatch.setattr(co.CircuitOptimizationResult, '_log_report', _noop_log_report)
 
-    res = co.optimize_circuit('dummy.v', 'TOP', gates=['or', 'and'])
+    res = co.opt_chains(None, 'tests/files/decentral_mux.v', 'decentral_mux', gates=['or', 'and'])
     assert res.modules_processed == 1
+
+
+def test_optimize_circuit_bad_combinations(monkeypatch):
+    circ = Circuit(name='c')
+    circ.set_top(circ.create_module('m1'))
+    with pytest.raises(ValueError):
+        co.opt_chains(circ, 'tests/files/decentral_mux.v', 'decentral_mux', gates=['or', 'and'])
+    with pytest.raises(ValueError):
+        co.opt_chains(None, None, None, gates=['or', 'and'])
+    with pytest.raises(ValueError):
+        co.opt_chains(None, None, 'decentral_mux', gates=['or', 'and'])
+    with pytest.raises(ValueError):
+        co.opt_chains(None, 'tests/files/decentral_mux.v', None, gates=['or', 'and'])
+    with pytest.raises(ValueError):
+        co.opt_chains(circ, None, 'decentral_mux', gates=['or', 'and'])
+    with pytest.raises(ValueError):
+        co.opt_chains(circ, 'tests/files/decentral_mux.v', None, gates=['or', 'and'])
 
 
 def test_optimize_circuit_with_chains(monkeypatch, tmp_path):
-    mod = DummyModOpt('m1')
-    circ = DummyCircuitOpt('C', {'m1': mod})
+    circ = Circuit(name='C')
+    mod = circ.create_module('m1')
+    circ.set_top(mod)
 
     monkeypatch.setattr(co, 'nc_read', lambda input_path, top: circ)
 
@@ -1296,37 +1316,41 @@ def test_optimize_circuit_with_chains(monkeypatch, tmp_path):
     monkeypatch.setattr(co.CircuitOptimizationResult, '_log_report', _noop_log_report)
 
     out_file = tmp_path / 'out.v'
-    res = co.optimize_circuit('dummy.v', 'TOP', gates='or', output_path=str(out_file))
+    res = co.opt_chains(circ, gates=['or'], output_path=str(out_file))
 
     assert res.total_chains_replaced == 1
 
 
 def test_optimize_circuit_with_skip_modules(monkeypatch):
-    circ = DummyCircuitOpt('C', {'m1': DummyModOpt('m1'), 'm2': DummyModOpt('m2')})
+    circ = Circuit(name='C')
+    circ.set_top(circ.create_module('m1'))
+    circ.create_module('m2')
     monkeypatch.setattr(co, 'nc_read', lambda input_path, top: circ)
 
     monkeypatch.setattr(co.GateChainScanner, 'collect_chains', lambda *a, **k: {})
     monkeypatch.setattr(co.CircuitOptimizationResult, '_log_report', _noop_log_report)
 
-    res = co.optimize_circuit('dummy.v', 'TOP', gates='or', skip_modules={'m1'})
+    res = co.opt_chains(circ, gates=['or'], skip_modules={'m1'})
     assert res.modules_processed == 2
 
 
 def test_optimize_circuit_with_remove_degenerate(monkeypatch):
-    circ = DummyCircuitOpt('C', {'m1': DummyModOpt('m1')})
+    circ = Circuit(name='c')
+    circ.set_top(circ.create_module('m1'))
     monkeypatch.setattr(co, 'nc_read', lambda input_path, top: circ)
 
     monkeypatch.setattr(co.GateChainScanner, 'collect_chains', lambda *a, **k: {})
     monkeypatch.setattr(co, 'remove_degenerate_gates', lambda *a, **k: 5)
     monkeypatch.setattr(co.CircuitOptimizationResult, '_log_report', _noop_log_report)
 
-    res = co.optimize_circuit('dummy.v', 'TOP', gates='or', remove_degenerate=True)
+    res = co.opt_chains(circ, gates=['or'], remove_degenerate=True)
     assert res.modules_processed == 1
 
 
 def test_optimize_circuit_chain_replace_exception(monkeypatch):
-    mod = DummyModOpt('m1')
-    circ = DummyCircuitOpt('C', {'m1': mod})
+    circ = Circuit(name='C')
+    mod = circ.create_module('m1')
+    circ.set_top(mod)
 
     monkeypatch.setattr(co, 'nc_read', lambda input_path, top: circ)
 
@@ -1339,13 +1363,14 @@ def test_optimize_circuit_chain_replace_exception(monkeypatch):
 
     monkeypatch.setattr(co.CircuitOptimizationResult, '_log_report', _noop_log_report)
 
-    res = co.optimize_circuit('dummy.v', 'TOP', gates='or')
+    res = co.opt_chains(None, 'dummy.v', 'TOP', gates=['or'])
     assert res.total_chains_failed == 1
 
 
 def test_optimize_circuit_chain_skipped(monkeypatch):
-    mod = DummyModOpt('m1')
-    circ = DummyCircuitOpt('C', {'m1': mod})
+    circ = Circuit(name='C')
+    mod = circ.create_module('m1')
+    circ.set_top(mod)
 
     monkeypatch.setattr(co, 'nc_read', lambda input_path, top: circ)
     monkeypatch.setattr(co.GateChainScanner, 'collect_chains', lambda *a, **k: {'m1': [['g1', 'g2']]})
@@ -1361,7 +1386,7 @@ def test_optimize_circuit_chain_skipped(monkeypatch):
 
     monkeypatch.setattr(co.CircuitOptimizationResult, '_log_report', _noop_log_report)
 
-    res = co.optimize_circuit('dummy.v', 'TOP', gates='or')
+    res = co.opt_chains(None, 'dummy.v', 'TOP', gates=['or'])
     assert res.total_chains_skipped == 1
 
 
