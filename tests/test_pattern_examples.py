@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 
 import pytest
 from utils import save_results
@@ -11,7 +10,7 @@ from netlist_carpentry.core.graph.pattern import Pattern
 from netlist_carpentry.core.graph.pattern_generator import PatternGenerator
 from netlist_carpentry.io.read.read_utils import generate_json_netlist
 from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
-from netlist_carpentry.routines.floodfill.cascading_or_replacement import cascading_or_replacement
+from netlist_carpentry.routines.floodfill.chain_optimizer import opt_chains
 from netlist_carpentry.utils.gate_lib import OrGate
 from netlist_carpentry.utils.log import Log, initialize_logging
 
@@ -68,13 +67,13 @@ def test_decentral_mux_pattern_replacement(dec_mux_circuit: Circuit, dec_mux_pat
         assert or_g.ports['Y'][0].raw_ws_path != ''
 
 
-@pytest.mark.skip
 def test_decentral_mux_pattern_replacement_fnc() -> None:
     generate_json_netlist('tests/files/decentral_mux.v', 'tests/files/decentral_mux.json')
-    cascading_or_replacement(Path('tests/files/decentral_mux.json'), 'tests/files/gen/decentral_mux_fnc_replaced.v')
+    opt_chains(None, 'tests/files/decentral_mux.v', 'decentral_mux', gates=['or'], output_path='./tests/files/gen/decentral_mux_fnc_replaced.v')
     c_before = read('tests/files/decentral_mux.v')
     c_after = read('./tests/files/gen/decentral_mux_fnc_replaced.v')
     m_before = c_before.first
+    m_before.optimize()
     m_after = c_after.first
 
     nr_inst_before = len(m_before.instances)
