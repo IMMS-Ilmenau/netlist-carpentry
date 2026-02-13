@@ -6,6 +6,8 @@
 - `netlist_carpentry.utils.gate_lib.Divider` class modeling a Divider cell
 - `netlist_carpentry.utils.gate_lib.Modulo` class modeling a Modulo cell
 - Added factory methods for Adder (`adder()`), Subtractor (`subtractor()`), Multiplier (`multiplier()`), Divider (`divider()`), Modulo (`modulo()`) to `netlist_carpentry.utils.gate_factory`
+- `netlist_carpentry.Module.check()` to check a module for issues - currently only combinational loops and fanout issues, returning a CheckReport object
+- `netlist_carpentry.Circuit.check()` to check the whole circuit
 
 ## CHANGED
 - `netlist_carpentry.routines.floodfill` → `netlist_carpentry.routines.opt.floodfill`
