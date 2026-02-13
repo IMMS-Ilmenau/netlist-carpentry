@@ -3,33 +3,40 @@
 ## ADDED
 - `netlist_carpentry.routines.opt.floodfill.chain_optimizer` for optimizing instance chains and rebuilding them into trees
 - `netlist_carpentry.routines.opt.floodfill.chain_metrics` for optimization data collection and tracing
+- `netlist_carpentry.utils.gate_lib.Divider` class modeling a Divider cell
+- `netlist_carpentry.utils.gate_lib.Modulo` class modeling a Modulo cell
+- Added factory methods for Adder (`adder()`), Subtractor (`subtractor()`), Multiplier (`multiplier()`), Divider (`divider()`), Modulo (`modulo()`) to `netlist_carpentry.utils.gate_factory`
 
 ## CHANGED
 - `netlist_carpentry.routines.floodfill` → `netlist_carpentry.routines.opt.floodfill`
 
-### REMOVED
+## FIXED
+- Fixed issues where params get droppend after instance creation
+- `netlist_carpentry.Port.set_signed()` now updates signedness in its parent instance correctly if the port is an instance port
+
+## REMOVED
 - `netlist_carpentry.routines.floodfill.cascading_or_replacement`
 
 # Older Versions
 
-## 0.3.3 (2026-02-03)
+## 0.3.3 (2026-02-11)
 
-## ADDED
+### ADDED
 - `netlist_carpentry.scripts.equivalence_checking.run_equiv()` to execute an equivalence check via Yosys equiv_* passes, as a more stable alternative to EQY (import via `from netlist_carpentry import run_equiv`)
 - `netlist_carpentry.scripts.equivalence_checking.run_eqy()` as a standalone function to skip the creation of the Wrapper class (import via `from netlist_carpentry import run_eqy`)
 
-## CHANGED
+### CHANGED
 - `netlist_carpentry.Module.change_instance_type()` → `netlist_carpentry.Module.refine_instance()`
 - `netlist_carpentry.Module.replace()` → `netlist_carpentry.Module.substitute_instance()`
 - `netlist_carpentry.scripts.eqy_check` → `netlist_carpentry.scripts.equivalence_checking`
 - `netlist_carpentry.scripts.eqy_check.EqyWrapper` → `netlist_carpentry.scripts.equivalence_checking.EquivalenceChecking`
 - Whole interface of `netlist_carpentry.scripts.equivalence_checking.EquivalenceChecking` has been rewritten, the methods still mainly exist, but now use `netlist_carpentry.run_eqy()` instead of the class-related methods - this is far more convenient
 
-## FIXED
+### FIXED
 - Fixed renaming issues that occurred for wires when renaming a modules
 - Fixed issue with black-box instances losing all connection data if no port direction is specified for the instance
 - Fixed some issues with EQY by flattening the design inside the EQY process
-`
+
 
 ## 0.3.2 (2026-02-03)
 
