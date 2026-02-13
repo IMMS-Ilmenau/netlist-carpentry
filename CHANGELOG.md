@@ -15,6 +15,7 @@
 ## FIXED
 - Fixed issues where params get droppend after instance creation
 - `netlist_carpentry.Port.set_signed()` now updates signedness in its parent instance correctly if the port is an instance port
+- Fixed performance issues with `netlist_carpentry.Circuit.copy_module()` and `netlist_carpentry.Circuit.uniquify()` caused by excessive deepcopying
 
 ## REMOVED
 - `netlist_carpentry.routines.floodfill.cascading_or_replacement`

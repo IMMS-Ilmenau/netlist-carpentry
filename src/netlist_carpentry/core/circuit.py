@@ -228,9 +228,23 @@ class Circuit(BaseModel):
                 old_module = self[old_module]
             else:
                 raise ObjectNotFoundError(f'No module {old_module} exists in circuit {self.name}!')
-        new_module = deepcopy(old_module)
-        new_module.set_name(new_name)
-        return self.add_module(new_module)
+        new_module = self.create_module(new_name)
+        new_module.parameters = old_module.parameters.copy()
+        new_module.metadata = deepcopy(old_module.metadata)
+        for wire in old_module.wires.values():
+            new_module.create_wire(wire.name, wire.width, offset=wire.offset or 0)
+        for port in old_module.ports.values():
+            p = new_module.create_port(port.name, port.direction, port.width, port.offset or 0)
+            for idx, ws_path in port.connected_wire_segments.items():
+                new_module.connect(ws_path.replace(old_module.name, new_name), p[idx])
+        for instance in old_module.instances.values():
+            idef = instance.module_definition if instance.module_definition is not None else instance.__class__
+            new_inst = new_module.create_instance(idef, instance.name, dict(instance.parameters))
+            for pname, con_dict in instance.connections.items():
+                new_inst.disconnect(pname)
+                for idx, ws_path in con_dict.items():
+                    new_module.connect(ws_path.replace(old_module.name, new_name), new_inst.ports[pname][idx])
+        return new_module
 
     def remove_module(self, module: Union[ModuleName, Module]) -> None:
         """
