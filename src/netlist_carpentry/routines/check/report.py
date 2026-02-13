@@ -20,3 +20,7 @@ class CheckReport:
 
     def __bool__(self) -> bool:
         return self.has_comb_loops or self.any_without_load
+
+    def update(self, other: 'CheckReport') -> None:
+        self.comb_loops.update(other.comb_loops)
+        self.fanouts.update(other.fanouts)

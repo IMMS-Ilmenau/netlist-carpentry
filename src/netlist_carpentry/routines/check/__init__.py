@@ -2,5 +2,6 @@
 
 from .comb_loops import find_comb_loops, has_comb_loops
 from .fanout_analysis import fanout
+from .report import CheckReport
 
-__all__ = ['fanout', 'find_comb_loops', 'has_comb_loops']
+__all__ = ['CheckReport', 'fanout', 'find_comb_loops', 'has_comb_loops']
