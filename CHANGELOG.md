@@ -1,4 +1,18 @@
-# Changelog 0.3.3
+# Changelog 0.3.4
+
+## ADDED
+- `netlist_carpentry.routines.opt.floodfill.chain_optimizer` for optimizing instance chains and rebuilding them into trees
+- `netlist_carpentry.routines.opt.floodfill.chain_metrics` for optimization data collection and tracing
+
+## CHANGED
+- `netlist_carpentry.routines.floodfill` → `netlist_carpentry.routines.opt.floodfill`
+
+### REMOVED
+- `netlist_carpentry.routines.floodfill.cascading_or_replacement`
+
+# Older Versions
+
+## 0.3.3 (2026-02-03)
 
 ## ADDED
 - `netlist_carpentry.scripts.equivalence_checking.run_equiv()` to execute an equivalence check via Yosys equiv_* passes, as a more stable alternative to EQY (import via `from netlist_carpentry import run_equiv`)
@@ -15,8 +29,7 @@
 - Fixed renaming issues that occurred for wires when renaming a modules
 - Fixed issue with black-box instances losing all connection data if no port direction is specified for the instance
 - Fixed some issues with EQY by flattening the design inside the EQY process
-
-# Older Versions
+`
 
 ## 0.3.2 (2026-02-03)
 
