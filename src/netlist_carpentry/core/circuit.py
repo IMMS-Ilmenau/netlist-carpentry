@@ -502,12 +502,10 @@ class Circuit(BaseModel):
             idx = 0
             mapping = {}
             for m_instpath in self.instances[m.name]:
-                m_i = deepcopy(m)
-                while f'{m_i.name}_{idx}' in self:
+                while f'{m.name}_{idx}' in self:
                     idx += 1
-                new_inst_type = f'{m_i.name}_{idx}'
-                m_i.set_name(new_inst_type)
-                self.add_module(m_i)
+                new_inst_type = f'{m.name}_{idx}'
+                self.copy_module(m.name, new_inst_type)
                 self.get_from_path(m_instpath).instance_type = new_inst_type
                 mapping[new_inst_type] = [m_instpath]
                 mapdict[m_instpath] = new_inst_type
