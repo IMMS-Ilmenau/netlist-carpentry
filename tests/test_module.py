@@ -1704,6 +1704,21 @@ def test_optimize(connected_module: Module) -> None:
     assert len(connected_module.instances) == 0
 
 
+def test_check(connected_module: Module) -> None:
+    report = connected_module.check()
+    assert report
+    assert report.any_without_load  # Unconnected en wire
+    assert connected_module.name in report.comb_loops  # Module name index is present...
+    assert not report.comb_loops[connected_module.name]  # ...but no comb loops found
+    assert not report.has_comb_loops
+
+    connected_module.remove_wire('en')
+    report = connected_module.check()
+    assert not report
+    assert not report.any_without_load  # Unconnected en wire
+    assert not report.has_comb_loops
+
+
 def test_set_name(connected_module: Module) -> None:
     connected_module.set_name('SOME_MODULE')
     assert connected_module.name == 'SOME_MODULE'

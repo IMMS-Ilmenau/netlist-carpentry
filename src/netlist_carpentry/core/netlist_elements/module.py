@@ -6,7 +6,7 @@ import copy
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Callable, Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union, overload
+from typing import TYPE_CHECKING, Callable, Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union, overload
 from uuid import uuid4
 
 from dash import Dash
@@ -53,6 +53,9 @@ T_INSTANCE = TypeVar('T_INSTANCE', bound=Instance)
 T_PORT = Union[Port['Module'], Port[Instance]]
 ANY_SIGNAL_SOURCE = Union[PortSegmentPath, PortPath, PortSegment, T_PORT, WireSegmentPath, WireSegment, Wire]
 ANY_SIGNAL_TARGET = Union[PortSegmentPath, PortPath, PortSegment, T_PORT]
+
+if TYPE_CHECKING:
+    from netlist_carpentry.routines.check.report import CheckReport
 
 
 class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin, NetlistElement, BaseModel):
@@ -1272,6 +1275,20 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 break
             any_opt = True
         return any_opt
+
+    def check(self) -> 'CheckReport':
+        """Checks this module for issues.
+
+        Returns:
+            CheckReport: A report with all found issues.
+                bool(CheckReport) returns True if there are issues, and False otherwise.
+        """
+        from netlist_carpentry.routines.check import CheckReport, fanout, find_comb_loops
+
+        LOG.info(f'Checking module {self.name}...')
+        comb_loops = find_comb_loops(self)
+        fanout_by_number = fanout(self, sort_by='number')
+        return CheckReport(comb_loops={self.name: comb_loops}, fanouts=fanout_by_number)
 
     @overload
     def show(self) -> None: ...

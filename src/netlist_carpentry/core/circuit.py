@@ -7,7 +7,7 @@ import subprocess
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
-from typing import Callable, DefaultDict, Dict, Iterator, List, Literal, Optional, Union, overload
+from typing import TYPE_CHECKING, Callable, DefaultDict, Dict, Iterator, List, Literal, Optional, Union, overload
 
 from pydantic import BaseModel, NonNegativeInt
 
@@ -42,6 +42,9 @@ from netlist_carpentry.utils.log import LOG
 ModuleName = str
 InstanceType = str
 VerilogPath = str
+
+if TYPE_CHECKING:
+    from netlist_carpentry.routines.check.report import CheckReport
 
 
 class Circuit(BaseModel):
@@ -619,12 +622,26 @@ class Circuit(BaseModel):
         from netlist_carpentry.routines.opt import clean_circuit, opt_chains
 
         any_optimized = False
-        for mname, m in self.modules.items():
-            LOG.info(f'Optimizing module {mname}...')
+        for m in self:
+            LOG.info(f'Optimizing module {m.name}...')
             any_optimized |= m.optimize()
         any_optimized |= bool(opt_chains(self).total_chains_replaced)
         any_optimized |= clean_circuit(self)
         return any_optimized
+
+    def check(self) -> CheckReport:
+        """Checks the circuit for issues.
+
+        Returns:
+            CheckReport: A report with all found issues.
+                bool(CheckReport) returns True if there are issues, and False otherwise.
+        """
+        from netlist_carpentry.routines.check import CheckReport
+
+        report = CheckReport({}, {})
+        for m in self:
+            report.update(m.check())
+        return report
 
     def evaluate(self) -> None:
         """

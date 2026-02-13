@@ -660,6 +660,22 @@ def test_optimize_circuit(connected_circuit: Circuit) -> None:
     assert not has_changed
 
 
+def test_check_circuit(connected_circuit: Circuit) -> None:
+    report = connected_circuit.check()
+    assert report
+    assert report.any_without_load  # Unconnected en wire
+    for m in connected_circuit:
+        assert m.name in report.comb_loops  # Module name index is present...
+        assert not report.comb_loops[m.name]  # ...but no comb loops found
+    assert not report.has_comb_loops
+
+    connected_circuit['test_module1'].remove_wire('en')
+    report = connected_circuit.check()
+    assert not report
+    assert not report.any_without_load  # Unconnected en wire
+    assert not report.has_comb_loops
+
+
 def test_evaluate(connected_circuit: Circuit) -> None:
     wrapper = connected_circuit.get_module('wrapper')
     in1 = wrapper.get_port('in1')
