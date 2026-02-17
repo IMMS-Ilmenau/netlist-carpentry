@@ -111,14 +111,14 @@ class EquivalenceChecking:
             subprocess.CompletedProcess: The result of the execution plus some metadata.
         """
         self._create_eqy_file(overwrite)
-        if overwrite and output_path is not None and os.path.exists(output_path):
-            shutil.rmtree(output_path, ignore_errors=True)
         # Use the path if the given path is not None, otherwise use a temporary directory
         context = tempfile.TemporaryDirectory() if output_path is None else nullcontext(output_path)
         if output_path is not None:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
         with context as workdir:
+            if overwrite and os.path.exists(workdir):
+                shutil.rmtree(workdir, ignore_errors=True)
             dir_path = os.path.dirname(os.path.abspath(__file__))
             stdout = subprocess.PIPE if quiet else None
             stderr = subprocess.PIPE if quiet else None
