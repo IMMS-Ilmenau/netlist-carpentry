@@ -499,9 +499,37 @@ def test_demultiplexer(module: Module) -> None:
 
 
 def test_adder(module: Module) -> None:
-    g = factory.adder(module)
+    A = module.create_port('A', Direction.IN, width=4)
+    B = module.create_port('B', Direction.IN, width=4)
+    Y = module.create_port('Y', Direction.OUT, width=4)
+    g = factory.adder(module, A=A, B=B, Y=Y)
     assert isinstance(g, lib.Adder)
     assert g.name == '_Adder_0_'
+    assert g.ports['A'].is_connected
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].is_connected
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].is_connected
+    assert g.ports['Y'].width == 4
+
+
+def test_adder_different_widths(module: Module) -> None:
+    A = module.create_port('A', Direction.IN, width=4)
+    B = module.create_port('B', Direction.IN, width=1)
+    Y = module.create_port('Y', Direction.OUT, width=5)
+    Y2 = module.create_port('Y2', Direction.OUT, width=6)
+    g = factory.adder(module, A=A, B=B, Y=Y)
+    assert isinstance(g, lib.Adder)
+    assert g.name == '_Adder_0_'
+    assert g.ports['A'].is_connected
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].is_connected
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].is_connected
+    assert g.ports['Y'].width == 5
+
+    with pytest.raises(WidthMismatchError):
+        factory.adder(module, A=A, B=B, Y=Y2)
 
 
 def test_subtractor(module: Module) -> None:

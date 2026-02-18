@@ -1586,7 +1586,7 @@ def test_demux_behavior(simple_module: Module) -> None:
 def test_adder_structure(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Adder
 
-    a = Adder(raw_path='a.adder_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    a = Adder(raw_path='a.adder_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     assert 'A' in a.ports
     assert 'B' in a.ports
@@ -1636,7 +1636,7 @@ def test_adder_structure(simple_module: Module) -> None:
 def test_adder_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Adder
 
-    a = Adder(raw_path='a.adder_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    a = Adder(raw_path='a.adder_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     a.tie_port('A', 0, '0')
     a.tie_port('A', 1, '0')
@@ -1675,7 +1675,7 @@ def test_adder_behavior(simple_module: Module) -> None:
 def test_subtractor_structure(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Subtractor
 
-    s = Subtractor(raw_path='a.subtractor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    s = Subtractor(raw_path='a.subtractor_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     assert 'A' in s.ports
     assert 'B' in s.ports
@@ -1710,7 +1710,7 @@ def test_subtractor_structure(simple_module: Module) -> None:
 def test_subtractor_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Subtractor
 
-    s = Subtractor(raw_path='a.subtractor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    s = Subtractor(raw_path='a.subtractor_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     s.tie_port('A', 0, '0')
     s.tie_port('A', 1, '0')
@@ -1747,7 +1747,7 @@ def test_subtractor_behavior(simple_module: Module) -> None:
 def test_multiplier_structure(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Multiplier
 
-    m = Multiplier(raw_path='a.multiplier_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    m = Multiplier(raw_path='a.multiplier_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     assert 'A' in m.ports
     assert 'B' in m.ports
@@ -1784,7 +1784,7 @@ def test_multiplier_structure(simple_module: Module) -> None:
 def test_multiplier_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Multiplier
 
-    m = Multiplier(raw_path='a.multiplier_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    m = Multiplier(raw_path='a.multiplier_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     m.tie_port('A', 0, '0')
     m.tie_port('A', 1, '0')
@@ -1821,7 +1821,7 @@ def test_multiplier_behavior(simple_module: Module) -> None:
 def test_divider_structure(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Divider
 
-    d = Divider(raw_path='a.divider_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    d = Divider(raw_path='a.divider_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     assert 'A' in d.ports
     assert 'B' in d.ports
@@ -1858,7 +1858,7 @@ def test_divider_structure(simple_module: Module) -> None:
 def test_divider_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Divider
 
-    d = Divider(raw_path='a.divider_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    d = Divider(raw_path='a.divider_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     d.tie_port('A', 0, '0')
     d.tie_port('A', 1, '0')
@@ -1897,7 +1897,7 @@ def test_divider_behavior(simple_module: Module) -> None:
 def test_modulo_structure(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Modulo
 
-    m = Modulo(raw_path='a.modulo_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    m = Modulo(raw_path='a.modulo_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     assert 'A' in m.ports
     assert 'B' in m.ports
@@ -1934,7 +1934,7 @@ def test_modulo_structure(simple_module: Module) -> None:
 def test_modulo_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Modulo
 
-    m = Modulo(raw_path='a.modulo_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    m = Modulo(raw_path='a.modulo_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     m.tie_port('A', 0, '0')
     m.tie_port('A', 1, '0')

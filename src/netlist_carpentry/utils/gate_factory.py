@@ -3,6 +3,8 @@
 from math import ceil, log2
 from typing import Dict, List, Optional, Tuple, Type, TypeVar, Union
 
+from pydantic import PositiveInt
+
 import netlist_carpentry.utils.gate_lib as g
 from netlist_carpentry.core.exceptions import MultipleDriverError, WidthMismatchError
 from netlist_carpentry.core.netlist_elements.instance import Instance
@@ -479,6 +481,35 @@ def demultiplexer(
     return gate
 
 
+def _arith_gate(
+    gate: Type[GATE],
+    module: M,
+    inst_name: Optional[str] = None,
+    A: Optional[PORT] = None,
+    B: Optional[PORT] = None,
+    Y: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> GATE:
+    params = params or {}
+    _update_params(params, [A], 'A_WIDTH')
+    _update_params(params, [B], 'B_WIDTH')
+    _update_params(params, [Y], 'Y_WIDTH')
+    a_width: PositiveInt = params['A_WIDTH']  # type: ignore
+    b_width: PositiveInt = params['B_WIDTH']  # type: ignore
+    y_width: PositiveInt = params['Y_WIDTH']  # type: ignore
+    g = module.create_instance(gate, inst_name, params)
+    if a_width + b_width < y_width:
+        raise WidthMismatchError(f'Output width of {g.raw_path} is larger than both input widths! ({y_width} > {a_width} + {b_width})')
+    _check_out_connection(Y, g)
+    if A is not None:
+        module.connect(A, g.ports['A'])
+    if B is not None:
+        module.connect(B, g.ports['B'])
+    if Y is not None:
+        module.connect(g.ports['Y'], Y)
+    return g
+
+
 def adder(
     module: M,
     inst_name: Optional[str] = None,
@@ -487,7 +518,7 @@ def adder(
     Y: Optional[PORT] = None,
     params: Optional[Dict[str, object]] = None,
 ) -> g.Adder:
-    return _bin_gate(g.Adder, module, inst_name, A, B, Y, params)
+    return _arith_gate(g.Adder, module, inst_name, A, B, Y, params)
 
 
 def subtractor(
@@ -498,7 +529,7 @@ def subtractor(
     Y: Optional[PORT] = None,
     params: Optional[Dict[str, object]] = None,
 ) -> g.Subtractor:
-    return _bin_gate(g.Subtractor, module, inst_name, A, B, Y, params)
+    return _arith_gate(g.Subtractor, module, inst_name, A, B, Y, params)
 
 
 def multiplier(
@@ -509,10 +540,7 @@ def multiplier(
     Y: Optional[PORT] = None,
     params: Optional[Dict[str, object]] = None,
 ) -> g.Multiplier:
-    return _bin_gate(g.Multiplier, module, inst_name, A, B, Y, params)
-
-
-### ARITHMETIC GATES !!!
+    return _arith_gate(g.Multiplier, module, inst_name, A, B, Y, params)
 
 
 def _dff(
