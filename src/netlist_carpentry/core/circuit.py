@@ -123,7 +123,7 @@ class Circuit(BaseModel):
         """Returns a module from the circuit that has the given name."""
         if key in self.modules:
             return self.modules[key]
-        raise ObjectNotFoundError(f'No module {key} exists in this circui!')
+        raise ObjectNotFoundError(f'No module {key} exists in this circuit!')
 
     def __contains__(self, key: Union[str, Module]) -> bool:
         """Implements `module_name in circuit`."""
