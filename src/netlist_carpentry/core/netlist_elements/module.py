@@ -206,7 +206,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if old_instance not in self.instances:
             raise ObjectNotFoundError(f'Cannot replace instance {old_instance}, since no such instance exists in module {self.name}!')
         old_instance = self.instances[old_instance]
-        new_instance = self.create_instance(new_type_definition, old_instance.name + uuid4().hex, params=old_instance.parameters)
+        new_instance = self.create_instance(new_type_definition, old_instance.name + uuid4().hex, params=dict(old_instance.parameters))
         self._substitute_check_ports(old_instance, new_instance)
         connections = old_instance.connections
         self.remove_instance(old_instance)
@@ -278,7 +278,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 f'Unable to replace {old_instance.raw_path}: New instance {new_instance.raw_path} is missing these ports: {", ".join(missing_ports)}'
             )
         for pname, p in old_instance.ports.items():
-            if pname in new_instance.ports and p.width != new_instance.ports[pname].width:
+            if pname in new_instance.ports and p.width > new_instance.ports[pname].width:
                 raise WidthMismatchError(
                     f'Port {pname} is {p.width} bit wide in {old_instance.raw_path}, but {new_instance.ports[pname].width} bit wide in {new_instance.raw_path}'
                 )
@@ -288,7 +288,8 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             if pname in connections:
                 p = new_instance.ports[pname]
                 for idx, ps in p:
-                    self.connect(connections[pname][idx], ps)
+                    if idx in connections[pname]:
+                        self.connect(connections[pname][idx], ps)
 
     def remove_instance(self, instance: Union[str, Instance]) -> None:
         """
