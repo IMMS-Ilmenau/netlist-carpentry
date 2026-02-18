@@ -214,7 +214,7 @@ def _opt_constant_propagate_dff(module: Module, inst: DFF) -> bool:
                 f'Found {ff_id} with disabled Enable signal ({ff_id} never active, except for reset). Constant propagation not implemented for this edge case!'
             )
 
-    if inst.ports['D'].is_tied and not _tied_clk(inst) and not _tied_en_inactive(inst):
+    if inst.ports['D'].is_tied and not _tied_clk(inst) and (not isinstance(inst, EnMixin) or not _tied_en_inactive(inst)):  # type: ignore
         _propagate_output_port(module, inst, 'Q', inst.ports['D'].signal_array)  # Propagate data to output
         propagates = True
     return propagates
