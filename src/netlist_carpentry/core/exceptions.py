@@ -73,6 +73,12 @@ class PathResolutionError(ObjectNotFoundError):
     """Raised when a circuit path cannot be resolved."""
 
 
+class HierarchyError(CircuitStructureError):
+    """Raised whenever issues with the circuit's hierarchy arise."""
+
+    pass
+
+
 class DetachedSegmentError(CircuitStructureError):
     """Raised when a segment object is created without a parent element."""
 
