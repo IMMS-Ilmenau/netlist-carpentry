@@ -478,12 +478,13 @@ class Circuit(BaseModel):
             return WireSegmentPath(raw=path_str)
         raise PathResolutionError(f'Cannot resolve path {path_str}: The last resolved object is a wire with path {path_str}!')
 
-    def update_instance(self, old_type: str, instance: Union[Instance, InstancePath]) -> None:
+    def update_instance(self, instance: Union[Instance, InstancePath], old_type: Optional[str] = None) -> None:
         if isinstance(instance, InstancePath):
             instance = self.get_from_path(instance)
-        self.instances[old_type].remove(instance.path)
-        if not self.instances[old_type]:
-            self.instances.pop(old_type)
+        if old_type is not None:
+            self.instances[old_type].remove(instance.path)
+            if not self.instances[old_type]:
+                self.instances.pop(old_type)
         self.instances[instance.instance_type].append(instance.path)
 
     def uniquify(self, module: Optional[Union[ModuleName, Module]] = None, *, keep_original_module: bool = False) -> Dict[InstancePath, ModuleName]:

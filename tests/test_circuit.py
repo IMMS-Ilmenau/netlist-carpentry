@@ -445,17 +445,28 @@ def test_update_instance(connected_circuit: Circuit) -> None:
     assert '§and' in connected_circuit.instances
     assert connected_circuit.instances['§and'] == [inst.path]
 
-    connected_circuit.update_instance('§and', inst)
+    connected_circuit.update_instance(inst, '§and')
     assert '§and' not in connected_circuit.instances
     assert 'new_and' in connected_circuit.instances
     assert connected_circuit.instances['new_and'] == [inst.path]
 
     inst.instance_type = 'new_and2'
-    connected_circuit.update_instance('new_and', inst)
+    connected_circuit.update_instance(inst, 'new_and')
     assert '§and' not in connected_circuit.instances
     assert 'new_and' not in connected_circuit.instances
     assert 'new_and2' in connected_circuit.instances
     assert connected_circuit.instances['new_and2'] == [inst.path]
+
+
+def test_update_instance_none(connected_circuit: Circuit) -> None:
+    m = connected_circuit['test_module1']
+    inst = AndGate(raw_path=f'{m.name}.and_inst2', module=m)
+    assert len(connected_circuit.instances['§and']) == 1
+    assert connected_circuit.instances['§and'] == [InstancePath(raw='test_module1.and_inst')]
+
+    connected_circuit.update_instance(inst)
+    assert len(connected_circuit.instances['§and']) == 2
+    assert connected_circuit.instances['§and'] == [InstancePath(raw='test_module1.and_inst'), inst.path]
 
 
 def test_uniquify() -> None:
