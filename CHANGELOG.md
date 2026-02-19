@@ -8,6 +8,8 @@
 - Added factory methods for Adder (`adder()`), Subtractor (`subtractor()`), Multiplier (`multiplier()`), Divider (`divider()`), Modulo (`modulo()`) to `netlist_carpentry.utils.gate_factory`
 - `netlist_carpentry.Module.check()` to check a module for issues - currently only combinational loops and fanout issues, returning a CheckReport object
 - `netlist_carpentry.Circuit.check()` to check the whole circuit
+- `netlist_carpentry.Circuit.update_instance()` to update the circuit instance dictionary (replace the previous instance path entry with the new instance path entry for the correct instance type), useful if the type of an instance gets changed
+
 
 ## CHANGED
 - `netlist_carpentry.routines.floodfill` → `netlist_carpentry.routines.opt.floodfill`
@@ -16,6 +18,10 @@
 - Fixed issues where params get droppend after instance creation
 - `netlist_carpentry.Port.set_signed()` now updates signedness in its parent instance correctly if the port is an instance port
 - Fixed performance issues with `netlist_carpentry.Circuit.copy_module()` and `netlist_carpentry.Circuit.uniquify()` caused by excessive deepcopying
+- Fixed issue with `netlist_carpentry.run_eqy()` failing on newly created directory, if an EQY output path is provided
+- Fixed issue where arithmetic gates, where each port must have the same width, now the output can be of any width up to the sum of the width of its inputs
+- Fixed issues with `netlist_carpentry.Module.refine_instance()` method if port widths increase in the new instance or module definition
+- Fixed issue with `netlist_carpentry.Module.optimize()`, where Netlist Carpentry crashes for a DFFs with constant input but without Enable Port
 
 ## REMOVED
 - `netlist_carpentry.routines.floodfill.cascading_or_replacement`
