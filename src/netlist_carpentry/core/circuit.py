@@ -479,6 +479,23 @@ class Circuit(BaseModel):
         raise PathResolutionError(f'Cannot resolve path {path_str}: The last resolved object is a wire with path {path_str}!')
 
     def update_instance(self, instance: Union[Instance, InstancePath], old_type: Optional[str] = None) -> None:
+        """Updates this Circuit's instance dictionary.
+
+        For a given Instance (or InstancePath), adds a reference to the instance's type definition.
+        For an instance with path `top.submodule.inst` and type `SomeModule`, this method
+        updates the Circuit's instance dictionary, such that `Circuit.instances["SomeModule]`
+        now contains the path `top.submodule.inst`.
+
+        If `old_type` is not None, the corresponding instance path entry for
+        `Circuit.instances["old_type"]` is removed as well.
+        For this, a matching instance path must exist in `Circuit.instances["old_type"]`!
+
+        Args:
+            instance (Union[Instance, InstancePath]): The instance (or path to an instance) to update in this Circuit.
+            old_type (Optional[str], optional): A previous instance type, to delete the former reference from `Circuit.instances`,
+                so that the previous reference does not point to an invalid path.
+                If None, nothing is removed. Defaults to None.
+        """
         if isinstance(instance, InstancePath):
             instance = self.get_from_path(instance)
         if old_type is not None:
