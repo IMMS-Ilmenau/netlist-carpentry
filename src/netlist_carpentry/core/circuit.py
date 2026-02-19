@@ -478,6 +478,35 @@ class Circuit(BaseModel):
             return WireSegmentPath(raw=path_str)
         raise PathResolutionError(f'Cannot resolve path {path_str}: The last resolved object is a wire with path {path_str}!')
 
+    def sync_instances(self) -> None:
+        """
+        Synchronizes the instance registry by collecting instance paths from all modules.
+
+        This method clears the current `instances` dictionary and rebuilds it by
+        iterating through all modules. This is to ensure that an up-to-date mapping exists
+        of instance types to their respective hierarchical paths.
+
+        The `Circuit.instances` dictionary is structured as:
+
+            ```python
+            {
+                'instance_type': ['path/to/inst1', 'path/to/inst2', ...],
+                ...
+            }
+            ```
+
+        Note:
+            This method has a complexity of O(N * M) where N is the number of submodules
+            and M is the number of instance types per submodule.
+            For large circuits, this method might thus be rather slow
+            and should therefore only be used if the `instances` dict somehow got corrupted.
+            For "synchronization" of single instances, use `Circuit.update_instance()` instead.
+        """
+        self.instances.clear()
+        for m in self:
+            for inst in m.instances.values():
+                self.update_instance(inst)
+
     def update_instance(self, instance: Union[Instance, InstancePath], old_type: Optional[str] = None) -> None:
         """Updates this Circuit's instance dictionary.
 

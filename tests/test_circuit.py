@@ -438,6 +438,16 @@ def test_get_path_from_str(connected_circuit: Circuit) -> None:
     assert inst == WireSegmentPath(raw='wrapper.I_cm.wire_and.0')
 
 
+def test_sync_instances(connected_circuit: Circuit) -> None:
+    instances = connected_circuit.instances.copy()
+    connected_circuit.instances.clear()
+    assert instances != connected_circuit.instances
+    assert not connected_circuit.instances
+
+    connected_circuit.sync_instances()
+    assert instances == connected_circuit.instances
+
+
 def test_update_instance(connected_circuit: Circuit) -> None:
     inst_path = connected_circuit.instances['§and'][0]
     inst = connected_circuit.get_from_path(inst_path)
