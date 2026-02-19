@@ -168,7 +168,7 @@ class Circuit(BaseModel):
 
     def _add_module_instances(self, module: Module) -> None:
         for instance in module.instances.values():
-            self.instances[instance.instance_type].append(instance.path)
+            self.update_instance(instance)
 
     def add_from_circuit(self, other_circuit: Union[VerilogPath, Circuit]) -> Dict[ModuleName, Module]:
         """
