@@ -438,6 +438,26 @@ def test_get_path_from_str(connected_circuit: Circuit) -> None:
     assert inst == WireSegmentPath(raw='wrapper.I_cm.wire_and.0')
 
 
+def test_update_instance(connected_circuit: Circuit) -> None:
+    inst_path = connected_circuit.instances['§and'][0]
+    inst = connected_circuit.get_from_path(inst_path)
+    inst.instance_type = 'new_and'
+    assert '§and' in connected_circuit.instances
+    assert connected_circuit.instances['§and'] == [inst.path]
+
+    connected_circuit.update_instance('§and', inst)
+    assert '§and' not in connected_circuit.instances
+    assert 'new_and' in connected_circuit.instances
+    assert connected_circuit.instances['new_and'] == [inst.path]
+
+    inst.instance_type = 'new_and2'
+    connected_circuit.update_instance('new_and', inst)
+    assert '§and' not in connected_circuit.instances
+    assert 'new_and' not in connected_circuit.instances
+    assert 'new_and2' in connected_circuit.instances
+    assert connected_circuit.instances['new_and2'] == [inst.path]
+
+
 def test_uniquify() -> None:
     c = Circuit(name='c')
     m1 = c.create_module('m1')
