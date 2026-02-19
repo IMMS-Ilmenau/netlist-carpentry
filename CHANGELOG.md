@@ -9,6 +9,7 @@
 - `netlist_carpentry.Module.check()` to check a module for issues - currently only combinational loops and fanout issues, returning a CheckReport object
 - `netlist_carpentry.Circuit.check()` to check the whole circuit
 - `netlist_carpentry.Circuit.update_instance()` to update the circuit instance dictionary (replace the previous instance path entry with the new instance path entry for the correct instance type), useful if the type of an instance gets changed
+- `netlist_carpentry.Circuit.sync_instances()` to rebuild the whole instance dictionary (slow for large circuits, use `netlist_carpentry.Circuit.update_instance()` for smaller/individual changes)
 
 
 ## CHANGED
