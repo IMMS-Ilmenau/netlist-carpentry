@@ -5,7 +5,7 @@ description = "A library for netlist modification and analysis"
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [
-    { name = "Manuel Jirsak" }
+    { name = "Manuel Jirsak", email = "manuel.jirsak@imms.de" }
 ]
 maintainers = [
   { name = "Georg Gläser", email = "georg.glaeser@imms.de" }
