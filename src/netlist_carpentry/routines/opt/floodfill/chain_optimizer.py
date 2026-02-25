@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type
 from netlist_carpentry import Circuit, Direction, Instance, Module, ModuleGraph, PortSegment
 from netlist_carpentry import read as nc_read
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
-from netlist_carpentry.core.netlist_elements.segment_base import _Segment
 from netlist_carpentry.routines.opt.floodfill.chain_metrics import (
     ChainBoundary,
     ChainInfo,
@@ -125,7 +124,7 @@ def extract_instance_key(graph: ModuleGraph, node: str) -> str:
     return str(node)
 
 
-def safe_get_driver(segment: _Segment) -> Any:
+def safe_get_driver(segment: PortSegment) -> Any:
     """Safely get wire segment driver."""
     try:
         return segment.driver()
@@ -145,25 +144,23 @@ def is_valid_wire_path(wire_path: Optional[WireSegmentPath]) -> bool:
     """Check if wire path is valid."""
     if wire_path is None:
         return False
-    raw = getattr(wire_path, 'raw', '')
-    return bool(raw) and raw != '0'
+    return bool(wire_path.raw) and wire_path.raw != '0'
 
 
 def is_constant_wire(wire_path: Optional[WireSegmentPath]) -> bool:
     """Check if wire path is a constant (0, 1, x, z, 1'b0, etc.)."""
     if wire_path is None:
         return True
-    raw = getattr(wire_path, 'raw', '')
-    if not raw:
+    if not wire_path.raw:
         return True
-    if raw in ('0', '1', 'x', 'z', 'X', 'Z'):
+    if wire_path.raw in ('0', '1', 'x', 'z', 'X', 'Z'):
         return True
-    if raw.startswith("1'b") or raw.startswith("1'B"):
+    if wire_path.raw.startswith("1'b") or wire_path.raw.startswith("1'B"):
         return True
     return False
 
 
-def _driver_in_chain(segment, chain_ids: Set[str]) -> bool:
+def _driver_in_chain(segment: PortSegment, chain_ids: Set[str]) -> bool:
     """Return True if the driver of `segment` belongs to a gate instance in `chain_ids`."""
     driver = safe_get_driver(segment)
     if not driver:
@@ -177,7 +174,7 @@ def _driver_in_chain(segment, chain_ids: Set[str]) -> bool:
 
 def _should_include_external_wire(
     wire_path: Optional[WireSegmentPath],
-    segment,
+    segment: PortSegment,
     chain_ids: Set[str],
     internal_wire_paths: Set[str],
 ) -> Tuple[bool, bool]:
