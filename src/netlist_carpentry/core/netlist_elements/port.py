@@ -666,7 +666,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
             if None in dr_list:
                 raise WidthMismatchError(f'Cannot determine single driving port: At least one port segment of port {self.raw_path} is undriven!')
             ps_list: List[PortSegment] = [ps for ps in dr_list if ps is not None]
-            if all(ps_list[0].parent_name == ps.parent_name for ps in ps_list) and ps_list[0].parent.width == self.width:
+            if all(ps_list[0].parent.name == ps.parent.name for ps in ps_list) and ps_list[0].parent.width == self.width:
                 return ps_list[0].parent
             raise WidthMismatchError(f'Cannot determine single driving port of port {self.raw_path}: Differing port widths!')
         return drivers

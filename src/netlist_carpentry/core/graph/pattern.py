@@ -171,8 +171,8 @@ class Pattern:
             nodes = get_ports(seg.ws_path)
             p_maps.extend(nodes)
         # If instance name (0) and port name (1) are equal, index number (2) is no longer needed
-        if all(p_maps[0].grandparent_name == p.grandparent_name and p_maps[0].parent_name == p.parent_name for p in p_maps):
-            return (p_maps[0].grandparent_name, p_maps[0].parent_name, -1)
+        if all(p_maps[0].grandparent.name == p.grandparent.name and p_maps[0].parent.name == p.parent.name for p in p_maps):
+            return (p_maps[0].grandparent.name, p_maps[0].parent.name, -1)
         else:
             # TODO: support for port connections, where multiple wires are connected to different port segments
             raise ValueError(f'Unable to create mapping, since some nodes are differing: {p_maps}')

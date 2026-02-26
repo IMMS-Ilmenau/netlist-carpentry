@@ -80,4 +80,5 @@ class GraphBuildingMixin(ModuleBaseMixin):
                             pname1 = p1_path.name if p1_path.name else dr_name
                             pname2 = p2_path.name if p2_path.name else ld_name
                             key = f'{pname1}{CFG.id_internal}{pname2}'
-                            g.add_edge(dr_name, ld_name, key=key, ename=ws.super_wire_name, dr_seg=dr_seg_idx, ld_seg=ld_seg_idx)
+                            ename = ws.parent.name if ws.has_parent else ''
+                            g.add_edge(dr_name, ld_name, key=key, ename=ename, dr_seg=dr_seg_idx, ld_seg=ld_seg_idx)

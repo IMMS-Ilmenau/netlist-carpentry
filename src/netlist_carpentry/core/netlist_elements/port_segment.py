@@ -314,36 +314,19 @@ class PortSegment(_Segment, BaseModel):
         return self.parent.direction
 
     @property
-    def parent_name(self) -> str:
+    def grandparent(self) -> Union[Module, Instance]:
         """
-        Retrieves the name of the parent Port element from the path.
-
-        If a parent is available (i.e. the hierarchy level is 1 or more), it is returned.
-        The parent Port is the second last item in the ElementPath.
-        Otherwise, an empty string is returned, indicating the lack of a parent Port.
-
-        Returns:
-            str: The name of the parent Port element if defined in the path, otherwise an empty string.
-        """
-        if self.path.hierarchy_level >= 1:
-            return self.path.parent.name
-        return ''
-
-    @property
-    def grandparent_name(self) -> str:
-        """
-        Retrieves the name of the instance or module that contains this PortSegment.
+        Retrieves the instance or module that contains this PortSegment.
 
         If a parent is available (i.e. the hierarchy level is 2 or more), it is returned.
-        The instance or module name is the third last item in the ElementPath.
-        Otherwise, an empty string is returned, indicating the lack of a parent instance or module.
 
         Returns:
-            str: The name of the instance or module if defined in the path, otherwise an empty string.
+            Union[Module, Instance]: The instance or module if it exists.
+
+        Raises:
+            ParentNotFoundError: If no parent or grandparent was found.
         """
-        if self.path.hierarchy_level >= 2:
-            return self.path.nth_parent(2).name  # parent of port segment parent: either module or instance to which the port belongs
-        return ''
+        return self.parent.parent  # parent of port segment parent: either module or instance to which the port belongs
 
     def set_ws_path(self, ws_path: Union[str, WireSegmentPath]) -> Self:
         """

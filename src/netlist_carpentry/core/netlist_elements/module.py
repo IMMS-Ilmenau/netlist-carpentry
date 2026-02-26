@@ -712,13 +712,13 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if not w.is_constant:
             w.port_segments.add(p)
         # Connect Port -> Wire
-        if p.grandparent_name == self.name:
+        if p.grandparent.name == self.name:
             # Connect a module port segment to a wire segment
             p.set_ws_path(w.raw_path)
         else:
             # Connect an instance port segment to a wire segment
-            inst = self.instances[p.grandparent_name]
-            inst.modify_connection(p.parent_name, w.path, index=p.index)
+            inst = self.instances[p.grandparent.name]
+            inst.modify_connection(p.parent.name, w.path, index=p.index)
 
     def disconnect(self, port_like: Union[PortSegmentPath, PortPath, PortSegment, T_PORT]) -> None:
         """
@@ -772,11 +772,11 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if p.raw_ws_path != w.raw_path:
             # To prevent discrepancies if the port segment was tied to a value (which does not notify the wire segment)
             return
-        if p.grandparent_name == self.name:
+        if p.grandparent.name == self.name:
             p.set_ws_path('')
         else:
-            inst = self.instances[p.grandparent_name]
-            inst.disconnect(p.parent_name, index=p.index)
+            inst = self.instances[p.grandparent.name]
+            inst.disconnect(p.parent.name, index=p.index)
 
     def reconnect(self, source: Union[PortPath, T_PORT], target: Union[PortPath, T_PORT]) -> None:
         """

@@ -62,8 +62,8 @@ class EvaluationMixin(ModuleBaseMixin):
         wseg.evaluate()
         next_eval: CustomList[Union[Instance, Port['Module']]] = CustomList()
         for ps in self.get_load_ports(wseg.path):
-            inst = ps.grandparent_name
-            port = ps.parent_name
+            inst = ps.grandparent.name
+            port = ps.parent.name
             next_eval.add(self.instances[inst] if inst in self.instances else self.ports[port])
         return next_eval
 

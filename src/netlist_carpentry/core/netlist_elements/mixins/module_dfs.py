@@ -82,7 +82,7 @@ class ModuleDfsMixin(ModuleBaseMixin):
             return {wire_seg.path} if isinstance(wire_seg, WireSegment) and wire_seg is not None else set()
         elif port_segment.is_load and port_segment.is_instance_port:
             # Next path element is the output port of the instance for which port e is an input port
-            inst = self.instances[port_segment.grandparent_name]
+            inst = self.instances[port_segment.grandparent.name]
             return {pseg.path for p in inst.output_ports for pseg in p.segments.values()}
         # Module output port
         return set()

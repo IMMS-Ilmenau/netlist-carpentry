@@ -136,38 +136,6 @@ class WireSegment(_Segment, BaseModel):
         """
         return False
 
-    @property
-    def super_wire_name(self) -> str:
-        """
-        Retrieves the name of the parent Wire element.
-
-        If a parent is available (i.e. the hierarchy level is 1 or more), it is returned.
-        The parent Wire is the second last item in the ElementPath.
-        Otherwise, an empty string is returned, indicating the lack of a parent Wire.
-
-        Returns:
-            str: The name of the parent Wire element if defined in the path, otherwise an empty string.
-        """
-        if self.path.hierarchy_level >= 1:
-            return self.path.parent.name
-        return ''
-
-    @property
-    def super_module_name(self) -> str:
-        """
-        Retrieves the name of the module that contains this WireSegment.
-
-        If a parent is available (i.e. the hierarchy level is 2 or more), it is returned.
-        The module name is the third last item in the ElementPath.
-        Otherwise, an empty string is returned, indicating the lack of a parent module.
-
-        Returns:
-            str: The name of the module if defined in the path, otherwise an empty string.
-        """
-        if self.path.hierarchy_level >= 2:
-            return self.path.nth_parent(2).name  # parent of wire segment parent: module to which the wire belongs
-        return ''
-
     def add_port_segment(self, port_segment: PortSegment) -> PortSegment:
         """
         Adds a port segment to the set of ports connected to this wire segment.

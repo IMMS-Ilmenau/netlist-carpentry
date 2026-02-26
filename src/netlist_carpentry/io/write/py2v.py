@@ -437,14 +437,14 @@ class P2VTransformer:
         Returns:
             str: A Verilog-compatible string representing the concatenated wire segments.
         """
-        grouped_list = [list(group) for _, group in groupby(wire_segments, key=lambda x: cls._is_const_wseg_path(x.raw_path) or x.super_wire_name)]
+        grouped_list = [list(group) for _, group in groupby(wire_segments, key=lambda x: cls._is_const_wseg_path(x.raw_path) or x.parent.name)]
         formatted_wires: List[str] = []
         for wlist in grouped_list:
             if all(cls._is_const_wseg_path(w.raw_path) for w in wlist):
                 formatted_wires.append(cls._simplify_constant_wire_segments(wlist))
             else:
                 # Parse names and indices
-                parsed: List[re.Match] = [re.match(r'([\S ]+?|\w+)(?:\s*)\[(\d+)(?::(\d+))?\]', f'{w.super_wire_name}[{w.index}]') for w in wlist]
+                parsed: List[re.Match] = [re.match(r'([\S ]+?|\w+)(?:\s*)\[(\d+)(?::(\d+))?\]', f'{w.parent.name}[{w.index}]') for w in wlist]
 
                 base_wire_name = parsed[0].group(1)
                 wire = module.get_wire(base_wire_name)
