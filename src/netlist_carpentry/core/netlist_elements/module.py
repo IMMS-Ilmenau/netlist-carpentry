@@ -83,7 +83,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             Instance: the instance that was added.
         """
         self._raise_if_occupied(instance.name)
-        if instance.module is not None and instance.module is not self:
+        if instance.has_parent and instance.module is not self:
             raise SingleOwnershipError(f'Instance {self.raw_path} belongs to module {instance.module.name}. Cannot add it to module {self.name}!')
         instance.module = self
         if self.has_circuit:
@@ -496,7 +496,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             Wire: The wire that was added.
         """
         self._raise_if_occupied(wire.name)
-        if wire.module is not None and wire.module is not self:
+        if wire.has_parent and wire.module is not self:
             raise SingleOwnershipError(f'Wire {self.raw_path} belongs to module {wire.module.name}. Cannot add it to module {self.name}!')
         wire.module = self
         return self.wires.add(wire.name, wire, locked=self.locked)

@@ -75,7 +75,7 @@ class Wire(NetlistElement, BaseModel):
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         from netlist_carpentry.core.netlist_elements.module import Module
 
-        if self.module is None or isinstance(self.module, Module):
+        if not self.has_parent or isinstance(self.module, Module):
             return super().model_post_init(__context)
         raise TypeError(f'Wire.module {self.raw_path} should be a module, but is a {type(self.module).__name__}!')
 
@@ -571,13 +571,13 @@ class Wire(NetlistElement, BaseModel):
         return super().change_mutability(is_now_locked)
 
     def copy_object(self, new_name: str) -> Wire:
-        if self.module is not None and self.module.name_occupied(new_name):
-            raise IdentifierConflictError(f'An object with name {new_name} already exists in module {self.module.name}!')
+        if self.has_parent and self.parent.name_occupied(new_name):
+            raise IdentifierConflictError(f'An object with name {new_name} already exists in module {self.parent.name}!')
         new_path = WirePath(raw=self.raw_path).replace(self.name, new_name)
         w = Wire(raw_path=new_path.raw, module=self.module)
         w.create_wire_segments(self.width, self.offset or 0)
-        if self.module is not None:
-            self.module.add_wire(w)
+        if self.has_parent:
+            self.parent.add_wire(w)
         return w
 
     def evaluate(self) -> None:

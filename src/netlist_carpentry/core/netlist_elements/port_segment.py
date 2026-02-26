@@ -52,7 +52,7 @@ class PortSegment(_Segment, BaseModel):
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         from netlist_carpentry.core.netlist_elements.port import Port
 
-        if self.port is None:
+        if not self.has_parent:
             if not CFG.allow_detached_segments:
                 raise DetachedSegmentError(
                     f'No parent port provided for port segment {self.raw_path}! If this is intended, set CFG.allow_detached_segments to True!'

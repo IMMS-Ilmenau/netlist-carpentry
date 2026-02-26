@@ -50,12 +50,12 @@ class WireSegment(_Segment, BaseModel):
             return NotImplemented
         if not super().__eq__(value):
             return False
-        return (self.wire is None and value.wire is None) or (self.wire is not None and value.wire is not None and self.wire.path == value.wire.path)
+        return (not self.has_parent and not value.has_parent) or (self.parent.path == value.parent.path)
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         from netlist_carpentry.core.netlist_elements.wire import Wire
 
-        if self.wire is None:
+        if not self.has_parent:
             if not CFG.allow_detached_segments:
                 raise DetachedSegmentError(
                     f'No parent wire provided for wire segment {self.raw_path}! If this is intended, set CFG.allow_detached_segments to True!'

@@ -620,7 +620,7 @@ class Instance(NetlistElement, BaseModel):
         return super().change_mutability(is_now_locked)
 
     def copy_object(self, new_name: str) -> Instance:
-        if self.module is not None and self.module.name_occupied(new_name):
+        if self.has_parent and self.module.name_occupied(new_name):
             raise IdentifierConflictError(f'An object with name {new_name} already exists in module {self.module.name}!')
         new_path = InstancePath(raw=self.raw_path).replace(self.name, new_name)
         inst = type(self)(raw_path=new_path.raw, module=self.module, instance_type=self.instance_type, parameters=self.parameters)
@@ -629,7 +629,7 @@ class Instance(NetlistElement, BaseModel):
             new_p = Port(raw_path=p_path.raw, direction=p.direction, module_or_instance=self)
             new_p.create_port_segments(p.width, p.offset or 0)
             inst.ports.update({new_p.name: new_p})
-        if self.module is not None:
+        if self.has_parent:
             self.module.add_instance(inst)
         return inst
 

@@ -59,7 +59,7 @@ class ModuleBaseMixin(NetlistElement):
         raise HierarchyError('Modules do not have parents! Use `Module.circuit` to retrieve the circuit!')
 
     @property
-    def has_parent(self):
+    def has_parent(self) -> str:
         return False
 
     @property
