@@ -10,7 +10,6 @@ from netlist_carpentry import LOG, Signal
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import (
     DetachedSegmentError,
-    EvaluationError,
     MultipleDriverError,
     ParentNotFoundError,
     SignalAssignmentError,
@@ -53,15 +52,11 @@ class WireSegment(_Segment, BaseModel):
         return (not self.has_parent and not value.has_parent) or (self.parent.path == value.parent.path)
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
-        from netlist_carpentry.core.netlist_elements.wire import Wire
-
         if not self.has_parent:
             if not CFG.allow_detached_segments:
                 raise DetachedSegmentError(
                     f'No parent wire provided for wire segment {self.raw_path}! If this is intended, set CFG.allow_detached_segments to True!'
                 )
-        elif not isinstance(self.wire, Wire):
-            raise TypeError(f'wireSegment.wire {self.raw_path} should be a wire object, but is a {type(self.wire).__name__}!')
         return super().model_post_init(__context)
 
     @property
@@ -331,8 +326,6 @@ class WireSegment(_Segment, BaseModel):
             EvaluationError: If there are multiple drivers on this wire segment.
         """
         drv = self.driver()
-        if len(drv) > 1:
-            raise EvaluationError(f'Unable to evaluate wire segment {self.name}: found {len(drv)} drivers for bit {self.index}!')
         return Signal.UNDEFINED if not drv else drv[0].signal
 
     def _update_loads(self, new_signal: Signal) -> None:

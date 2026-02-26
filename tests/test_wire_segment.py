@@ -90,7 +90,6 @@ def test_wire_segment_basics(wire_segment: WireSegment) -> None:
     with pytest.raises(ValueError):
         wire_segment.index = 'foo'
     assert wire_segment.index == 2
-
     assert wire_segment.can_carry_signal
 
 
@@ -217,7 +216,12 @@ def test_get_drivers_multiple(wire_segment: WireSegment) -> None:
     initialize_logging()
     _add_multidriver(wire_segment)
     with pytest.raises(MultipleDriverError):
-        wire_segment.driver(True)
+        wire_segment.driver()
+
+    wire_segment.port_segments.clear()
+    warns = LOG.warns_quantity
+    assert not wire_segment.driver(True)
+    assert LOG.warns_quantity == warns + 1
 
 
 def test_get_loads(wire_segment: WireSegment) -> None:
@@ -325,6 +329,8 @@ def test_wire_segment_constants() -> None:
     assert WIRE_SEGMENT_0.is_defined_constant
     WIRE_SEGMENT_0.evaluate()
     assert WIRE_SEGMENT_0.signal == Signal.LOW
+    assert WIRE_SEGMENT_0._get_curr_signal() is Signal.LOW
+    assert WIRE_SEGMENT_0.is_placeholder_instance
 
     assert isinstance(WIRE_SEGMENT_1, WireSegmentConst1)
     assert WIRE_SEGMENT_1.signal == Signal.HIGH
@@ -333,6 +339,8 @@ def test_wire_segment_constants() -> None:
     assert WIRE_SEGMENT_1.is_defined_constant
     WIRE_SEGMENT_1.evaluate()
     assert WIRE_SEGMENT_1.signal == Signal.HIGH
+    assert WIRE_SEGMENT_1._get_curr_signal() is Signal.HIGH
+    assert WIRE_SEGMENT_1.is_placeholder_instance
 
     assert isinstance(WIRE_SEGMENT_Z, WireSegmentConstZ)
     assert WIRE_SEGMENT_Z.signal == Signal.FLOATING
@@ -341,6 +349,8 @@ def test_wire_segment_constants() -> None:
     assert not WIRE_SEGMENT_Z.is_defined_constant
     WIRE_SEGMENT_Z.evaluate()
     assert WIRE_SEGMENT_Z.signal == Signal.FLOATING
+    assert WIRE_SEGMENT_Z._get_curr_signal() is Signal.FLOATING
+    assert WIRE_SEGMENT_Z.is_placeholder_instance
 
     assert isinstance(WIRE_SEGMENT_X, WireSegmentConstX)
     assert WIRE_SEGMENT_X.signal == Signal.UNDEFINED
@@ -349,6 +359,8 @@ def test_wire_segment_constants() -> None:
     assert not WIRE_SEGMENT_X.is_defined_constant
     WIRE_SEGMENT_X.evaluate()
     assert WIRE_SEGMENT_X.signal == Signal.UNDEFINED
+    assert WIRE_SEGMENT_X._get_curr_signal() is Signal.UNDEFINED
+    assert WIRE_SEGMENT_X.is_placeholder_instance
 
 
 if __name__ == '__main__':

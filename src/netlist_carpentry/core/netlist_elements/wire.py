@@ -72,13 +72,6 @@ class Wire(NetlistElement, BaseModel):
             return False
         return self.segments == value.segments
 
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
-        from netlist_carpentry.core.netlist_elements.module import Module
-
-        if not self.has_parent or isinstance(self.module, Module):
-            return super().model_post_init(__context)
-        raise TypeError(f'Wire.module {self.raw_path} should be a module, but is a {type(self.module).__name__}!')
-
     @property
     def path(self) -> WirePath:
         """
@@ -104,12 +97,10 @@ class Wire(NetlistElement, BaseModel):
 
         if isinstance(self.module, Module):
             return self.module
-        elif self.module is None:
-            raise ParentNotFoundError(
-                f'No parent module specified for wire {self.name}. '
-                + 'This is probably due to a bad instantiation (missing or bad "module" parameter), or a subsequent modification of the module, which corrupted the wire.'
-            )
-        raise TypeError(f'Bad type: Parent object of wire {self.name} is {type(self.module).__name__}, but should be {Module.__name__}')
+        raise ParentNotFoundError(
+            f'No parent module specified for wire {self.name}. '
+            + 'This is probably due to a bad instantiation (missing or bad "module" parameter), or a subsequent modification of the module, which corrupted the wire.'
+        )
 
     @property
     def segments(self) -> CustomDict[int, WireSegment]:

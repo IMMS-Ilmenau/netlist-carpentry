@@ -50,15 +50,11 @@ class PortSegment(_Segment, BaseModel):
         return False
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
-        from netlist_carpentry.core.netlist_elements.port import Port
-
         if not self.has_parent:
             if not CFG.allow_detached_segments:
                 raise DetachedSegmentError(
                     f'No parent port provided for port segment {self.raw_path}! If this is intended, set CFG.allow_detached_segments to True!'
                 )
-        elif not isinstance(self.port, Port):
-            raise TypeError(f'PortSegment.port {self.raw_path} should be a port object, but is a {type(self.port).__name__}!')
         return super().model_post_init(__context)
 
     @property

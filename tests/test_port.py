@@ -62,6 +62,8 @@ def test_port_creation(standard_port_in: Port[Instance], standard_port_out: Port
     assert standard_port_in.signal is Signal.FLOATING  # Unconnected load port => Signal.FLOATING
     assert standard_port_in.signal_array == {0: Signal.FLOATING}
     assert standard_port_in.signal_str == 'z'
+    with pytest.raises(IndexError):
+        standard_port_in[42]
 
     assert standard_port_out.width == 2
     assert standard_port_out.direction == Direction.OUT
