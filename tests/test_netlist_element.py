@@ -71,6 +71,11 @@ def test_parent(netlist_element: NetlistElement) -> None:
         netlist_element.parent
 
 
+def test_has_parent(netlist_element: NetlistElement) -> None:
+    with pytest.raises(NotImplementedError):
+        netlist_element.has_parent
+
+
 def test_circuit(netlist_element: NetlistElement) -> None:
     with pytest.raises(NotImplementedError):
         netlist_element.circuit

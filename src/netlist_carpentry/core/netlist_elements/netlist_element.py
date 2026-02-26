@@ -9,7 +9,7 @@ from typing_extensions import Self
 
 from netlist_carpentry import CFG, LOG
 from netlist_carpentry.core.enums.element_type import EType
-from netlist_carpentry.core.exceptions import VerilogSyntaxError
+from netlist_carpentry.core.exceptions import ParentNotFoundError, VerilogSyntaxError
 from netlist_carpentry.core.netlist_elements.element_path import ElementPath
 from netlist_carpentry.core.netlist_elements.mixins.hooks import HooksMixin
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT, NESTED_DICT, MetadataMixin
@@ -98,6 +98,15 @@ class NetlistElement(HooksMixin, BaseModel):
         -   Modules do not have parents.
         """
         raise NotImplementedError(f'Not implemented for {self.type.name} objects by default! The problematic {self.type.value} is {self.raw_path}')
+
+    @property
+    def has_parent(self) -> bool:
+        """Whether this object has a parent."""
+        try:
+            self.parent
+            return True
+        except ParentNotFoundError:
+            return False
 
     @property
     def circuit(self) -> 'Circuit':

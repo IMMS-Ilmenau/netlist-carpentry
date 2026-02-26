@@ -119,6 +119,7 @@ def test_parent(standard_instance_with_ports: Instance) -> None:
     standard_instance_with_ports.module = m
     parent = standard_instance_with_ports.parent
     assert parent == m
+    assert standard_instance_with_ports.has_parent
 
     standard_instance_with_ports.module = None
     with pytest.raises(ParentNotFoundError):

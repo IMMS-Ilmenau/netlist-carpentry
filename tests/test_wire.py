@@ -109,6 +109,7 @@ def test_parent(standard_wire: Wire) -> None:
     standard_wire.module = m
     parent = standard_wire.parent
     assert parent == m
+    assert standard_wire.has_parent
 
     standard_wire.module = None
     with pytest.raises(ParentNotFoundError):

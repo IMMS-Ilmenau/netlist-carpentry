@@ -1,13 +1,13 @@
 """Base structure of the `Module` class."""
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, Callable, DefaultDict, Dict, List, Optional, Tuple, Union, overload
+from typing import TYPE_CHECKING, Callable, DefaultDict, Dict, List, NoReturn, Optional, Tuple, Union, overload
 
 from typing_extensions import Self
 
 from netlist_carpentry import Instance, Port, Wire
 from netlist_carpentry.core.enums.element_type import EType
-from netlist_carpentry.core.exceptions import ObjectNotFoundError, PathResolutionError
+from netlist_carpentry.core.exceptions import HierarchyError, ObjectNotFoundError, PathResolutionError
 from netlist_carpentry.core.netlist_elements.element_path import (
     T_PATH_TYPES,
     ElementPath,
@@ -53,6 +53,14 @@ class ModuleBaseMixin(NetlistElement):
     def type(self) -> EType:
         """The type of the element, which is a module."""
         return EType.MODULE
+
+    @property
+    def parent(self) -> NoReturn:
+        raise HierarchyError('Modules do not have parents! Use `Module.circuit` to retrieve the circuit!')
+
+    @property
+    def has_parent(self):
+        return False
 
     @property
     def circuit(self) -> 'Circuit':

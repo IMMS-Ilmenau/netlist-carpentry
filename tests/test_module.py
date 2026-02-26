@@ -14,6 +14,7 @@ from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.exceptions import (
     AlreadyConnectedError,
     EvaluationError,
+    HierarchyError,
     IdentifierConflictError,
     InvalidDirectionError,
     MissingConnectionError,
@@ -124,6 +125,10 @@ def test_module_creation(empty_module: Module) -> None:
     assert empty_module.gatelib_primitives == []
 
     assert not empty_module.can_carry_signal
+    assert not empty_module.has_circuit
+    assert not empty_module.has_parent
+    with pytest.raises(HierarchyError):
+        empty_module.parent
 
 
 def test_eq(empty_module: Module) -> None:
