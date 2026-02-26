@@ -50,7 +50,7 @@ def standard_pattern() -> Pattern:
 def standard_pattern_replacement() -> Pattern:
     g = _pattern_graph()
 
-    xnor_inst = XnorGate(raw_path='a.b.c', module=None)
+    xnor_inst = XnorGate(name='abc', module=None)
 
     g_rep = ModuleGraph()
     g_rep.add_node('new_inst', ntype='INSTANCE', nsubtype='§xnor', ndata=xnor_inst, n_input_inst=True, n_output_inst=True)
@@ -63,7 +63,7 @@ def not_found_pattern() -> Pattern:
     module = utils.connected_module()
     g = ModuleGraph()
     xor_inst = module.instances['xor_inst']
-    nand = NandGate(raw_path='a.b.c', module=module)
+    nand = NandGate(name='abc', module=module)
     g.add_node(xor_inst.name, ntype=xor_inst.type.name, nsubtype=xor_inst.instance_type, ndata=xor_inst, n_input_inst=True, n_output_inst=False)
     g.add_node(nand.name, ntype=nand.type.name, nsubtype=nand.instance_type, ndata=nand, n_input_inst=False, n_output_inst=True)
     g.add_edge(xor_inst.name, nand.name, key='Y§A', ename='wire_xor')

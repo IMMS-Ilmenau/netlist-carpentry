@@ -25,11 +25,14 @@ class NetlistElement(HooksMixin, BaseModel):
     Represents a netlist element, such as an instance or a wire.
 
     Attributes:
-        raw_path (str): The hierarchical path of the element in the design as a string, where '.' is the hierarchical separator.
+        name (str): The name of the element.
     """
 
-    raw_path: str
-    """The hierarchical path of the element in the design as a plain string."""
+    name: str
+    """The name of the element.
+
+    !!! Do not modify this variable after instantiating it. Use NetlistElement.set_name() instead.
+        Modifying this variable might lead to inconsistencies later on."""
     _locked: bool = False
     """Whether the element is structurally unchangeable (e.g. if set to True, connections cannot be changed). Defaults to False."""
 
@@ -61,12 +64,13 @@ class NetlistElement(HooksMixin, BaseModel):
         Returns:
             ElementPath: The hierarchical path of the netlist element.
         """
-        return ElementPath(raw=self.raw_path)
+        if self.has_parent:
+            return ElementPath(raw='.'.join([*self.parent.path.parts, self.name]))
+        return ElementPath(raw=self.name)
 
     @property
-    def name(self) -> str:
-        """The name of the element."""
-        return self.path.name
+    def raw_path(self) -> str:
+        return self.path.raw
 
     @property
     def type(self) -> EType:
@@ -97,7 +101,7 @@ class NetlistElement(HooksMixin, BaseModel):
         -   For an instance, the parent is either an instance again or a module.
         -   Modules do not have parents.
         """
-        raise NotImplementedError(f'Not implemented for {self.type.name} objects by default! The problematic {self.type.value} is {self.raw_path}')
+        raise NotImplementedError(f'Not implemented for {self.type.name} objects by default!')
 
     @property
     def has_parent(self) -> bool:
@@ -105,7 +109,7 @@ class NetlistElement(HooksMixin, BaseModel):
         try:
             self.parent
             return True
-        except ParentNotFoundError:
+        except (ParentNotFoundError, NotImplementedError):
             return False
 
     @property
@@ -187,9 +191,7 @@ class NetlistElement(HooksMixin, BaseModel):
         old_name = self.name
         if new_name != old_name:
             LOG.debug(f'Changing instance name from object at {self.raw_path} from {self.name} to {new_name}!')
-            new_raw_path = self.raw_path.split(self.path.sep)[:-1]
-            new_raw_path.append(new_name)
-            self.raw_path = self.path.sep.join(new_raw_path)
+            self.name = new_name
             self._set_name_recursively(old_name, new_name)
 
     def _set_name_recursively(self, old_name: str, new_name: str) -> None:

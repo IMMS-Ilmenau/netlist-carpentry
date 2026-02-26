@@ -17,7 +17,7 @@ from netlist_carpentry.core.exceptions import (
     ParentNotFoundError,
     SplittingUnsupportedError,
 )
-from netlist_carpentry.core.netlist_elements.element_path import InstancePath, PortPath, WireSegmentPath
+from netlist_carpentry.core.netlist_elements.element_path import InstancePath, WireSegmentPath
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT, NESTED_DICT
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
@@ -50,7 +50,9 @@ class Instance(NetlistElement, BaseModel):
         Returns:
             InstancePath: The hierarchical path of the netlist element.
         """
-        return InstancePath(raw=self.raw_path)
+        if self.has_parent:
+            return InstancePath(raw='.'.join([*self.parent.path.parts, self.name]))
+        return InstancePath(raw=self.name)
 
     @property
     def type(self) -> EType:
@@ -65,10 +67,10 @@ class Instance(NetlistElement, BaseModel):
             return self.module
         elif self.module is None:
             raise ParentNotFoundError(
-                f'No parent module specified for instance {self.raw_path}. '
+                f'No parent module specified for instance {self.name}. '
                 + 'This is probably due to a bad instantiation (missing or bad "module" parameter), or a subsequent modification of the module, which corrupted the instance.'
             )
-        raise TypeError(f'Bad type: Parent object of instance {self.raw_path} is {type(self.module).__name__}, but should be {Module.__name__}')
+        raise TypeError(f'Bad type: Parent object of instance {self.name} is {type(self.module).__name__}, but should be {Module.__name__}')
 
     @property
     def module_definition(self) -> Optional[Module]:
@@ -338,7 +340,7 @@ class Instance(NetlistElement, BaseModel):
         if port_name in self.ports:
             port = self.ports[port_name]
         else:
-            port = Port(raw_path=f'{self.path.raw}.{port_name}', direction=direction, module_or_instance=self)
+            port = Port(name=port_name, direction=direction, module_or_instance=self)
             self.ports.add(port_name, port, locked=self.locked)
         ws_path_raw = ws_path.raw if ws_path is not None else ''
         try:
@@ -557,9 +559,7 @@ class Instance(NetlistElement, BaseModel):
 
     def _set_name_recursively(self, old_name: str, new_name: str) -> None:
         for p in self.ports.values():
-            p.raw_path = p.path.replace(old_name, new_name).raw
             for _, ps in p:
-                ps.raw_path = ps.path.replace(old_name, new_name).raw
                 ps.set_ws_path(ps.ws_path.replace(old_name, new_name))
 
     def update_signedness(self, port_name: str) -> None:
@@ -622,11 +622,9 @@ class Instance(NetlistElement, BaseModel):
     def copy_object(self, new_name: str) -> Instance:
         if self.has_parent and self.module.name_occupied(new_name):
             raise IdentifierConflictError(f'An object with name {new_name} already exists in module {self.module.name}!')
-        new_path = InstancePath(raw=self.raw_path).replace(self.name, new_name)
-        inst = type(self)(raw_path=new_path.raw, module=self.module, instance_type=self.instance_type, parameters=self.parameters)
+        inst = type(self)(name=new_name, module=self.module, instance_type=self.instance_type, parameters=self.parameters)
         for p in self.ports.values():
-            p_path = PortPath(raw=p.raw_path).replace(self.name, new_name)
-            new_p = Port(raw_path=p_path.raw, direction=p.direction, module_or_instance=self)
+            new_p = Port(name=p.name, direction=p.direction, module_or_instance=self)
             new_p.create_port_segments(p.width, p.offset or 0)
             inst.ports.update({new_p.name: new_p})
         if self.has_parent:

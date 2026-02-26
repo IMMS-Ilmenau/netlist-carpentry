@@ -52,7 +52,7 @@ def test_port_creation(standard_port_in: Port[Instance], standard_port_out: Port
     assert standard_port_in.name == 'test_port1'
     assert standard_port_in.path.name == 'test_port1'
     assert standard_port_in.path.type is EType.PORT
-    assert standard_port_in.path.raw == 'test_module1.test_port1'
+    assert standard_port_in.path.raw == 'some_test_inst.test_port1'
     assert standard_port_in.width == 1
     assert standard_port_in.offset == 0
     assert standard_port_in.direction == Direction.IN
@@ -69,8 +69,8 @@ def test_port_creation(standard_port_in: Port[Instance], standard_port_out: Port
     assert standard_port_out.is_module_port
     assert standard_port_out[0].path.raw == 'test_module1.test_port2.0'
     assert standard_port_out[1].path.raw == 'test_module1.test_port2.1'
-    assert standard_port_out[0] == standard_port_out[0]
-    assert standard_port_out[1] == standard_port_out[1]
+    assert standard_port_out[0].hierarchy_level == 2
+    assert standard_port_out[1].hierarchy_level == 2
     assert standard_port_out.signal is Signal.UNDEFINED  # Unconnected driving port (i.e. no load) => Signal.UNDEFINED until evaluated
     assert standard_port_out.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED}
     assert standard_port_out.signal_str == 'xx'
@@ -80,7 +80,7 @@ def test_port_creation(standard_port_in: Port[Instance], standard_port_out: Port
     assert standard_port_in.can_carry_signal
 
     with pytest.raises(ParentNotFoundError):
-        Port(raw_path='a.b', direction=Direction.IN, module_or_instance=None).is_module_port
+        Port(name='abc', direction=Direction.IN, module_or_instance=None).is_module_port
 
 
 def test_port_len(standard_port_in: Port[Instance], standard_port_out: Port[Module]) -> None:
@@ -100,7 +100,7 @@ def test_port_iter(standard_port_in: Port[Instance], standard_port_out: Port[Mod
 
 def test_port_parent_init() -> None:
     with pytest.raises(ValidationError):
-        Port(raw_path='a.b.c', direction=Direction.IN, module_or_instance=NetlistElement(raw_path='a.b'))
+        Port(name='abc', direction=Direction.IN, module_or_instance=NetlistElement(name='foo'))
 
 
 def test_parent(standard_port_in: Port[Instance]) -> None:
@@ -126,7 +126,7 @@ def test_module(standard_port_in: Port[Instance]) -> None:
     assert module == m
 
     m2 = empty_module()
-    a = m2.create_instance(Module(raw_path='m'), 'a')
+    a = m2.create_instance(Module(name='m'), 'a')
     standard_port_in.module_or_instance = a
     module = standard_port_in.module
     assert module == m2
@@ -306,8 +306,8 @@ def test_port_is_driver(standard_port_in: Port[Instance], standard_port_out: Por
     assert not standard_port_in.is_driver
     assert not standard_port_out.is_driver
 
-    standard_port_in.module_or_instance = Module(raw_path='a')
-    standard_port_out.module_or_instance = Instance(raw_path='a.b', instance_type='c', module=None)
+    standard_port_in.module_or_instance = Module(name='a')
+    standard_port_out.module_or_instance = Instance(name='abc', instance_type='c', module=None)
     assert standard_port_in.is_driver
     assert standard_port_out.is_driver
 
@@ -316,8 +316,8 @@ def test_port_is_load(standard_port_in: Port[Instance], standard_port_out: Port[
     assert standard_port_in.is_load
     assert standard_port_out.is_load
 
-    standard_port_in.module_or_instance = Module(raw_path='a')
-    standard_port_out.module_or_instance = Instance(raw_path='a.b', instance_type='c', module=None)
+    standard_port_in.module_or_instance = Module(name='a')
+    standard_port_out.module_or_instance = Instance(name='abc', instance_type='c', module=None)
     assert not standard_port_in.is_load
     assert not standard_port_out.is_load
 
@@ -341,7 +341,7 @@ def test_connected_wire_segments(standard_port_in: Port[Instance], standard_port
     assert dict3[0] == standard_port_in[0].ws_path
     assert dict3[1] == standard_port_in[1].ws_path
 
-    p = Port(raw_path='', direction=Direction.IN_OUT, module_or_instance=None)
+    p = Port(name='', direction=Direction.IN_OUT, module_or_instance=None)
     dict4 = p.connected_wire_segments
     assert dict4 == {}
 
@@ -354,14 +354,14 @@ def test_connected_wires(standard_port_in: Port[Instance], standard_port_out: Po
 
 
 def test_add_port_segment(standard_port_in: Port[Instance], locked_port: Port[Module]) -> None:
-    seg2 = PortSegment(raw_path=standard_port_in.raw_path + '.1', port=standard_port_in)
+    seg2 = PortSegment(name='1', port=standard_port_in)
     added = standard_port_in._add_port_segment(seg2)
     assert added == seg2
     assert len(standard_port_in.segments) == 2
     assert standard_port_in[1] == seg2
     assert seg2.port is standard_port_in
 
-    seg3 = PortSegment(raw_path=standard_port_in.raw_path + '.1', port=standard_port_in)
+    seg3 = PortSegment(name='1', port=standard_port_in)
     with pytest.raises(IdentifierConflictError):
         standard_port_in._add_port_segment(seg3)
     assert len(standard_port_in.segments) == 2
@@ -476,7 +476,7 @@ def test_set_signal(standard_port_in: Port[Instance]) -> None:
     standard_port_in.set_signal(signal='Z')
     assert standard_port_in.signal is Signal.FLOATING
 
-    standard_port_in.module_or_instance = Module(raw_path='a')
+    standard_port_in.module_or_instance = Module(name='a')
     assert standard_port_in.is_driver
     standard_port_in.set_signal(signal=Signal.LOW)
     assert standard_port_in.signal is Signal.LOW
@@ -533,7 +533,7 @@ def test_count_signal(standard_port_out: Port[Module]) -> None:
 
 
 def test_driver() -> None:
-    m = Module(raw_path='m')
+    m = Module(name='m')
     in1 = m.create_port('in1', Direction.IN, width=4)
     out = m.create_port('out', Direction.OUT, width=4)
     m.connect(in1, out)
@@ -572,7 +572,7 @@ def test_driver() -> None:
 
 
 def test_loads() -> None:
-    m = Module(raw_path='m')
+    m = Module(name='m')
     in1 = m.create_port('in1', Direction.IN, width=4)
     out = m.create_port('out', Direction.OUT, width=4)
     m.connect(in1, out)
@@ -600,7 +600,7 @@ def test_set_signed(standard_port_out: Port[Module]) -> None:
 def test_set_signed_update_signedness() -> None:
     from netlist_carpentry.utils.gate_factory import and_gate
 
-    m = Module(raw_path='m')
+    m = Module(name='m')
     A = m.create_port('A', Direction.IN)
     B = m.create_port('B', Direction.IN)
     Y = m.create_port('Y', Direction.OUT)
@@ -650,7 +650,7 @@ def test_set_name(standard_port_out: Port[Module]) -> None:
     assert 'test_port2' not in standard_port_out.parent.ports
     assert 'PORT' in standard_port_out.parent.ports
 
-    w = Wire(raw_path=standard_port_out.module.name + '.PORT', module=standard_port_out.module)
+    w = Wire(name='PORT', module=standard_port_out.module)
     standard_port_out.module.wires['PORT'] = w
     standard_port_out.set_name('NEW_NAME')
     assert 'PORT' not in standard_port_out.parent.ports
@@ -695,7 +695,7 @@ def test_copy_object_module(standard_port_out: Port[Module]) -> None:
 def test_copy_object_instance(standard_port_in: Port[Instance]) -> None:
     new_p = standard_port_in.copy_object('new_port')
     assert isinstance(new_p, Port)
-    assert new_p.raw_path == 'test_module1.new_port'
+    assert new_p.raw_path == 'some_test_inst.new_port'
     assert new_p.is_unconnected
     assert new_p.module_or_instance is not None
     assert new_p.module_or_instance is standard_port_in.module_or_instance
@@ -760,12 +760,12 @@ def test_normalize_metadata(standard_port_out: Port[Module]) -> None:
 
 def test_port_str(standard_port_in: Port[Instance]) -> None:
     # Test the string representation of a port
-    assert str(standard_port_in) == 'Port "test_port1" with path test_module1.test_port1 (input port)'
+    assert str(standard_port_in) == 'Port "test_port1" with path some_test_inst.test_port1 (input port)'
 
 
 def test_port_repr(standard_port_in: Port[Instance]) -> None:
     # Test the representation of a port
-    assert repr(standard_port_in) == 'Port(test_port1 at test_module1.test_port1)'
+    assert repr(standard_port_in) == 'Port(test_port1 at some_test_inst.test_port1)'
 
 
 if __name__ == '__main__':

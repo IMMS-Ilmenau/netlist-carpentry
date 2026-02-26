@@ -26,7 +26,7 @@ from netlist_carpentry.core.netlist_elements.netlist_element import NetlistEleme
 
 @pytest.fixture
 def empty_standard_instance() -> Instance:
-    return Instance(raw_path='test_module1.test_instance1', instance_type='test_instance_type', module=Circuit(name='c').create_module('m'))
+    return Instance(name='test_instance1', instance_type='test_instance_type', module=Circuit(name='c').create_module('m'))
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def test_instance_creation(empty_standard_instance: Instance) -> None:
     assert empty_standard_instance.name == 'test_instance1'
     assert empty_standard_instance.path.name == 'test_instance1'
     assert empty_standard_instance.path.type is EType.INSTANCE
-    assert empty_standard_instance.path.raw == 'test_module1.test_instance1'
+    assert empty_standard_instance.path.raw == 'm.test_instance1'
     assert empty_standard_instance.instance_type == 'test_instance_type'
     assert empty_standard_instance.is_blackbox is True
     assert empty_standard_instance.type is EType.INSTANCE
@@ -109,7 +109,7 @@ def test_instance_with_ports(standard_instance_with_ports: Instance) -> None:
 
 def test_wire_parent_init() -> None:
     with pytest.raises(ValidationError):
-        Instance(raw_path='a.b.c', instance_type='foo', module=NetlistElement(raw_path='a.b'))
+        Instance(name='b', instance_type='foo', module=NetlistElement(name='a'))
 
 
 def test_parent(standard_instance_with_ports: Instance) -> None:
@@ -173,9 +173,9 @@ def test_signals(standard_instance_with_ports: Instance) -> None:
 def test_is_primitive(standard_instance_with_ports: Instance) -> None:
     assert not standard_instance_with_ports.is_primitive
 
-    assert Instance(raw_path='', instance_type='§mux', module=None).is_primitive
+    assert Instance(name='', instance_type='§mux', module=None).is_primitive
 
-    assert not Instance(raw_path='', instance_type='§some_other_instance', module=None).is_primitive
+    assert not Instance(name='', instance_type='§some_other_instance', module=None).is_primitive
 
 
 def test_verilog_template(standard_instance_with_ports: Instance) -> None:
@@ -587,12 +587,12 @@ def test_normalize_metadata(standard_instance_with_ports: Instance) -> None:
 
 def test_instance_str(empty_standard_instance: Instance) -> None:
     # Test the string representation of a instance
-    assert str(empty_standard_instance) == 'Instance "test_instance1" with path test_module1.test_instance1 (type test_instance_type)'
+    assert str(empty_standard_instance) == 'Instance "test_instance1" with path m.test_instance1 (type test_instance_type)'
 
 
 def test_instance_repr(empty_standard_instance: Instance) -> None:
     # Test the representation of a instance
-    assert repr(empty_standard_instance) == 'Instance(test_instance_type: test_module1.test_instance1)'
+    assert repr(empty_standard_instance) == 'Instance(test_instance_type: m.test_instance1)'
 
 
 if __name__ == '__main__':

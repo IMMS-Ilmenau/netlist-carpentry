@@ -214,7 +214,7 @@ class YosysNetlistReader(AbstractReader):
         for mname in modules_dict:
             s = time()
             LOG.debug(f'Building module {mname}...')
-            circuit.add_module(self._populate_module(Module(raw_path=mname), modules_dict[mname]))
+            circuit.add_module(self._populate_module(Module(name=mname), modules_dict[mname]))
             # TODO check for multiple top modules!
             if 'attributes' in modules_dict[mname] and 'top' in modules_dict[mname]['attributes']:
                 LOG.debug(f'Setting module {mname} as new top module as specified in the netlist!')
@@ -239,7 +239,7 @@ class YosysNetlistReader(AbstractReader):
             for wire_name, wire_data in tqdm(module_dict['netnames'].items(), desc='Wire building progress', leave=False):
                 w_path = f'{module.name}.{wire_name}'
                 msb_first = 'upto' not in wire_data
-                w = Wire(raw_path=w_path, msb_first=msb_first, module=module)
+                w = Wire(name=wire_name, msb_first=msb_first, module=module)
                 self._build_metadata(w, wire_data)
                 self._build_parameters(w, wire_data)
                 w.parameters['signed'] = wire_data['signed'] if 'signed' in wire_data else 0
@@ -263,10 +263,9 @@ class YosysNetlistReader(AbstractReader):
             LOG.debug(f'Building {len(module_dict["ports"])} module ports...')
             start = time()
             for port_name, port_data in tqdm(module_dict['ports'].items(), desc='Port building progress', leave=False):
-                p_path = f'{module.name}.{port_name}'
                 direction = Direction.get(port_data['direction']) if 'direction' in port_data else Direction.UNKNOWN
                 msb_first = 'upto' not in port_data or port_data['upto'] != 1
-                p = Port(raw_path=p_path, direction=direction, msb_first=msb_first, module_or_instance=module)
+                p = Port(name=port_name, direction=direction, msb_first=msb_first, module_or_instance=module)
                 module.add_port(p)
                 self._build_metadata(p, port_data)
                 self._build_parameters(p, port_data)
@@ -310,8 +309,7 @@ class YosysNetlistReader(AbstractReader):
         if self._dict_must_be_prepared(type_str):
             self._prepare_dict(type_str, inst_data)
 
-        inst_path = f'{module.name}.{inst_name}'
-        inst = self._get_inst(type_str, inst_path)
+        inst = self._get_inst(type_str, inst_name)
         inst.module = module
         self._build_metadata(inst, inst_data)
         self._build_parameters(inst, inst_data)
@@ -380,14 +378,14 @@ class YosysNetlistReader(AbstractReader):
             return int(str_val, 2)
         return str_val
 
-    def _get_inst(self, type_str: str, inst_path: str) -> Instance:
+    def _get_inst(self, type_str: str, inst_name: str) -> Instance:
         is_primitive = type_str[0] == CFG.id_internal
         if is_primitive and type_str not in self.module_definitions:
             inst_cls: Instance = get(type_str)  # type:ignore
-            return inst_cls(raw_path=inst_path, is_primitive=True, module=None)  # type:ignore
+            return inst_cls(name=inst_name, is_primitive=True, module=None)  # type:ignore
         else:
             self._module_instantiations.add(type_str)
-            return Instance(raw_path=inst_path, instance_type=type_str, module=None)
+            return Instance(name=inst_name, instance_type=type_str, module=None)
 
     def _dict_must_be_prepared(self, inst_type: str) -> int:
         return CFG.id_internal in inst_type and ('dff' in inst_type or 'mux' in inst_type)

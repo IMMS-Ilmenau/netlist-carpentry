@@ -209,7 +209,7 @@ def test_populate_circuit_empty_module(simple_reader: YNR) -> None:
 
 
 def test_build_wires(simple_reader: YNR) -> None:
-    m = Module(raw_path='simpleAdder')
+    m = Module(name='simpleAdder')
 
     m1 = copy.deepcopy(m)
     simple_reader._build_wires(m1, {})
@@ -242,12 +242,12 @@ def test_build_wires(simple_reader: YNR) -> None:
 
 
 def test_build_port(simple_reader: YNR) -> None:
-    m = Module(raw_path='simpleAdder')
+    m = Module(name='simpleAdder')
     with pytest.raises(AttributeError):
         simple_reader.net_number_mapping[m.name] = {}
         simple_reader._build_ports(m, {'ports': {'in2': {'direction': 'input'}, 'out': {'direction': 'output'}}})
 
-    m = Module(raw_path='simpleAdder')
+    m = Module(name='simpleAdder')
     with pytest.raises(AttributeError):
         simple_reader.net_number_mapping[m.name] = {}
         simple_reader._build_ports(
@@ -258,7 +258,7 @@ def test_build_port(simple_reader: YNR) -> None:
     simple_reader._build_ports(m1, {})
     assert m == m1
 
-    m = Module(raw_path='simpleAdder')
+    m = Module(name='simpleAdder')
     simple_reader._build_wires(m, {'netnames': {'in2': {'bits': [12, 13]}, 'out': {'bits': [20, 21, 22]}}})
     simple_reader._build_ports(
         m, {'ports': {'in2_p': {'direction': 'input', 'bits': [12, 13]}, 'out_p': {'direction': 'output', 'bits': [20, 21, 22]}}}
@@ -283,7 +283,7 @@ def test_build_port(simple_reader: YNR) -> None:
 
 
 def test_build_port_const(simple_reader: YNR) -> None:
-    m = Module(raw_path='simpleAdder')
+    m = Module(name='simpleAdder')
     simple_reader.net_number_mapping[m.name] = {}
     simple_reader._build_ports(m, {'ports': {'in2_p': {'direction': 'input', 'bits': ['0']}, 'out_p': {'direction': 'output', 'bits': ['1', 'x']}}})
 
@@ -295,7 +295,7 @@ def test_build_port_const(simple_reader: YNR) -> None:
 
 
 def test_build_instances(simple_reader: YNR) -> None:
-    m = Module(raw_path='simpleAdder')
+    m = Module(name='simpleAdder')
 
     # TODO add pytest.raises cases
     m1 = copy.deepcopy(m)
@@ -404,9 +404,9 @@ def test_build_instances(simple_reader: YNR) -> None:
 
 def test_build_instance_port_edge_cases(simple_reader: YNR) -> None:
     simple_reader.net_number_mapping['test'] = {2: WireSegmentPath(raw='test.w.0')}
-    m = Module(raw_path='test')
+    m = Module(name='test')
     m.create_wire('w')
-    inst = Instance(raw_path='test.instance', instance_type='§and', module=None)
+    inst = Instance(name='instance', instance_type='§and', module=None)
     inst_dict = {'connections': {'A': [2]}, 'port_directions': {}}
 
     simple_reader._build_instance_ports(m, inst, inst_dict)
@@ -417,7 +417,7 @@ def test_build_instance_port_edge_cases(simple_reader: YNR) -> None:
 
     m.wires['w'][0].port_segments.clear()
     inst_dict.pop('port_directions')
-    inst = Instance(raw_path='test.instance', instance_type='§and', module=None)
+    inst = Instance(name='instance', instance_type='§and', module=None)
     simple_reader._build_instance_ports(m, inst, inst_dict)
     assert len(inst.ports) == 1
     assert inst.ports['A'].direction == Direction.UNKNOWN
@@ -427,8 +427,8 @@ def test_build_instance_port_edge_cases(simple_reader: YNR) -> None:
 
 def test_build_instance_port_consts(simple_reader: YNR) -> None:
     simple_reader.net_number_mapping['test'] = {2: WireSegmentPath(raw='')}
-    m = Module(raw_path='test')
-    inst = Instance(raw_path='test.instance', instance_type='§and', module=None)
+    m = Module(name='test')
+    inst = Instance(name='instance', instance_type='§and', module=None)
     inst_dict = {'connections': {'A': ['0', '1', 'x']}, 'port_directions': {'A': 'input'}}
 
     simple_reader._build_instance_ports(m, inst, inst_dict)
@@ -465,7 +465,7 @@ def test_prepare_dict_mux(simple_reader: YNR) -> None:
 
 
 def test_build_metadata(simple_reader: YNR) -> None:
-    m = Module(raw_path='simpleAdder')
+    m = Module(name='simpleAdder')
     simple_reader._build_metadata(m, {})
 
     assert len(m.metadata) == 0
@@ -478,7 +478,7 @@ def test_build_metadata(simple_reader: YNR) -> None:
 
 
 def test_build_parameters(simple_reader: YNR) -> None:
-    m = Module(raw_path='simpleAdder')
+    m = Module(name='simpleAdder')
     simple_reader._build_module_parameters(m, {})
 
     assert m.parameters == {}
@@ -491,7 +491,7 @@ def test_build_parameters(simple_reader: YNR) -> None:
 
 
 def test_instance_post_processing(hierarchical_reader: YNR) -> None:
-    inst = ADFF(raw_path='a.b.c', instance_type='§adff', module=None)
+    inst = ADFF(name='abc', instance_type='§adff', module=None)
     inst_data = {'parameters': {'ARST_VALUE': '001100'}}  # 12
     hierarchical_reader._instance_post_processing(inst, inst_data)
     assert inst.rst_val_int == 12
@@ -504,7 +504,7 @@ def test_instance_post_processing(hierarchical_reader: YNR) -> None:
     inst_data = {'parameters': {'CLK_POLARITY': '0'}}
     hierarchical_reader._instance_post_processing(inst, inst_data)
     assert inst.clk_polarity == Signal.LOW
-    inst = DFFE(raw_path='a.b.c', instance_type='§dffe', module=None)
+    inst = DFFE(name='abc', instance_type='§dffe', module=None)
     inst_data = {'parameters': {'EN_POLARITY': 0}}
     hierarchical_reader._instance_post_processing(inst, inst_data)
     assert inst.en_polarity == Signal.LOW

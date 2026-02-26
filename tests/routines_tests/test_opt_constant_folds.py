@@ -140,7 +140,7 @@ def test_opt_constant_propagation_dff_d(module: Module) -> None:
 
 
 def test_opt_constant_propagation_dlatch() -> None:
-    module = Module(raw_path='testModule1')
+    module = Module(name='testModule1')
     en = module.create_port('EN', Direction.IN)
     d = module.create_port('D', Direction.IN)
     q = module.create_port('Q', Direction.OUT)

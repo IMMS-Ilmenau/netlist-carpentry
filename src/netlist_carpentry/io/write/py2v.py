@@ -320,8 +320,8 @@ class P2VTransformer:
             ```python
             >>> from netlist_carpentry.core.netlist_elements.module import Module
             >>> from netlist_carpentry.core.netlist_elements.wire import Wire
-            >>> module = Module(raw_path='module1')
-            >>> wire = Wire(raw_path='module1.wire1', width=8)
+            >>> module = Module(name='module1')
+            >>> wire = Wire(name='wire1', width=8)
             >>> module.add_wire(wire)
             >>> transformer = P2VTransformer()
             >>> print(transformer.wire2v(module, wire))
@@ -333,9 +333,9 @@ class P2VTransformer:
             >>> from netlist_carpentry.core.netlist_elements.module import Module
             >>> from netlist_carpentry.core.netlist_elements.wire import Wire
             >>> from netlist_carpentry.utils.gate_lib import DFF
-            >>> module = Module(raw_path='module1')
-            >>> dff = DFF(raw_path='module1.dff1')
-            >>> wire = Wire(raw_path='module1.wire1', width=8)
+            >>> module = Module(name='module1')
+            >>> dff = DFF(name='dff1')
+            >>> wire = Wire(name='wire1', width=8)
             >>> module.add_wire(wire)
             >>> module.add_instance(dff1)
             >>> module.connect(dff.ports['Q'].path, wire[0].path)  # Connect wire to a Flip-Flop -> wire becomes a reg

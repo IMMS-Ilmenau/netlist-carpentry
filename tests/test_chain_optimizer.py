@@ -15,12 +15,12 @@ from netlist_carpentry.utils.gate_lib import AndGate, OrGate, XorGate
 
 @pytest.fixture()
 def empty_module() -> Module:
-    return Module(raw_path='test_module')
+    return Module(name='test_module')
 
 
 @pytest.fixture()
 def module_with_or_chain() -> Module:
-    m = Module(raw_path='or_chain_module')
+    m = Module(name='or_chain_module')
 
     p_in1 = m.create_port('in1_port', Dir.IN)
     p_in2 = m.create_port('in2_port', Dir.IN)
@@ -65,7 +65,7 @@ def module_with_or_chain() -> Module:
 
 @pytest.fixture()
 def module_with_and_chain() -> Module:
-    m = Module(raw_path='and_chain_module')
+    m = Module(name='and_chain_module')
 
     p_in1 = m.create_port('in1_port', Dir.IN)
     p_in2 = m.create_port('in2_port', Dir.IN)
@@ -110,7 +110,7 @@ def module_with_and_chain() -> Module:
 
 @pytest.fixture()
 def module_with_two_chains() -> Module:
-    m = Module(raw_path='two_chains_module')
+    m = Module(name='two_chains_module')
 
     # Chain 1
     p_in1 = m.create_port('in1_port', Dir.IN)
@@ -175,7 +175,7 @@ def module_with_two_chains() -> Module:
 
 @pytest.fixture()
 def module_with_mixed_gates() -> Module:
-    m = Module(raw_path='mixed_module')
+    m = Module(name='mixed_module')
 
     p_in1 = m.create_port('in1_port', Dir.IN)
     p_in2 = m.create_port('in2_port', Dir.IN)
@@ -731,7 +731,7 @@ def test_analyze_module_gates_wrong_type(module_with_or_chain, and_config):
 
 def test_gate_tree_builder_depth(or_config):
     for n_inputs in [2, 3, 4, 5, 8, 16]:
-        m = Module(raw_path='t')
+        m = Module(name='t')
         for i in range(n_inputs):
             m.create_wire(f'in{i}')
         m.create_wire('out')
@@ -864,7 +864,7 @@ def test_resolve_chain_instances_short_names(module_with_or_chain):
 
 
 def test_remove_instances_handles_exception():
-    m = Module(raw_path='t')
+    m = Module(name='t')
 
     class FakeInstance:
         raw_path = 'fake'

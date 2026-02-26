@@ -7,14 +7,14 @@ from netlist_carpentry.core.netlist_elements.segment_base import _Segment
 
 @pytest.fixture()
 def segment_base() -> _Segment:
-    return _Segment(raw_path='a.b.c.3')
+    return _Segment(name='3')
 
 
 def test_segment_base(segment_base: _Segment) -> None:
     assert segment_base.index == 3
 
     with pytest.raises(ValueError):
-        _Segment(raw_path='a.b.c')
+        _Segment(name='c')
 
 
 def test_set_signal(segment_base: _Segment) -> None:

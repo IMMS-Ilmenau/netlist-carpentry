@@ -108,7 +108,9 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         Returns:
             PortPath: The hierarchical path of the netlist element.
         """
-        return PortPath(raw=self.raw_path)
+        if self.has_parent:
+            return PortPath(raw='.'.join([*self.parent.path.parts, self.name]))
+        return PortPath(raw=self.name)
 
     @property
     def type(self) -> EType:
@@ -120,7 +122,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         if self.module_or_instance is not None:
             return self.module_or_instance
         raise ParentNotFoundError(
-            f'No parent port specified for port {self.raw_path}. '
+            f'No parent port specified for port {self.name}. '
             + 'This is probably due to a bad instantiation (missing or bad "module_or_instance" parameter), or a subsequent modification of either the module or instance, which corrupted the port.'
         )
 
@@ -507,7 +509,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         Returns:
             PortSegment: The PortSegment that was created and added to this port.
         """
-        return self._add_port_segment(PortSegment(raw_path=f'{self.raw_path}.{index}', port=self))
+        return self._add_port_segment(PortSegment(name=str(index), port=self))
 
     def create_port_segments(self, count: PositiveInt, offset: NonNegativeInt = 0) -> Dict[int, PortSegment]:
         """
@@ -702,7 +704,6 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
     def _set_name_recursively(self, old_name: str, new_name: str) -> None:
         for _, ps in self:
-            ps.raw_path = ps.path.replace(old_name, new_name).raw
             ps.set_ws_path(ps.ws_path.replace(old_name, new_name))
 
     def change_mutability(self, is_now_locked: bool, recursive: bool = False) -> Self:
@@ -720,8 +721,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
             type_str = 'module' if name_in_module else 'instance'
             if name_in_module or name_in_instance:
                 raise IdentifierConflictError(f'An object with name {new_name} already exists in {type_str} {self.parent.raw_path}!')
-        new_path = PortPath(raw=self.raw_path).replace(self.name, new_name)
-        p = Port(raw_path=new_path.raw, direction=self.direction, module_or_instance=self.module_or_instance)
+        p = Port(name=new_name, direction=self.direction, module_or_instance=self.module_or_instance)
         p.create_port_segments(self.width, self.offset or 0)
         if self.has_parent:
             if isinstance(self.parent, Module):

@@ -37,22 +37,22 @@ from netlist_carpentry.utils.log import LOG
 
 @pytest.fixture
 def primitive_gate() -> Instance:
-    return PrimitiveGate(raw_path='a.b.primitive_gate_inst', instance_type='primitive_gate', module=None)
+    return PrimitiveGate(name='primitive_gate_inst', instance_type='primitive_gate', module=None)
 
 
 @pytest.fixture
 def unary_gate() -> Instance:
-    return UnaryGate(raw_path='a.b.unary_gate_inst', instance_type='unary_gate', module=None)
+    return UnaryGate(name='unary_gate_inst', instance_type='unary_gate', module=None)
 
 
 @pytest.fixture
 def reduce_gate() -> Instance:
-    return ReduceGate(raw_path='a.b.reduce_gate_inst', instance_type='reduce_gate', parameters={'A_WIDTH': 4}, module=None)
+    return ReduceGate(name='reduce_gate_inst', instance_type='reduce_gate', parameters={'A_WIDTH': 4}, module=None)
 
 
 @pytest.fixture
 def binary_gate() -> Instance:
-    return BinaryGate(raw_path='a.b.binary_gate_inst', instance_type='binary_gate', module=None)
+    return BinaryGate(name='binary_gate_inst', instance_type='binary_gate', module=None)
 
 
 @pytest.fixture()
@@ -60,7 +60,7 @@ def simple_module() -> Module:
     from utils import empty_module
 
     m = empty_module()
-    m.raw_path = 'a'
+    m.name = 'a'
     m.create_wire('wire', 4)
     m.create_wire('wireA1', 3)
     m.create_wire('wireA2', 1)
@@ -128,7 +128,7 @@ def test_unary_gate(unary_gate: UnaryGate) -> None:
 
 
 def test_unary_gate_8bit(simple_module: Module) -> None:
-    g = UnaryGate(raw_path='a.b.unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
+    g = UnaryGate(name='unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
     assert len(g.connections) == 2
     assert len(g.connections['A']) == 8
     assert len(g.connections['Y']) == 8
@@ -143,7 +143,7 @@ def test_unary_gate_8bit(simple_module: Module) -> None:
 
 
 def test_unary_gate_split(simple_module: Module) -> None:
-    g = UnaryGate(raw_path='a.b.unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
+    g = UnaryGate(name='unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
     simple_module.add_instance(g)
     a = simple_module.create_port('A', Direction.IN, width=8)
     y = simple_module.create_port('Y', Direction.OUT, width=8)
@@ -202,7 +202,7 @@ def _test_signal_conf1_n(gate: UnaryGate, sin: Signal, sout_prev: Signal, sout_n
 def test_buffer(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Buffer
 
-    g = Buffer(raw_path='a.buf_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    g = Buffer(name='buf_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'buf_inst'
     assert g.instance_type == '§buf'
     assert g.verilog_template == 'assign {out} = {in1};'
@@ -228,7 +228,7 @@ def test_buffer(simple_module: Module) -> None:
 def test_not_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import NotGate
 
-    g = NotGate(raw_path='a.not_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    g = NotGate(name='not_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.verilog_template == 'assign {out} = ~{in1};'
     assert g.name == 'not_inst'
     assert g.instance_type == '§not'
@@ -253,7 +253,7 @@ def test_not_gate(simple_module: Module) -> None:
 def test_neg_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import NegGate
 
-    g = NegGate(raw_path='a.neg_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    g = NegGate(name='neg_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.verilog_template == 'assign {out} = -{in1};'
     assert g.name == 'neg_inst'
     assert g.instance_type == '§neg'
@@ -332,7 +332,7 @@ def test_reducer(reduce_gate: ReduceGate) -> None:
 def test_reduce_and(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceAnd
 
-    r = ReduceAnd(raw_path='a.reduce_and_inst', parameters={'A_WIDTH': 4}, module=simple_module)
+    r = ReduceAnd(name='reduce_and_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     assert r.verilog_template == 'assign {out} = &{in1};'
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
@@ -363,7 +363,7 @@ def test_reduce_and(simple_module: Module) -> None:
 def test_reduce_and_bad_verilog(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceAnd
 
-    r = ReduceAnd(raw_path='a.reduce_and_inst', parameters={'A_WIDTH': 4}, module=simple_module)
+    r = ReduceAnd(name='reduce_and_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: r.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -375,7 +375,7 @@ def test_reduce_and_bad_verilog(simple_module: Module) -> None:
 def test_reduce_or(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceOr
 
-    r = ReduceOr(raw_path='a.reduce_or_inst', parameters={'A_WIDTH': 4}, module=simple_module)
+    r = ReduceOr(name='reduce_or_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     assert r.verilog_template == 'assign {out} = |{in1};'
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
@@ -410,7 +410,7 @@ def test_reduce_or(simple_module: Module) -> None:
 def test_reduce_bool(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceBool
 
-    r = ReduceBool(raw_path='a.reduce_bool_inst', parameters={'A_WIDTH': 4}, module=simple_module)
+    r = ReduceBool(name='reduce_bool_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     assert r.verilog_template == 'assign {out} = |{in1};'  # TODO EQY unable to prove equality for !(!wire), but can prove equality for |wire
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
@@ -447,7 +447,7 @@ def test_reduce_bool(simple_module: Module) -> None:
 def test_reduce_xor(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceXor
 
-    r = ReduceXor(raw_path='a.reduce_xor_inst', parameters={'A_WIDTH': 4}, module=simple_module)
+    r = ReduceXor(name='reduce_xor_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     assert r.verilog_template == 'assign {out} = ^{in1};'
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
@@ -479,7 +479,7 @@ def test_reduce_xor(simple_module: Module) -> None:
 def test_reduce_xnor(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceXnor
 
-    r = ReduceXnor(raw_path='a.reduce_xnor_inst', parameters={'A_WIDTH': 4}, module=simple_module)
+    r = ReduceXnor(name='reduce_xnor_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     assert r.verilog_template == 'assign {out} = ~^{in1};'
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
@@ -511,7 +511,7 @@ def test_reduce_xnor(simple_module: Module) -> None:
 def test_logic_not(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import LogicNot
 
-    ln = LogicNot(raw_path='a.logic_not_inst', parameters={'A_WIDTH': 4}, module=simple_module)
+    ln = LogicNot(name='logic_not_inst', parameters={'A_WIDTH': 4}, module=simple_module)
     assert ln.verilog_template == 'assign {out} = !{in1};'
     ln.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     ln.tie_port('A', index=1, sig_value='1')
@@ -576,7 +576,7 @@ def test_binary_gate(binary_gate: BinaryGate) -> None:
 
 
 def test_binary_gate_8bit(simple_module: Module) -> None:
-    g = BinaryGate(raw_path='a.b.binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
+    g = BinaryGate(name='binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
     assert len(g.connections) == 3
     assert len(g.connections['A']) == 8
     assert len(g.connections['B']) == 8
@@ -593,7 +593,7 @@ def test_binary_gate_8bit(simple_module: Module) -> None:
 
 
 def test_binary_gate_split(simple_module: Module) -> None:
-    g = BinaryGate(raw_path='a.b.binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
+    g = BinaryGate(name='binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
     simple_module.add_instance(g)
     a = simple_module.create_port('A', Direction.IN, width=8)
     b = simple_module.create_port('B', Direction.IN, width=8)
@@ -656,7 +656,7 @@ def _test_signal_conf2_n(gate: BinaryGate, sin1: Signal, sin2: Signal, sout_prev
 def test_and_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import AndGate
 
-    g = AndGate(raw_path='a.and_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    g = AndGate(name='and_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'and_inst'
     assert g.instance_type == '§and'
     assert g.verilog_template == 'assign {out} = {in1} & {in2};'
@@ -692,7 +692,7 @@ def test_and_gate(simple_module: Module) -> None:
 def test_and_gate_signed(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import AndGate
 
-    g = AndGate(raw_path='a.and_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    g = AndGate(name='and_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -716,7 +716,7 @@ def test_and_gate_signed(simple_module: Module) -> None:
 def test_or_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import OrGate
 
-    g = OrGate(raw_path='a.or_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    g = OrGate(name='or_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'or_inst'
     assert g.instance_type == '§or'
     assert g.verilog_template == 'assign {out} = {in1} | {in2};'
@@ -751,7 +751,7 @@ def test_or_gate(simple_module: Module) -> None:
 def test_xor_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import XorGate
 
-    g = XorGate(raw_path='a.xor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    g = XorGate(name='xor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'xor_inst'
     assert g.instance_type == '§xor'
     assert g.verilog_template == 'assign {out} = {in1} ^ {in2};'
@@ -786,7 +786,7 @@ def test_xor_gate(simple_module: Module) -> None:
 def test_xnor_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import XnorGate
 
-    g = XnorGate(raw_path='a.xnor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    g = XnorGate(name='xnor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'xnor_inst'
     assert g.instance_type == '§xnor'
     assert g.verilog_template == 'assign {out} = {in1} ^~ {in2};'
@@ -821,7 +821,7 @@ def test_xnor_gate(simple_module: Module) -> None:
 def test_nor_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import NorGate
 
-    g = NorGate(raw_path='a.nor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    g = NorGate(name='nor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'nor_inst'
     assert g.instance_type == '§nor'
     assert g.verilog_template == 'assign {out} = ~({in1} | {in2});'
@@ -856,7 +856,7 @@ def test_nor_gate(simple_module: Module) -> None:
 def test_nand_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import NandGate
 
-    g = NandGate(raw_path='a.nand_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    g = NandGate(name='nand_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'nand_inst'
     assert g.instance_type == '§nand'
     assert g.verilog_template == 'assign {out} = ~({in1} & {in2});'
@@ -891,7 +891,7 @@ def test_nand_gate(simple_module: Module) -> None:
 def test_shift_signed_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ShiftSigned
 
-    g = ShiftSigned(raw_path='a.shift_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    g = ShiftSigned(name='shift_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'shift_inst'
     assert g.instance_type == '§shift'
     assert not g.splittable
@@ -976,7 +976,7 @@ def test_shift_signed_gate(simple_module: Module) -> None:
 def test_shl_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ShiftLeft
 
-    g = ShiftLeft(raw_path='a.shl_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    g = ShiftLeft(name='shl_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'shl_inst'
     assert g.instance_type == '§shl'
     assert g.verilog_template == 'assign {out} = {in1} << {in2};'
@@ -1024,7 +1024,7 @@ def test_shl_gate(simple_module: Module) -> None:
 def test_shr_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ShiftRight
 
-    g = ShiftRight(raw_path='a.shr_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
+    g = ShiftRight(name='shr_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'shr_inst'
     assert g.instance_type == '§shr'
     assert g.verilog_template == 'assign {out} = {in1} >> {in2};'
@@ -1070,7 +1070,7 @@ def test_shr_gate(simple_module: Module) -> None:
 
 
 def test_comparison_gate(simple_module: Module) -> None:
-    g = BinaryNto1Gate(raw_path='a.comp_inst', module=simple_module)
+    g = BinaryNto1Gate(name='comp_inst', module=simple_module)
     assert g.verilog == ''
     assert not g.splittable
 
@@ -1096,7 +1096,7 @@ def _test_signal_conf2_arith(gate: BinaryGate, sins1: Dict[int, Signal], sins2: 
 def test_logic_and_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import LogicAnd
 
-    g = LogicAnd(raw_path='a.logic_and_inst', parameters={'A_WIDTH': 2}, module=simple_module)
+    g = LogicAnd(name='logic_and_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'logic_and_inst'
     assert g.instance_type == '§logic_and'
     assert g.verilog_template == 'assign {out} = {in1} && {in2};'
@@ -1121,7 +1121,7 @@ def test_logic_and_gate(simple_module: Module) -> None:
 def test_logic_or_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import LogicOr
 
-    g = LogicOr(raw_path='a.logic_or_inst', parameters={'A_WIDTH': 2}, module=simple_module)
+    g = LogicOr(name='logic_or_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'logic_or_inst'
     assert g.instance_type == '§logic_or'
     assert g.verilog_template == 'assign {out} = {in1} || {in2};'
@@ -1145,7 +1145,7 @@ def test_logic_or_gate(simple_module: Module) -> None:
 def test_lt_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import LessThan
 
-    g = LessThan(raw_path='a.lt_inst', parameters={'A_WIDTH': 2}, module=simple_module)
+    g = LessThan(name='lt_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'lt_inst'
     assert g.instance_type == '§lt'
     assert g.verilog_template == 'assign {out} = {in1} < {in2};'
@@ -1169,7 +1169,7 @@ def test_lt_gate(simple_module: Module) -> None:
 def test_le_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import LessEqual
 
-    g = LessEqual(raw_path='a.le_inst', parameters={'A_WIDTH': 2}, module=simple_module)
+    g = LessEqual(name='le_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'le_inst'
     assert g.instance_type == '§le'
     assert g.verilog_template == 'assign {out} = {in1} <= {in2};'
@@ -1193,7 +1193,7 @@ def test_le_gate(simple_module: Module) -> None:
 def test_eq_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Equal
 
-    g = Equal(raw_path='a.eq_inst', parameters={'A_WIDTH': 2}, module=simple_module)
+    g = Equal(name='eq_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'eq_inst'
     assert g.instance_type == '§eq'
     assert g.verilog_template == 'assign {out} = {in1} == {in2};'
@@ -1217,7 +1217,7 @@ def test_eq_gate(simple_module: Module) -> None:
 def test_ne_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import NotEqual
 
-    g = NotEqual(raw_path='a.ne_inst', parameters={'A_WIDTH': 2}, module=simple_module)
+    g = NotEqual(name='ne_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'ne_inst'
     assert g.instance_type == '§ne'
     assert g.verilog_template == 'assign {out} = {in1} != {in2};'
@@ -1241,7 +1241,7 @@ def test_ne_gate(simple_module: Module) -> None:
 def test_gt_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import GreaterThan
 
-    g = GreaterThan(raw_path='a.gt_inst', parameters={'A_WIDTH': 2}, module=simple_module)
+    g = GreaterThan(name='gt_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'gt_inst'
     assert g.instance_type == '§gt'
     assert g.verilog_template == 'assign {out} = {in1} > {in2};'
@@ -1265,7 +1265,7 @@ def test_gt_gate(simple_module: Module) -> None:
 def test_ge_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import GreaterEqual
 
-    g = GreaterEqual(raw_path='a.ge_inst', parameters={'A_WIDTH': 2}, module=simple_module)
+    g = GreaterEqual(name='ge_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'ge_inst'
     assert g.instance_type == '§ge'
     assert g.verilog_template == 'assign {out} = {in1} >= {in2};'
@@ -1303,7 +1303,7 @@ def _init_mux_structure(m: Multiplexer) -> None:
 
 
 def test_mux_structure(simple_module: Module) -> None:
-    m = Multiplexer(raw_path='a.mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
+    m = Multiplexer(name='mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
 
     assert m.name == 'mux_inst'
     assert m.instance_type == '§mux'
@@ -1350,7 +1350,7 @@ def test_mux_structure(simple_module: Module) -> None:
 
 
 def test_mux_split(simple_module: Module) -> None:
-    m = Multiplexer(raw_path='a.mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
+    m = Multiplexer(name='mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
     simple_module.add_instance(m)
     d0 = simple_module.create_port('D0', Direction.IN, width=4)
     d1 = simple_module.create_port('D1', Direction.IN, width=4)
@@ -1394,7 +1394,7 @@ def test_mux_split(simple_module: Module) -> None:
 
 
 def test_mux_behavior(simple_module: Module) -> None:
-    m = Multiplexer(raw_path='a.mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
+    m = Multiplexer(name='mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
     _init_mux_structure(m)
 
     # Select Ports
@@ -1449,7 +1449,7 @@ def _init_demux_structure(d: Demultiplexer) -> None:
 
 
 def test_demux_structure(simple_module: Module) -> None:
-    d = Demultiplexer(raw_path='a.demux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
+    d = Demultiplexer(name='demux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
 
     assert d.name == 'demux_inst'
     assert d.instance_type == '§demux'
@@ -1498,7 +1498,7 @@ def test_demux_structure(simple_module: Module) -> None:
 
 
 def test_demux_split(simple_module: Module) -> None:
-    dm = Demultiplexer(raw_path='a.mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
+    dm = Demultiplexer(name='mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
     simple_module.add_instance(dm)
     d = simple_module.create_port('D', Direction.OUT, width=4)
     s = simple_module.create_port('S', Direction.OUT, width=3)
@@ -1542,7 +1542,7 @@ def test_demux_split(simple_module: Module) -> None:
 
 
 def test_demux_behavior(simple_module: Module) -> None:
-    d = Demultiplexer(raw_path='a.demux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
+    d = Demultiplexer(name='demux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
     _init_demux_structure(d)
 
     # Select Ports
@@ -1586,7 +1586,7 @@ def test_demux_behavior(simple_module: Module) -> None:
 def test_adder_structure(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Adder
 
-    a = Adder(raw_path='a.adder_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
+    a = Adder(name='adder_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     assert 'A' in a.ports
     assert 'B' in a.ports
@@ -1636,7 +1636,7 @@ def test_adder_structure(simple_module: Module) -> None:
 def test_adder_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Adder
 
-    a = Adder(raw_path='a.adder_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
+    a = Adder(name='adder_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     a.tie_port('A', 0, '0')
     a.tie_port('A', 1, '0')
@@ -1675,7 +1675,7 @@ def test_adder_behavior(simple_module: Module) -> None:
 def test_subtractor_structure(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Subtractor
 
-    s = Subtractor(raw_path='a.subtractor_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
+    s = Subtractor(name='subtractor_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     assert 'A' in s.ports
     assert 'B' in s.ports
@@ -1710,7 +1710,7 @@ def test_subtractor_structure(simple_module: Module) -> None:
 def test_subtractor_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Subtractor
 
-    s = Subtractor(raw_path='a.subtractor_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
+    s = Subtractor(name='subtractor_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     s.tie_port('A', 0, '0')
     s.tie_port('A', 1, '0')
@@ -1747,7 +1747,7 @@ def test_subtractor_behavior(simple_module: Module) -> None:
 def test_multiplier_structure(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Multiplier
 
-    m = Multiplier(raw_path='a.multiplier_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
+    m = Multiplier(name='multiplier_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     assert 'A' in m.ports
     assert 'B' in m.ports
@@ -1784,7 +1784,7 @@ def test_multiplier_structure(simple_module: Module) -> None:
 def test_multiplier_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Multiplier
 
-    m = Multiplier(raw_path='a.multiplier_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
+    m = Multiplier(name='multiplier_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     m.tie_port('A', 0, '0')
     m.tie_port('A', 1, '0')
@@ -1821,7 +1821,7 @@ def test_multiplier_behavior(simple_module: Module) -> None:
 def test_divider_structure(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Divider
 
-    d = Divider(raw_path='a.divider_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
+    d = Divider(name='divider_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     assert 'A' in d.ports
     assert 'B' in d.ports
@@ -1858,7 +1858,7 @@ def test_divider_structure(simple_module: Module) -> None:
 def test_divider_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Divider
 
-    d = Divider(raw_path='a.divider_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
+    d = Divider(name='divider_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     d.tie_port('A', 0, '0')
     d.tie_port('A', 1, '0')
@@ -1897,7 +1897,7 @@ def test_divider_behavior(simple_module: Module) -> None:
 def test_modulo_structure(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Modulo
 
-    m = Modulo(raw_path='a.modulo_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
+    m = Modulo(name='modulo_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     assert 'A' in m.ports
     assert 'B' in m.ports
@@ -1934,7 +1934,7 @@ def test_modulo_structure(simple_module: Module) -> None:
 def test_modulo_behavior(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import Modulo
 
-    m = Modulo(raw_path='a.modulo_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
+    m = Modulo(name='modulo_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
 
     m.tie_port('A', 0, '0')
     m.tie_port('A', 1, '0')
@@ -1976,7 +1976,7 @@ def test_clocked_gate(simple_module: Module) -> None:
 
     g = ClkMixin(
         instance_type='clocked_gate',
-        raw_path='a.clocked_gate_inst',
+        name='clocked_gate_inst',
         parameters={'CLK_POLARITY': Signal.LOW, 'RST_POLARITY': Signal.LOW},
         module=simple_module,
     )
@@ -1997,7 +1997,7 @@ def test_clocked_gate(simple_module: Module) -> None:
 def test_clocked_gate_split(simple_module: Module) -> None:
     dff = ADFFE(
         instance_type='clocked_gate',
-        raw_path='a.clocked_gate_inst',
+        name='clocked_gate_inst',
         parameters={'CLK_POLARITY': Signal.LOW, 'RST_POLARITY': Signal.LOW, 'WIDTH': 8},
         module=simple_module,
     )
@@ -2064,7 +2064,7 @@ def _clk(ff: DFF, cycles: int = 1) -> None:
 
 
 def test_dff_structure(simple_module: Module) -> None:
-    ff = DFF(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+    ff = DFF(name='dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
 
     assert ff.name == 'dff_inst'
     assert ff.instance_type == '§dff'
@@ -2097,7 +2097,7 @@ def test_dff_structure(simple_module: Module) -> None:
 
 
 def test_dff_behaviour(simple_module: Module) -> None:
-    ff = DFF(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    ff = DFF(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     _init_dff_structure(ff, init_all_in=True)
     assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
@@ -2107,7 +2107,7 @@ def test_dff_behaviour(simple_module: Module) -> None:
 
 
 def test_dff_to_scan(simple_module: Module) -> None:
-    ff = DFF(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    ff = DFF(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
 
     scan_ff = ff.get_scanff()
     assert scan_ff.name == 'dff_inst_scan'
@@ -2115,7 +2115,7 @@ def test_dff_to_scan(simple_module: Module) -> None:
 
 
 def test_adff_structure(simple_module: Module) -> None:
-    ff = ADFF(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+    ff = ADFF(name='dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
 
     assert ff.name == 'dff_inst'
     assert ff.instance_type == '§adff'
@@ -2154,7 +2154,7 @@ def test_adff_structure(simple_module: Module) -> None:
 
 
 def test_adff_behaviour(simple_module: Module) -> None:
-    ff = ADFF(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    ff = ADFF(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     _init_dff_structure(ff, init_all_in=True)
     ff.modify_connection('RST', WireSegmentPath(raw='a.rst.0'))
     assert ff.rst_polarity is Signal.HIGH
@@ -2175,7 +2175,7 @@ def test_adff_behaviour(simple_module: Module) -> None:
 
 
 def test_dffe_structure(simple_module: Module) -> None:
-    ff = DFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+    ff = DFFE(name='dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
 
     assert ff.name == 'dff_inst'
     assert ff.instance_type == '§dffe'
@@ -2212,7 +2212,7 @@ def test_dffe_structure(simple_module: Module) -> None:
 
 
 def test_dffe_behaviour(simple_module: Module) -> None:
-    ff = DFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    ff = DFFE(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     _init_dff_structure(ff, init_all_in=True)
     ff.modify_connection('EN', WireSegmentPath(raw='a.en.0'))
     assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
@@ -2227,7 +2227,7 @@ def test_dffe_behaviour(simple_module: Module) -> None:
 
 
 def test_adffe_structure(simple_module: Module) -> None:
-    ff = ADFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+    ff = ADFFE(name='dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
 
     assert ff.name == 'dff_inst'
     assert ff.instance_type == '§adffe'
@@ -2273,7 +2273,7 @@ def test_adffe_structure(simple_module: Module) -> None:
 
 
 def test_adffe_behavior_init(simple_module: Module) -> None:
-    ff = ADFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    ff = ADFFE(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     _init_dff_structure(ff, True, True)
 
     assert not ff.in_reset
@@ -2300,7 +2300,7 @@ def test_adffe_behavior_init(simple_module: Module) -> None:
 
 
 def test_adffe_behavior_clk(simple_module: Module) -> None:
-    ff = ADFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    ff = ADFFE(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     _init_dff_structure(ff, True, True)
 
     assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
@@ -2324,7 +2324,7 @@ def test_adffe_behavior_clk(simple_module: Module) -> None:
 
 
 def test_adffe_behavior_4bit(simple_module: Module) -> None:
-    ff = ADFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    ff = ADFFE(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     _init_dff_structure(ff, True, True)
 
     assert ff.output_port.signal is Signal.UNDEFINED
@@ -2351,7 +2351,7 @@ def test_adffe_behavior_4bit(simple_module: Module) -> None:
 
 
 def test_adffe_behavior_en(simple_module: Module) -> None:
-    ff = ADFFE(raw_path='a.dff_inst', module=simple_module)
+    ff = ADFFE(name='dff_inst', module=simple_module)
     ff.modify_connection('D', WireSegmentPath(raw='a.wireA1.0'), index=0)
     ff.modify_connection('Q', WireSegmentPath(raw='a.wire.0'), index=0)
     ff.modify_connection('CLK', WireSegmentPath(raw='a.clk.0'))
@@ -2407,7 +2407,7 @@ def _init_scan_structure(ff: DFF) -> None:
 
 
 def test_scandff_structure(simple_module: Module) -> None:
-    ff = ScanDFF(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+    ff = ScanDFF(name='dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
     simple_module.instances['dff_inst'] = ff
 
     assert ff.name == 'dff_inst'
@@ -2454,7 +2454,7 @@ def test_scandff_structure(simple_module: Module) -> None:
 
 
 def test_scandff_behaviour(simple_module: Module) -> None:
-    ff = ScanDFF(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    ff = ScanDFF(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     simple_module.instances['dff_inst'] = ff
     _init_dff_structure(ff, init_all_in=True)
     _init_scan_structure(ff)
@@ -2477,7 +2477,7 @@ def test_scandff_behaviour(simple_module: Module) -> None:
 
 
 def test_scanadff_structure(simple_module: Module) -> None:
-    ff = ScanADFF(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+    ff = ScanADFF(name='dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
     simple_module.instances['dff_inst'] = ff
 
     assert ff.name == 'dff_inst'
@@ -2531,7 +2531,7 @@ def test_scanadff_structure(simple_module: Module) -> None:
 
 
 def test_scanadff_behaviour(simple_module: Module) -> None:
-    ff = ScanADFF(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    ff = ScanADFF(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     simple_module.instances['dff_inst'] = ff
     _init_dff_structure(ff, init_all_in=True)
     _init_scan_structure(ff)
@@ -2562,7 +2562,7 @@ def test_scanadff_behaviour(simple_module: Module) -> None:
 
 
 def test_scandffe_structure(simple_module: Module) -> None:
-    ff = ScanDFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+    ff = ScanDFFE(name='dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
     simple_module.instances['dff_inst'] = ff
 
     assert ff.name == 'dff_inst'
@@ -2613,7 +2613,7 @@ def test_scandffe_structure(simple_module: Module) -> None:
 
 
 def test_scandffe_behaviour(simple_module: Module) -> None:
-    ff = ScanDFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    ff = ScanDFFE(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     simple_module.instances['dff_inst'] = ff
     _init_dff_structure(ff, init_all_in=True)
     _init_scan_structure(ff)
@@ -2642,7 +2642,7 @@ def test_scandffe_behaviour(simple_module: Module) -> None:
 
 
 def test_scanadffe_structure(simple_module: Module) -> None:
-    ff = ScanADFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
+    ff = ScanADFFE(name='dff_inst', parameters={'WIDTH': 4, 'ARST_POLARITY': Signal.LOW}, module=simple_module)
     simple_module.instances['dff_inst'] = ff
 
     assert ff.name == 'dff_inst'
@@ -2699,7 +2699,7 @@ def test_scanadffe_structure(simple_module: Module) -> None:
 
 
 def test_scanadffe_behaviour(simple_module: Module) -> None:
-    ff = ScanADFFE(raw_path='a.dff_inst', parameters={'WIDTH': 4}, module=simple_module)
+    ff = ScanADFFE(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     simple_module.instances['dff_inst'] = ff
     _init_dff_structure(ff, init_all_in=True, init_rst_en=True)
     _init_scan_structure(ff)
@@ -2752,7 +2752,7 @@ def _init_dlatch_structure(dl: DLatch, init_all: bool = False) -> None:
 
 
 def test_dlatch_structure(simple_module: Module) -> None:
-    dl = DLatch(raw_path='a.dlatch_inst', parameters={'WIDTH': 4}, module=simple_module)
+    dl = DLatch(name='dlatch_inst', parameters={'WIDTH': 4}, module=simple_module)
 
     assert dl.name == 'dlatch_inst'
     assert dl.instance_type == '§dlatch'
@@ -2786,7 +2786,7 @@ def test_dlatch_structure(simple_module: Module) -> None:
 
 
 def test_dlatch_behavior(simple_module: Module) -> None:
-    dl = DLatch(raw_path='a.dlatch_inst', parameters={'WIDTH': 4}, module=simple_module)
+    dl = DLatch(name='dlatch_inst', parameters={'WIDTH': 4}, module=simple_module)
 
     assert all(s == Signal.FLOATING for s in dl.input_port.signal_array.values())
     assert dl.en_port.signal == Signal.FLOATING

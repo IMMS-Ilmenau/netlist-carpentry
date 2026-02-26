@@ -132,10 +132,10 @@ def test_module_creation(empty_module: Module) -> None:
 
 
 def test_eq(empty_module: Module) -> None:
-    n2 = Module(raw_path=empty_module.raw_path)
+    n2 = Module(name=empty_module.name)
     assert empty_module == n2
 
-    n3 = Module(raw_path='wrong_path')
+    n3 = Module(name='wrong_path')
     assert empty_module != n3
 
     n4 = 'wrong_type'
@@ -263,7 +263,7 @@ def test_add_instance(empty_module: Module, locked_module: Module) -> None:
     assert len(empty_module.instances) == 1
     assert empty_module.instances[i.name] == i
 
-    m2 = Module(raw_path='m2')
+    m2 = Module(name='m2')
     with pytest.raises(SingleOwnershipError):
         m2.add_instance(i)
 
@@ -279,7 +279,7 @@ def test_add_instance(empty_module: Module, locked_module: Module) -> None:
 
     i3 = standard_instance_with_ports()
     empty_module.create_port('double')
-    i3.raw_path = 'test_module1.double'
+    i3.name = 'double'
     with pytest.raises(IdentifierConflictError):
         empty_module.add_wire(i3)
 
@@ -430,7 +430,10 @@ def test_refine_instance(dff_module: Module) -> None:
     assert dff2.is_module_instance
     assert not isinstance(dff2, DFF)
 
-    assert dff.ports == dff2.ports
+    for p in dff2.ports.values():
+        assert p.name in dff.ports
+        assert p.is_connected
+        assert dff.ports[p.name].is_unconnected
     assert dff2.parameters == {'WIDTH': 4}
     for p in dff.ports.values():
         assert p.is_unconnected
@@ -440,7 +443,7 @@ def test_refine_instance(dff_module: Module) -> None:
 
 
 def test_substitute_instance(dff_module: Module) -> None:
-    adffe = ADFFE(raw_path=f'{dff_module.name}.adffe_inst')
+    adffe = ADFFE(name='adffe_inst')
     with pytest.raises(ObjectNotFoundError):
         dff_module.substitute_instance('lulz no instance', adffe)
 
@@ -450,7 +453,7 @@ def test_substitute_instance(dff_module: Module) -> None:
     with pytest.raises(WidthMismatchError):
         dff_module.substitute_instance(dff, adffe)
 
-    adffe = ADFFE(raw_path=f'{dff_module.name}.adffe_inst', parameters={'WIDTH': 4})
+    adffe = ADFFE(name='adffe_inst', parameters={'WIDTH': 4})
     assert dff.name in dff_module.instances
     assert adffe.name not in dff_module.instances
     for p in dff.ports.values():
@@ -482,7 +485,7 @@ def test_substitute_instance(dff_module: Module) -> None:
 
 def test_substitute_instance_silent(dff_module: Module) -> None:
     dff = dff_module.instances_by_types['§dff'][0]
-    adffe = ADFFE(raw_path=f'{dff_module.name}.adffe_inst', parameters={'WIDTH': 4})
+    adffe = ADFFE(name='adffe_inst', parameters={'WIDTH': 4})
     warns = LOG.warns_quantity
     dff_module.substitute_instance(dff, adffe, silent=True)
     assert LOG.warns_quantity == warns
@@ -491,7 +494,7 @@ def test_substitute_instance_silent(dff_module: Module) -> None:
 def test_add_instance_multi_type(standard_module: Module) -> None:
     assert len(standard_module.instances_by_types['§and']) == 1
 
-    is_added = standard_module.add_instance(Instance(raw_path='test_module1.test_instance2', instance_type='§and', module=None))
+    is_added = standard_module.add_instance(Instance(name='test_instance2', instance_type='§and', module=None))
 
     assert is_added
     assert len(standard_module.instances) == 2
@@ -518,7 +521,7 @@ def test_remove_instance(empty_module: Module, locked_module: Module, connected_
     assert len(empty_module.instances) == 0
     assert i.module is None
 
-    m2 = Module(raw_path='m2')
+    m2 = Module(name='m2')
     i = empty_module.create_instance(m2, 'inst2')
     empty_module.remove_instance(i)
     assert len(empty_module.instances) == 0
@@ -565,7 +568,7 @@ def test_get_instance(standard_module: Module) -> None:
 def test_get_instances(standard_module: Module) -> None:
     c = Circuit(name='c')
     c.add_module(standard_module)
-    standard_module.add_instance(Instance(raw_path='test_module1.test_instance2', instance_type='$and', module=None))
+    standard_module.add_instance(Instance(name='test_instance2', instance_type='$and', module=None))
 
     i1 = standard_module.get_instances(name='test_instance')
     assert i1 == [standard_module.instances['test_instance']]
@@ -580,8 +583,8 @@ def test_get_instances(standard_module: Module) -> None:
     i6 = standard_module.get_instances(name='test_instance', type='$and')
     assert i6 == []
 
-    m2 = c.add_module(Module(raw_path='m2'))
-    inst3 = m2.create_instance(c.add_module(Module(raw_path='some_and')), instance_name='test_instance3')
+    m2 = c.add_module(Module(name='m2'))
+    inst3 = m2.create_instance(c.add_module(Module(name='some_and')), instance_name='test_instance3')
     standard_module.create_instance(m2, 'inst2')
 
     i2 = standard_module.get_instances(name='test_instance', fuzzy=True)
@@ -605,7 +608,7 @@ def test_add_port(empty_module: Module, locked_module: Module) -> None:
     assert len(empty_module.ports) == 1
     assert empty_module.ports[p.name] == p
 
-    m2 = Module(raw_path='m2')
+    m2 = Module(name='m2')
     with pytest.raises(SingleOwnershipError):
         m2.add_port(p)
 
@@ -620,8 +623,8 @@ def test_add_port(empty_module: Module, locked_module: Module) -> None:
     assert empty_module.ports[p.name] == p
 
     p3 = standard_port_out()
-    empty_module.create_instance(Module(raw_path='m2'), 'double')
-    p3.raw_path = 'test_module1.double'
+    empty_module.create_instance(Module(name='m2'), 'double')
+    p3.name = 'double'
     with pytest.raises(IdentifierConflictError):
         empty_module.add_port(p3)
 
@@ -758,7 +761,7 @@ def test_add_wire(empty_module: Module, locked_module: Module) -> None:
     assert len(empty_module.wires) == 1
     assert empty_module.wires[w.name] == w
 
-    m2 = Module(raw_path='m2')
+    m2 = Module(name='m2')
     with pytest.raises(SingleOwnershipError):
         m2.add_wire(w)
 
@@ -774,7 +777,7 @@ def test_add_wire(empty_module: Module, locked_module: Module) -> None:
 
     w3 = standard_wire()
     empty_module.create_port('double')
-    w3.raw_path = 'test_module1.double'
+    w3.name = 'double'
     with pytest.raises(IdentifierConflictError):
         empty_module.add_wire(w3)
 
@@ -1148,7 +1151,7 @@ def test_reconnect(connected_module: Module) -> None:
 
 
 def test_update_module_instances() -> None:
-    m = Module(raw_path='m')
+    m = Module(name='m')
 
     with pytest.raises(ObjectNotFoundError):
         m.update_module_instances()
@@ -1850,7 +1853,7 @@ def test_evaluate(connected_module: Module) -> None:
 def test_evaluate_corner_cases(standard_module: Module) -> None:
     with pytest.raises(EvaluationError):
         # Add dummy instance without evaluate method
-        inst = Instance(raw_path='test_module1.test', instance_type='LOL', module=None)
+        inst = Instance(name='test', instance_type='LOL', module=None)
         standard_module.add_instance(inst)
         inst.connect('A', WireSegmentPath(raw='test_module1.test_wire.0'), direction=Dir.IN)
         wseg = standard_module.wires['test_wire'][0]

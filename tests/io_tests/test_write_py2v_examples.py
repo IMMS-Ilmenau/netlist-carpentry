@@ -81,7 +81,7 @@ def test_thermo_enc(log_setup: Log) -> None:
 
 
 def test_wire2port() -> None:
-    m = Module(raw_path='m')
+    m = Module(name='m')
     in_ = m.create_port('in', Direction.IN)
     out = m.create_port('out', Direction.OUT)
     m.connect(in_, out)

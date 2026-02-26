@@ -74,7 +74,9 @@ class WireSegment(_Segment, BaseModel):
         Returns:
             WireSegmentPath: The hierarchical path of the netlist element.
         """
-        return WireSegmentPath(raw=self.raw_path)
+        if self.has_parent:
+            return WireSegmentPath(raw='.'.join([*self.parent.path.parts, self.name]))
+        return WireSegmentPath(raw=self.name)
 
     @property
     def type(self) -> EType:
@@ -89,10 +91,10 @@ class WireSegment(_Segment, BaseModel):
             return self.wire
         elif self.wire is None:
             raise ParentNotFoundError(
-                f'No parent wire specified for wire segment {self.raw_path}. '
+                f'No parent wire specified for wire segment {self.name}. '
                 + 'This is probably due to a bad instantiation (missing or bad "wire" parameter), or a subsequent modification of the wire, which corrupted the wire segment.'
             )
-        raise TypeError(f'Bad type: Parent object of wire segment {self.raw_path} is {type(self.wire).__name__}, but should be {Wire.__name__}')
+        raise TypeError(f'Bad type: Parent object of wire segment {self.name} is {type(self.wire).__name__}, but should be {Wire.__name__}')
 
     @property
     def signal(self) -> Signal:
@@ -387,6 +389,10 @@ class _WireSegmentConst(WireSegment):
     """A constant wire segment that always has the same signal value."""
 
     @property
+    def path(self) -> WireSegmentPath:
+        return WireSegmentPath(raw=self.name)
+
+    @property
     def is_constant(self) -> bool:
         return True
 
@@ -468,16 +474,16 @@ class WireSegmentConstX(_WireSegmentConst):
         return Signal.UNDEFINED
 
 
-WIRE_SEGMENT_0 = WireSegmentConst0(raw_path='0', wire=None).change_mutability(is_now_locked=True)
+WIRE_SEGMENT_0 = WireSegmentConst0(name='0', wire=None).change_mutability(is_now_locked=True)
 """A locked (unchangeable) placeholder representing the constant 0. Its signal is always 0."""
 
-WIRE_SEGMENT_1 = WireSegmentConst1(raw_path='1', wire=None).change_mutability(is_now_locked=True)
+WIRE_SEGMENT_1 = WireSegmentConst1(name='1', wire=None).change_mutability(is_now_locked=True)
 """A locked (unchangeable) placeholder representing the constant 1. Its signal is always 1."""
 
-WIRE_SEGMENT_Z = WireSegmentConstZ(raw_path='Z', wire=None).change_mutability(is_now_locked=True)
+WIRE_SEGMENT_Z = WireSegmentConstZ(name='Z', wire=None).change_mutability(is_now_locked=True)
 """A locked (unchangeable) placeholder representing a floating state. Its signal is always z (floating)."""
 
-WIRE_SEGMENT_X = WireSegmentConstX(raw_path='X', wire=None).change_mutability(is_now_locked=True)
+WIRE_SEGMENT_X = WireSegmentConstX(name='X', wire=None).change_mutability(is_now_locked=True)
 """A locked (unchangeable) placeholder representing an unconnected state. Its signal is always x (unknown, don't-care)."""
 
 CONST_MAP_VAL2OBJ: Dict[str, _WireSegmentConst] = {

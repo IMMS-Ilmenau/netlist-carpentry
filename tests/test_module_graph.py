@@ -45,15 +45,15 @@ def test_set_data(mgraph: ModuleGraph) -> None:
     assert mgraph.get_data('and_inst', 'ntype') == 'PORT'
     mgraph.set_data('and_inst', 'input', 'nsubtype')
     assert mgraph.get_data('and_inst', 'nsubtype') == 'input'
-    mgraph.set_data('in1', Port(raw_path='a.b.c', direction=Direction.IN, module_or_instance=None), 'ndata')
-    assert mgraph.get_data('in1', 'ndata').raw_path == 'a.b.c'
+    mgraph.set_data('in1', Port(name='a.b.c', direction=Direction.IN, module_or_instance=None), 'ndata')
+    assert mgraph.get_data('in1', 'ndata').name == 'a.b.c'
 
     mgraph.set_data('in1', 'INSTANCE', 'ntype')
     assert mgraph.get_data('in1', 'ntype') == 'INSTANCE'
     mgraph.set_data('in1', '§and', 'nsubtype')
     assert mgraph.get_data('in1', 'nsubtype') == '§and'
-    mgraph.set_data('and_inst', AndGate(raw_path='a.b.c'), 'ndata')
-    assert mgraph.get_data('and_inst', 'ndata').raw_path == 'a.b.c'
+    mgraph.set_data('and_inst', AndGate(name='a.b.c'), 'ndata')
+    assert mgraph.get_data('and_inst', 'ndata').name == 'a.b.c'
 
 
 def test_node_type(mgraph: ModuleGraph) -> None:

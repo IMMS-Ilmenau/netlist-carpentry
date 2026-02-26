@@ -39,15 +39,15 @@ def wire_segment() -> WireSegment:
     from utils import standard_wire
 
     wire = standard_wire()
-    inst = Instance(raw_path='a.b', instance_type='c', module=None)
-    module = Module(raw_path='a')
-    p1 = Port(raw_path='a.b.c.p1', direction=Direction.OUT, module_or_instance=inst)
-    p2 = Port(raw_path='a.b.d.p2', direction=Direction.IN, module_or_instance=inst)
-    p3 = Port(raw_path='a.b.p3', direction=Direction.OUT, module_or_instance=module)
-    p1.create_port_segment(0).set_ws_path('a.b.c.0')
-    p2.create_port_segment(0).set_ws_path('a.b.c.0')
-    p3.create_port_segment(0).set_ws_path('a.b.c.0')
-    w = WireSegment(raw_path='a.b.c.0', wire=wire)
+    inst = Instance(name='b', instance_type='c', module=None)
+    module = Module(name='a')
+    p1 = Port(name='p1', direction=Direction.OUT, module_or_instance=inst)
+    p2 = Port(name='p2', direction=Direction.IN, module_or_instance=inst)
+    p3 = Port(name='p3', direction=Direction.OUT, module_or_instance=module)
+    p1.create_port_segment(0).set_ws_path('a.c.0')
+    p2.create_port_segment(0).set_ws_path('a.c.0')
+    p3.create_port_segment(0).set_ws_path('a.c.0')
+    w = WireSegment(name='0', wire=wire)
     w.add_port_segments([p1[0], p2[0], p3[0]])
     return w
 
@@ -60,7 +60,7 @@ def locked_seg() -> WireSegment:
 
 
 def _add_multidriver(wire_segment: WireSegment) -> None:
-    p = Port(raw_path='a.b.p4', direction=Direction.IN, module_or_instance=Module(raw_path='a'))
+    p = Port(name='p4', direction=Direction.IN, module_or_instance=Module(name='a'))
     p.create_port_segment(0)
     wire_segment.add_port_segment(p[0])
 
@@ -68,7 +68,7 @@ def _add_multidriver(wire_segment: WireSegment) -> None:
 def test_wire_segment_basics(wire_segment: WireSegment) -> None:
     assert wire_segment.name == '0'
     assert wire_segment.path.type is EType.WIRE_SEGMENT
-    assert wire_segment.path.raw == 'a.b.c.0'
+    assert wire_segment.path.raw == 'wire1.0'
     assert wire_segment.type is EType.WIRE_SEGMENT
     assert wire_segment.index == 0
     assert wire_segment.signal is Signal.UNDEFINED
@@ -97,9 +97,9 @@ def test_wire_segment_basics(wire_segment: WireSegment) -> None:
 def test_wire_segment_parent_wire() -> None:
     CFG.allow_detached_segments = False
     with pytest.raises(DetachedSegmentError):
-        WireSegment(raw_path='a.b.c.0', wire=None)
+        WireSegment(name='0', wire=None)
     with pytest.raises(TypeError):
-        WireSegment(raw_path='a.b.c.0', wire=NetlistElement(raw_path='a.b.c'))
+        WireSegment(name='0', wire=NetlistElement(name='foo'))
     CFG.allow_detached_segments = True
 
 
@@ -111,14 +111,14 @@ def test_parent() -> None:
     assert parent == w
 
     with pytest.raises(ParentNotFoundError):
-        WireSegment(raw_path='a.b.c.0', wire=None).parent
+        WireSegment(name='0', wire=None).parent
 
 
 def test_eq(wire_segment: WireSegment) -> None:
     n2 = copy.deepcopy(wire_segment)
     assert wire_segment == n2
 
-    n3 = WireSegment(raw_path='wrong_path.0', wire=None)
+    n3 = WireSegment(name='42', wire=None)
     assert wire_segment != n3
 
     n4 = 'wrong_type'
@@ -138,38 +138,6 @@ def test_is_defined_constant(wire_segment: WireSegment) -> None:
     assert WIRE_SEGMENT_0.is_defined_constant
     assert WIRE_SEGMENT_1.is_defined_constant
     assert not WIRE_SEGMENT_X.is_defined_constant
-
-
-def test_super_wire_name(wire_segment: WireSegment) -> None:
-    from utils import standard_wire
-
-    wire = standard_wire()
-    assert wire_segment.super_wire_name == 'c'
-
-    still_valid = WireSegment(raw_path='a.0', wire=wire)
-    assert still_valid.super_wire_name == 'a'
-
-    invalid = WireSegment(raw_path='0', wire=wire)
-    assert invalid.super_wire_name == ''
-
-    invalid = WireSegment(raw_path='', wire=wire)
-    assert invalid.super_wire_name == ''
-
-
-def test_super_module_name(wire_segment: WireSegment) -> None:
-    assert wire_segment.super_module_name == 'b'
-
-    still_valid = WireSegment(raw_path='a.b.0', wire=None)
-    assert still_valid.super_module_name == 'a'
-
-    invalid = WireSegment(raw_path='a.0', wire=None)
-    assert invalid.super_module_name == ''
-
-    invalid = WireSegment(raw_path='0', wire=None)
-    assert invalid.super_module_name == ''
-
-    invalid = WireSegment(raw_path='', wire=None)
-    assert invalid.super_module_name == ''
 
 
 def test_add_port_segment(wire_segment: WireSegment, locked_seg: WireSegment) -> None:
@@ -332,7 +300,7 @@ def test_evaluate(wire_segment: WireSegment) -> None:
 
 
 def test_wire_segment_str(wire_segment: WireSegment) -> None:
-    assert str(wire_segment) == 'WireSegment "0" with path a.b.c.0'
+    assert str(wire_segment) == 'WireSegment "0" with path wire1.0'
 
     assert str(WIRE_SEGMENT_0) == 'Constant WireSegment "0" with path 0 and signal 0'
     assert str(WIRE_SEGMENT_1) == 'Constant WireSegment "1" with path 1 and signal 1'
@@ -341,7 +309,7 @@ def test_wire_segment_str(wire_segment: WireSegment) -> None:
 
 
 def test_wire_segment_repr(wire_segment: WireSegment) -> None:
-    assert repr(wire_segment) == 'WireSegment(a.b.c.0, Signal:x, 3 port(s))'
+    assert repr(wire_segment) == 'WireSegment(wire1.0, Signal:x, 3 port(s))'
 
     assert repr(WIRE_SEGMENT_0) == 'Constant WireSegment "0" WireSeg(0)'
     assert repr(WIRE_SEGMENT_1) == 'Constant WireSegment "1" WireSeg(1)'

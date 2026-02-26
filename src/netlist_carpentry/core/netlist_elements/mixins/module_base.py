@@ -47,7 +47,7 @@ class ModuleBaseMixin(NetlistElement):
         Returns:
             ModulePath: The hierarchical path of the netlist element.
         """
-        return ModulePath(raw=self.raw_path)
+        return ModulePath(raw=self.name)
 
     @property
     def type(self) -> EType:
@@ -59,7 +59,7 @@ class ModuleBaseMixin(NetlistElement):
         raise HierarchyError('Modules do not have parents! Use `Module.circuit` to retrieve the circuit!')
 
     @property
-    def has_parent(self) -> str:
+    def has_parent(self) -> bool:
         return False
 
     @property
@@ -294,13 +294,10 @@ class ModuleBaseMixin(NetlistElement):
 
     def _set_name_recursively(self, old_name: str, new_name: str) -> None:
         for p in self.ports.values():
-            p.raw_path = p.path.replace(old_name, new_name).raw
             p._set_name_recursively(old_name, new_name)
         for w in self.wires.values():
-            w.raw_path = w.path.replace(old_name, new_name).raw
             w._set_name_recursively(old_name, new_name)
         for i in self.instances.values():
-            i.raw_path = i.path.replace(old_name, new_name).raw
             i._set_name_recursively(old_name, new_name)
 
     def change_mutability(self, is_now_locked: bool, recursive: bool = False) -> Self:

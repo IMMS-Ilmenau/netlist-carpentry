@@ -115,7 +115,7 @@ def test_implement_scan_chain_corner_case(dff_circuit: Circuit) -> None:
 
     connect_all_scan_elements(top, [], 'SI', 'SO', 'SE')
 
-    m4.create_instance(Module(raw_path='M5'), 'm5')
+    m4.create_instance(Module(name='M5'), 'm5')
     scan_list = _implement_scanff_in_submodules(m4)
     assert scan_list == []
 

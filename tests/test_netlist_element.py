@@ -11,11 +11,11 @@ from netlist_carpentry.core.netlist_elements.netlist_element import NetlistEleme
 
 @pytest.fixture
 def netlist_element() -> NetlistElement:
-    return NetlistElement(raw_path='a.b.c.d.test_name')
+    return NetlistElement(name='test_name')
 
 
 def test_netlist_element_constructor(netlist_element: NetlistElement) -> None:
-    element_path = ElementPath(raw='a.b.c.d.test_name')
+    element_path = ElementPath(raw='test_name')
     assert netlist_element.name == 'test_name'
     assert netlist_element.type is EType.UNSPECIFIED
     assert netlist_element.path == element_path
@@ -32,10 +32,10 @@ def test_netlist_element_constructor_locked(netlist_element: NetlistElement) -> 
 
 
 def test_eq(netlist_element: NetlistElement) -> None:
-    n2 = NetlistElement(raw_path=netlist_element.raw_path)
+    n2 = NetlistElement(name=netlist_element.name)
     assert netlist_element == n2
 
-    n3 = NetlistElement(raw_path='wrong_path')
+    n3 = NetlistElement(name='wrong_path')
     assert netlist_element != n3
 
     n4 = 'wrong_type'
@@ -63,7 +63,7 @@ def test_set_name(netlist_element: NetlistElement) -> None:
 
 
 def test_hierarchy_level(netlist_element: NetlistElement) -> None:
-    assert netlist_element.hierarchy_level == 4
+    assert netlist_element.hierarchy_level == 0
 
 
 def test_parent(netlist_element: NetlistElement) -> None:
@@ -72,8 +72,7 @@ def test_parent(netlist_element: NetlistElement) -> None:
 
 
 def test_has_parent(netlist_element: NetlistElement) -> None:
-    with pytest.raises(NotImplementedError):
-        netlist_element.has_parent
+    assert not netlist_element.has_parent
 
 
 def test_circuit(netlist_element: NetlistElement) -> None:
@@ -95,7 +94,7 @@ def test_change_mutability(netlist_element: NetlistElement) -> None:
 def test_is_placeholder_instance(netlist_element: NetlistElement) -> None:
     assert not netlist_element.is_placeholder_instance
 
-    assert NetlistElement(raw_path='').is_placeholder_instance
+    assert NetlistElement(name='').is_placeholder_instance
 
 
 def test_copy_object(netlist_element: NetlistElement) -> None:
@@ -113,12 +112,12 @@ def test_normalize_metadata(netlist_element: NetlistElement) -> None:
     found_dict = netlist_element.normalize_metadata()
     assert target_dict == found_dict
 
-    target_dict = {'a.b.c.d.test_name': {}}
+    target_dict = {'test_name': {}}
     found_dict = netlist_element.normalize_metadata(include_empty=True)
     assert target_dict == found_dict
 
     netlist_element.metadata.add_category('cat')
-    target_dict = {'a.b.c.d.test_name': {'cat': {}}}
+    target_dict = {'test_name': {'cat': {}}}
     found_dict = netlist_element.normalize_metadata(include_empty=True)
     assert target_dict == found_dict
 
@@ -126,7 +125,7 @@ def test_normalize_metadata(netlist_element: NetlistElement) -> None:
     found_dict = netlist_element.normalize_metadata()
     assert target_dict == found_dict
 
-    target_dict = {'cat': {'a.b.c.d.test_name': {}}}
+    target_dict = {'cat': {'test_name': {}}}
     found_dict = netlist_element.normalize_metadata(include_empty=True, sort_by='category')
     assert target_dict == found_dict
 
@@ -135,49 +134,49 @@ def test_normalize_metadata(netlist_element: NetlistElement) -> None:
     assert target_dict == found_dict
 
     netlist_element.metadata.set('foo', 'bar')
-    target_dict = {'cat': {'a.b.c.d.test_name': {}}, 'general': {'a.b.c.d.test_name': {'foo': 'bar'}}}
+    target_dict = {'cat': {'test_name': {}}, 'general': {'test_name': {'foo': 'bar'}}}
     found_dict = netlist_element.normalize_metadata(include_empty=True, sort_by='category')
     assert target_dict == found_dict
 
-    target_dict = {'general': {'a.b.c.d.test_name': {'foo': 'bar'}}}
+    target_dict = {'general': {'test_name': {'foo': 'bar'}}}
     found_dict = netlist_element.normalize_metadata(sort_by='category')
     assert target_dict == found_dict
 
     netlist_element.metadata.set('foo', 'bar')
-    target_dict = {'a.b.c.d.test_name': {'general': {'foo': 'bar'}, 'cat': {}}}
+    target_dict = {'test_name': {'general': {'foo': 'bar'}, 'cat': {}}}
     found_dict = netlist_element.normalize_metadata(include_empty=True)
     assert target_dict == found_dict
 
-    target_dict = {'a.b.c.d.test_name': {'general': {'foo': 'bar'}}}
+    target_dict = {'test_name': {'general': {'foo': 'bar'}}}
     found_dict = netlist_element.normalize_metadata()
     assert target_dict == found_dict
 
     netlist_element.metadata.set('foo', 'baz', 'cat')
-    target_dict = {'cat': {'a.b.c.d.test_name': {'foo': 'baz'}}, 'general': {'a.b.c.d.test_name': {'foo': 'bar'}}}
+    target_dict = {'cat': {'test_name': {'foo': 'baz'}}, 'general': {'test_name': {'foo': 'bar'}}}
     found_dict = netlist_element.normalize_metadata(include_empty=True, sort_by='category')
     assert target_dict == found_dict
 
-    target_dict = {'cat': {'a.b.c.d.test_name': {'foo': 'baz'}}}
+    target_dict = {'cat': {'test_name': {'foo': 'baz'}}}
     found_dict = netlist_element.normalize_metadata(include_empty=True, sort_by='category', filter=lambda cat, md: cat == 'cat')
     assert target_dict == found_dict
 
     netlist_element.metadata.add_category('cat2')
-    target_dict = {'cat': {'a.b.c.d.test_name': {'foo': 'baz'}}}
+    target_dict = {'cat': {'test_name': {'foo': 'baz'}}}
     found_dict = netlist_element.normalize_metadata(sort_by='category', filter=lambda cat, md: 'cat' in cat)
     assert target_dict == found_dict
 
     netlist_element.metadata.add_category('cat2')
-    target_dict = {'cat': {'a.b.c.d.test_name': {'foo': 'baz'}}, 'cat2': {'a.b.c.d.test_name': {}}}
+    target_dict = {'cat': {'test_name': {'foo': 'baz'}}, 'cat2': {'test_name': {}}}
     found_dict = netlist_element.normalize_metadata(include_empty=True, sort_by='category', filter=lambda cat, md: 'cat' in cat)
     assert target_dict == found_dict
 
 
 def test_str(netlist_element: NetlistElement) -> None:
-    assert str(netlist_element) == 'NetlistElement: UNSPECIFIED "test_name" with path a.b.c.d.test_name'
+    assert str(netlist_element) == 'NetlistElement: UNSPECIFIED "test_name" with path test_name'
 
 
 def test_repr(netlist_element: NetlistElement) -> None:
-    assert repr(netlist_element) == 'NetlistElement(test_name: UNSPECIFIED at a.b.c.d.test_name)'
+    assert repr(netlist_element) == 'NetlistElement(test_name: UNSPECIFIED at test_name)'
 
 
 if __name__ == '__main__':

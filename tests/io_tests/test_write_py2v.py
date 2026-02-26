@@ -34,7 +34,7 @@ def standard_module() -> Module:
 
     m = esm()
     m.connect(m.create_wire('test_wire'), m.create_port('test_port', Direction.IN))
-    m.add_instance(AndGate(raw_path='test_module1.test_instance', module=m))
+    m.add_instance(AndGate(name='test_instance', module=m))
     return m
 
 
@@ -78,11 +78,11 @@ def test_wire2v(writer: P2VTransformer) -> None:
     found_wcode = writer.wire2v(m, sw)
     assert target_wcode == found_wcode
 
-    sw[1].raw_path = ''
+    sw.segments[1] = WIRE_SEGMENT_X
     writer.wire2v(m, sw)
     assert writer._constant_wire_segments == {'test_module1': {'test_module1.wire1.1': WIRE_SEGMENT_X}}
 
-    w4[1].raw_path = '0'
+    w4.segments[1] = WIRE_SEGMENT_0
     writer.wire2v(m, w4)
     assert writer._constant_wire_segments == {'test_module1': {'test_module1.wire1.1': WIRE_SEGMENT_X, 'test_module1.wire4b.1': WIRE_SEGMENT_0}}
 
@@ -109,7 +109,7 @@ def test_const_wire_assigns(writer: P2VTransformer) -> None:
 
     m = empty_module()
     m.create_wire('w', width=6)
-    m.wires['w'][0].raw_path = 'test_module1.w.0'  # Only bit not constant!
+    m.wires['w'][0].name = '0'  # Only bit not constant!
     m.wires['w'].segments[1] = WIRE_SEGMENT_0
     m.wires['w'].segments[2] = WIRE_SEGMENT_1
     m.wires['w'].segments[3] = WIRE_SEGMENT_Z
@@ -129,7 +129,7 @@ def test_const_wire_assigns(writer: P2VTransformer) -> None:
 
 
 def test_port2wire_wires2v(writer: P2VTransformer) -> None:
-    m = Module(raw_path='testModule1')
+    m = Module(name='testModule1')
     p = m.create_port('in', Direction.IN)
     warns = LOG.warns_quantity
     vstr = writer._port2wire_wires2v(m)
@@ -165,7 +165,7 @@ def test_port2v(writer: P2VTransformer) -> None:
     assert target_pcode == found_pcode
 
     m.create_wire('test_port3')
-    p = Port(raw_path='test_module.test_port3', direction=Direction.OUT, msb_first=False, module_or_instance=m)
+    p = Port(name='test_port3', direction=Direction.OUT, msb_first=False, module_or_instance=m)
     p.create_port_segment(2).set_ws_path('test_module.test_port3.0')
     p.create_port_segment(3).set_ws_path('test_module.test_port3.0')
     m.add_port(p)
@@ -244,8 +244,8 @@ def test_module2v_id_replacement(writer: P2VTransformer) -> None:
     from tests.utils import empty_module
 
     m = empty_module()
-    m.raw_path = '§' + m.raw_path
-    m.create_instance(Module(raw_path='§some_type'), '§some_name')
+    m.name = '§' + m.name
+    m.create_instance(Module(name='§some_type'), '§some_name')
     m.connect(m.create_wire('§wire§1'), m.create_port('§port§1', Direction.IN))
     m.connect(m.create_wire('§wire§2'), m.create_port('§port§2', Direction.OUT))
     m.instances['§some_name'].connect('A', WSPath(raw='§test_module1.§wire§1.0'), Direction.IN)
@@ -289,7 +289,7 @@ def test_module2v_wire_edge_cases(writer: P2VTransformer) -> None:
 
 
 def test_instance2v(writer: P2VTransformer, standard_module: Module) -> None:
-    standard_module.create_instance(Module(raw_path='some_module'), 'test_module_instance')
+    standard_module.create_instance(Module(name='some_module'), 'test_module_instance')
     standard_module.create_wire('wireA')
     standard_module.create_wire('wireB')
     standard_module.create_wire('wireC')

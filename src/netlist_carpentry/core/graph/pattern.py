@@ -672,7 +672,7 @@ class Pattern:
             pattern_inst: Instance = self.replacement_graph.nodes[new_inst_node]['ndata']
             width = max(p.width for p in pattern_inst.ports.values())
             new_inst_cls = get(inst_type) if get(inst_type) is not None else Instance
-            module.add_instance(new_inst_cls(raw_path=f'{module.name}.{inst_name}', instance_type=inst_type, width=width, module=module))
+            module.add_instance(new_inst_cls(name=inst_name, instance_type=inst_type, width=width, module=module))
 
             # Update mapping
             pattern_inst_mapping[new_inst_node] = inst_name

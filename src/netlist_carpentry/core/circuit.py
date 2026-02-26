@@ -203,7 +203,7 @@ class Circuit(BaseModel):
         Returns:
             Module: The module that was created and added to this circuit.
         """
-        return self.add_module(Module(raw_path=name))
+        return self.add_module(Module(name=name))
 
     def copy_module(self, old_module: Union[ModuleName, Module], new_name: ModuleName) -> Module:
         """Duplicates the given module, and the new instance receives the given name.

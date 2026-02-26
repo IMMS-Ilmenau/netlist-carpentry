@@ -54,7 +54,7 @@ def test_circuit_creation(empty_circuit: Circuit) -> None:
 
 
 def test_add_module(empty_circuit: Circuit) -> None:
-    m = Module(raw_path='testModule')
+    m = Module(name='testModule')
     added = empty_circuit.add_module(m)
 
     assert added == m
@@ -68,15 +68,15 @@ def test_add_module(empty_circuit: Circuit) -> None:
     assert m.circuit == empty_circuit
     assert empty_circuit.instances == {}
 
-    m2 = Module(raw_path='testModule', parameters={'foo': 'bar'})
+    m2 = Module(name='testModule', parameters={'foo': 'bar'})
     with pytest.raises(IdentifierConflictError):
         empty_circuit.add_module(m2)
     assert empty_circuit.module_count == 1
     assert len(empty_circuit) == 1
     assert empty_circuit.first == m
 
-    m2 = empty_circuit.add_module(Module(raw_path='m2'))
-    m3 = Module(raw_path='m3')
+    m2 = empty_circuit.add_module(Module(name='m2'))
+    m3 = Module(name='m3')
     m3.create_instance(m2, 'm2_inst')
     empty_circuit.add_module(m3)
     assert empty_circuit.instances['m2'] == [InstancePath(raw='m3.m2_inst')]
@@ -183,7 +183,7 @@ def test_copy_module(empty_circuit: Circuit) -> None:
 
 
 def test_remove_module(empty_circuit: Circuit) -> None:
-    m = Module(raw_path='testModule')
+    m = Module(name='testModule')
     m.create_instance(AndGate, 'and_inst')
     empty_circuit.add_module(m)
     empty_circuit.set_top(m)
@@ -205,8 +205,8 @@ def test_remove_module(empty_circuit: Circuit) -> None:
     assert empty_circuit.module_count == 0
     assert len(empty_circuit) == 0
 
-    m2 = Module(raw_path='m2')
-    empty_circuit.modules['m3'] = Module(raw_path='m3')
+    m2 = Module(name='m2')
+    empty_circuit.modules['m3'] = Module(name='m3')
     empty_circuit.modules['m3'].create_instance(m2, 'm2_inst')
     empty_circuit.instances['m2'] = [InstancePath(raw='m3.m2_inst')]
 
@@ -214,7 +214,7 @@ def test_remove_module(empty_circuit: Circuit) -> None:
 
 
 def test_get_module(empty_circuit: Circuit) -> None:
-    m = Module(raw_path='testModule')
+    m = Module(name='testModule')
     empty_circuit.add_module(m)
 
     m2 = empty_circuit.get_module(m.name)
@@ -234,7 +234,7 @@ def test_get_module_idx(empty_circuit: Circuit) -> None:
     with pytest.raises(IndexError):
         empty_circuit.first
 
-    m = Module(raw_path='testModule')
+    m = Module(name='testModule')
     empty_circuit.add_module(m)
     get_m = empty_circuit.get_module_at_idx(0)
     assert get_m is m
@@ -242,7 +242,7 @@ def test_get_module_idx(empty_circuit: Circuit) -> None:
     get_m = empty_circuit.get_module_at_idx(1)
     assert get_m is None
 
-    m2 = Module(raw_path='testModule2')
+    m2 = Module(name='testModule2')
     empty_circuit.add_module(m2)
     get_m = empty_circuit.get_module_at_idx(0)
     assert get_m is m
@@ -470,7 +470,7 @@ def test_update_instance(connected_circuit: Circuit) -> None:
 
 def test_update_instance_none(connected_circuit: Circuit) -> None:
     m = connected_circuit['test_module1']
-    inst = AndGate(raw_path=f'{m.name}.and_inst2', module=m)
+    inst = AndGate(name='and_inst2', module=m)
     assert len(connected_circuit.instances['§and']) == 1
     assert connected_circuit.instances['§and'] == [InstancePath(raw='test_module1.and_inst')]
 

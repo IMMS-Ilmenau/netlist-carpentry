@@ -7,11 +7,11 @@ from netlist_carpentry.core.netlist_elements.mixins.graph_building import GraphB
 
 
 def test_not_implemented() -> None:
-    em = GraphBuildingMixin(raw_path='a.b.c')
+    em = GraphBuildingMixin(name='abc')
     with pytest.raises(NotImplementedError):
-        em.get_driving_ports(WireSegmentPath(raw='a.b.c.0'))
+        em.get_driving_ports(WireSegmentPath(raw='abc.0'))
     with pytest.raises(NotImplementedError):
-        em.get_load_ports(WireSegmentPath(raw='a.b.c.0'))
+        em.get_load_ports(WireSegmentPath(raw='abc.0'))
 
 
 if __name__ == '__main__':

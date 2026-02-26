@@ -38,7 +38,7 @@ def locked_wire() -> Wire:
 
 
 def _add_multidriver(standard_wire: Wire, name: str = 'p4') -> None:
-    p = Port(raw_path=f'test_module1.{name}', direction=Direction.IN, module_or_instance=Module(raw_path='a'))
+    p = Port(name=name, direction=Direction.IN, module_or_instance=Module(name='a'))
     p.create_port_segment(1)
     standard_wire[1].add_port_segment(p[1])
 
@@ -49,7 +49,7 @@ def test_wire_creation(standard_wire: Wire) -> None:
     assert standard_wire.type is EType.WIRE
     assert standard_wire.path.name == 'wire1'
     assert standard_wire.path.type is EType.WIRE
-    assert standard_wire.path.raw == 'test_module1.wire1'
+    assert standard_wire.path.raw == 'wire1'
     assert standard_wire.width == 1
     assert standard_wire.offset == 1
     assert standard_wire.signal == Signal.UNDEFINED
@@ -74,7 +74,7 @@ def test_wire_len(standard_wire: Wire) -> None:
     assert len(standard_wire) == 1
     assert len(standard_wire) == len(standard_wire.segments)
 
-    empty_wire = Wire(raw_path='', module=None)
+    empty_wire = Wire(name='', module=None)
 
     assert len(empty_wire) == 0
     assert len(empty_wire) == len(empty_wire.segments)
@@ -89,7 +89,7 @@ def test_eq(standard_wire: Wire) -> None:
     n2 = copy.deepcopy(standard_wire)
     assert standard_wire == n2
 
-    n3 = Wire(raw_path='wrong_path', module=None)
+    n3 = Wire(name='wrong_path', module=None)
     assert standard_wire != n3
 
     n4 = 'wrong_type'
@@ -99,7 +99,7 @@ def test_eq(standard_wire: Wire) -> None:
 
 def test_wire_parent_init() -> None:
     with pytest.raises(ValidationError):
-        Wire(raw_path='test_module1.c', module=NetlistElement(raw_path='test_module1'))
+        Wire(name='c', module=NetlistElement(name='test_module1'))
 
 
 def test_parent(standard_wire: Wire) -> None:
@@ -138,7 +138,7 @@ def test_wire_offset() -> None:
     w.remove_wire_segment(1)
     assert w.offset == 2
 
-    w = Wire(raw_path='test_module1.c', module=None)
+    w = Wire(name='c', module=None)
     assert w.offset is None  # No segments: no offset
 
 
@@ -172,14 +172,14 @@ def test_wire_signed_unsigned(standard_wire: Wire) -> None:
 def test_add_wire_segment(standard_wire: Wire, locked_wire: Wire) -> None:
     assert len(standard_wire.segments) == 1  # There is one wire segment in the standard wire by default
 
-    seg0 = WireSegment(raw_path='test_module1.wire1.0', wire=standard_wire)
+    seg0 = WireSegment(name='0', wire=standard_wire)
     standard_wire._add_wire_segment(seg0)
     assert len(standard_wire.segments) == 2
     assert standard_wire[0] == seg0
     assert standard_wire[0].index == 0
     assert seg0.index == 0
 
-    seg1 = WireSegment(raw_path='test_module1.wire1.1', wire=standard_wire)
+    seg1 = WireSegment(name='1', wire=standard_wire)
     with pytest.raises(IdentifierConflictError):
         standard_wire._add_wire_segment(seg1)  # Do not accidentally overwrite previous entries
 
@@ -347,7 +347,7 @@ def test_set_signals() -> None:
     assert w.parameters['signed'] == 0
     assert w.signal_int == 15
 
-    w = Wire(raw_path='test_module1.c', module=None)
+    w = Wire(name='c', module=None)
     with pytest.raises(IndexError):
         w.set_signals('1010')
 
@@ -501,7 +501,7 @@ def test_change_mutability(standard_wire: Wire) -> None:
 def test_copy_object(standard_wire: Wire) -> None:
     new_w = standard_wire.copy_object('new_wire')
     assert isinstance(new_w, Wire)
-    assert new_w.raw_path == 'test_module1.new_wire'
+    assert new_w.raw_path == 'new_wire'
     assert new_w.connected_port_segments == []
     assert new_w.connected_port_segments != standard_wire.connected_port_segments
     assert new_w.module is None
@@ -509,7 +509,7 @@ def test_copy_object(standard_wire: Wire) -> None:
     assert new_w.width == standard_wire.width
     assert new_w.offset == standard_wire.offset
 
-    m = Module(raw_path='m')
+    m = Module(name='m')
     m.add_wire(standard_wire)
     assert standard_wire in m.wires.values()
     new_w2 = standard_wire.copy_object('new_wire')
@@ -605,12 +605,12 @@ def test_normalize_metadata() -> None:
 
 def test_wire_str(standard_wire: Wire) -> None:
     # # Test the string representation of a wire
-    assert str(standard_wire) == 'Wire "wire1" with path test_module1.wire1 (1 bit(s) wide)'
+    assert str(standard_wire) == 'Wire "wire1" with path wire1 (1 bit(s) wide)'
 
 
 def test_wire_repr(standard_wire: Wire) -> None:
     # # # Test the representation of a wire
-    assert repr(standard_wire) == 'Wire(wire1 at test_module1.wire1)'
+    assert repr(standard_wire) == 'Wire(wire1 at wire1)'
 
 
 if __name__ == '__main__':

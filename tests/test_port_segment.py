@@ -24,12 +24,12 @@ from netlist_carpentry.utils.cfg import CFG
 
 @pytest.fixture
 def port_segment() -> PortSegment:
-    return PortSegment(raw_path='a.b.c.0', port=None).set_ws_path('a.b.wire1.wire_seg1')
+    return PortSegment(name='0', port=None).set_ws_path('a.b.wire1.wire_seg1')
 
 
 @pytest.fixture
 def const_port_segment() -> PortSegment:
-    return PortSegment(raw_path='a.b.c.1', port=None).set_ws_path('1')
+    return PortSegment(name='1', port=None).set_ws_path('1')
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def standard_port_out() -> Port[Module]:
 def test_port_segment_basics(port_segment: PortSegment, const_port_segment: PortSegment) -> None:
     assert port_segment.name == '0'
     assert port_segment.path.type is EType.PORT_SEGMENT
-    assert port_segment.path.raw == 'a.b.c.0'
+    assert port_segment.path.raw == '0'
     assert port_segment.type is EType.PORT_SEGMENT
     assert port_segment.index == 0
     assert port_segment.ws_path == WireSegmentPath(raw='a.b.wire1.wire_seg1')
@@ -61,20 +61,26 @@ def test_port_segment_basics(port_segment: PortSegment, const_port_segment: Port
     with pytest.raises(ParentNotFoundError):
         port_segment.direction
 
-    assert const_port_segment.path.raw == 'a.b.c.1'
+    assert const_port_segment.path.raw == '1'
     assert const_port_segment.index == 1
     assert const_port_segment.ws_path == WireSegmentPath(raw='1')
     assert const_port_segment.wire_name == ''
     assert const_port_segment.port is None
 
-    super_port = Port(raw_path='a.b.c', direction=Direction.IN, module_or_instance=Instance(raw_path='a.b', instance_type='c', module=None))
+    super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
     const_port_segment.port = super_port
+    assert const_port_segment.path.raw == 'inst.abc.1'
     assert const_port_segment.signal is Signal.HIGH
 
     with pytest.raises(ValueError):
-        PortSegment(raw_path='a.b.c', port=None)
+        PortSegment(name='abc', port=None)
 
     assert port_segment.can_carry_signal
+
+
+def test_hierarchy_level(standard_port_in: Port[Instance]) -> None:
+    assert standard_port_in.hierarchy_level == 1
+    assert standard_port_in[0].hierarchy_level == 2
 
 
 def test_parent(port_segment: PortSegment, standard_port_in: Port[Instance]) -> None:
@@ -89,7 +95,7 @@ def test_ws(standard_port_in: Port[Instance]) -> None:
     with pytest.raises(ParentNotFoundError):
         standard_port_in[0].ws
 
-    m = Module(raw_path='test_module1')
+    m = Module(name='test_module1')
     w = m.create_wire('test_wire')
     m.add_instance(standard_port_in.parent)
     ps = standard_port_in[0]
@@ -100,14 +106,14 @@ def test_ws(standard_port_in: Port[Instance]) -> None:
 def test_port_segment_parent_port() -> None:
     CFG.allow_detached_segments = False
     with pytest.raises(DetachedSegmentError):
-        PortSegment(raw_path='a.b.c.0', port=None)
+        PortSegment(name='0', port=None)
     with pytest.raises(TypeError):
-        PortSegment(raw_path='a.b.c.0', port=NetlistElement(raw_path='a.b.c'))
+        PortSegment(name='0', port=NetlistElement(name='foo'))
     CFG.allow_detached_segments = True
 
 
 def test_signal(port_segment: PortSegment) -> None:
-    super_port = Port(raw_path='a.b.c', direction=Direction.IN, module_or_instance=Instance(raw_path='a.b', instance_type='c', module=None))
+    super_port = Port(name='ac', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
     port_segment.port = super_port
     assert port_segment.signal == Signal.UNDEFINED
     port_segment.set_ws_path('0')
@@ -123,7 +129,7 @@ def test_signal(port_segment: PortSegment) -> None:
 
 
 def test_signal_int(port_segment: PortSegment) -> None:
-    super_port = Port(raw_path='a.b.c', direction=Direction.IN, module_or_instance=Instance(raw_path='a.b', instance_type='c', module=None))
+    super_port = Port(name='ac', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
     port_segment.port = super_port
     assert port_segment.signal_int is None
     port_segment.set_ws_path('0')
@@ -227,8 +233,8 @@ def test_port_is_driver(standard_port_in: Port[Instance], standard_port_out: Por
     assert not standard_port_in[0].is_driver
     assert not standard_port_out[0].is_driver
 
-    standard_port_in.module_or_instance = Module(raw_path='a')
-    standard_port_out.module_or_instance = Instance(raw_path='a.b', instance_type='c', module=None)
+    standard_port_in.module_or_instance = Module(name='a')
+    standard_port_out.module_or_instance = Instance(name='inst', instance_type='c', module=None)
     assert standard_port_in[0].is_driver
     assert standard_port_out[0].is_driver
 
@@ -237,8 +243,8 @@ def test_port_is_load(standard_port_in: Port[Instance], standard_port_out: Port[
     assert standard_port_in[0].is_load
     assert standard_port_out[0].is_load
 
-    standard_port_in.module_or_instance = Module(raw_path='a')
-    standard_port_out.module_or_instance = Instance(raw_path='a.b', instance_type='c', module=None)
+    standard_port_in.module_or_instance = Module(name='a')
+    standard_port_out.module_or_instance = Instance(name='inst', instance_type='c', module=None)
     assert not standard_port_in[0].is_load
     assert not standard_port_out[0].is_load
 
@@ -252,35 +258,6 @@ def test_port_direction(standard_port_in: Port[Instance], standard_port_out: Por
     assert standard_port_in[0].direction == Direction.IN_OUT
 
 
-def test_super_port_name(port_segment: PortSegment) -> None:
-    assert port_segment.parent_name == 'c'
-
-    still_valid = PortSegment(raw_path='a.0', port=None)
-    assert still_valid.parent_name == 'a'
-
-    invalid = PortSegment(raw_path='0', port=None)
-    assert invalid.parent_name == ''
-
-    invalid = PortSegment(raw_path='', port=None)
-    assert invalid.parent_name == ''
-
-
-def test_super_inst_or_module_name(port_segment: PortSegment) -> None:
-    assert port_segment.grandparent_name == 'b'
-
-    still_valid = PortSegment(raw_path='a.b.0', port=None)
-    assert still_valid.grandparent_name == 'a'
-
-    invalid = PortSegment(raw_path='a.0', port=None)
-    assert invalid.grandparent_name == ''
-
-    invalid = PortSegment(raw_path='0', port=None)
-    assert invalid.grandparent_name == ''
-
-    invalid = PortSegment(raw_path='', port=None)
-    assert invalid.grandparent_name == ''
-
-
 def test_set_ws_path(port_segment: PortSegment) -> None:
     port_segment.set_ws_path('a.b.c')
     assert port_segment.ws_path == WireSegmentPath(raw='a.b.c')
@@ -291,7 +268,7 @@ def test_set_ws_path(port_segment: PortSegment) -> None:
 
 
 def test_tie_signal(port_segment: PortSegment) -> None:
-    super_port = Port(raw_path='a.b.c', direction=Direction.IN, module_or_instance=Instance(raw_path='a.b', instance_type='c', module=None))
+    super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
     port_segment.port = super_port
     port_segment.set_ws_path('')
     assert port_segment.raw_ws_path == ''
@@ -318,7 +295,7 @@ def test_tie_signal(port_segment: PortSegment) -> None:
 
 
 def test_tie_signal_driver_segment(port_segment: PortSegment) -> None:
-    port_segment.port = Port(raw_path='a.b.c.p', direction=Direction.OUT, module_or_instance=None)
+    port_segment.port = Port(name='p', direction=Direction.OUT, module_or_instance=None)
     assert port_segment.raw_ws_path == 'a.b.wire1.wire_seg1'
 
     with pytest.raises(AlreadyConnectedError):
@@ -340,7 +317,7 @@ def test_set_signal(port_segment: PortSegment) -> None:
 
 
 def test_driver() -> None:
-    m = Module(raw_path='m')
+    m = Module(name='m')
     in1 = m.create_port('in1', Direction.IN)
     out = m.create_port('out', Direction.OUT)
     m.connect(in1, out)
@@ -353,7 +330,7 @@ def test_driver() -> None:
 
 
 def test_loads() -> None:
-    m = Module(raw_path='m')
+    m = Module(name='m')
     in1 = m.create_port('in1', Direction.IN)
     out = m.create_port('out', Direction.OUT)
     m.connect(in1, out)
@@ -381,11 +358,15 @@ def test_change_connection(port_segment: PortSegment) -> None:
 
 
 def test_port_segment_str(port_segment: PortSegment) -> None:
-    assert str(port_segment) == 'PortSegment "0" with path a.b.c.0'
+    super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
+    port_segment.port = super_port
+    assert str(port_segment) == 'PortSegment "0" with path inst.abc.0'
 
 
 def test_port_segment_repr(port_segment: PortSegment) -> None:
-    assert repr(port_segment) == 'PortSegment(a.b.c.0, Signal:x)'
+    super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
+    port_segment.port = super_port
+    assert repr(port_segment) == 'PortSegment(inst.abc.0, Signal:x)'
 
 
 if __name__ == '__main__':

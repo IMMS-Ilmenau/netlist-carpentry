@@ -8,7 +8,7 @@ from netlist_carpentry.core.netlist_elements.module import Module
 
 
 def test_not_implemented() -> None:
-    em = EvaluationMixin(raw_path='a.b.c')
+    em = EvaluationMixin(name='a.b.c')
     with pytest.raises(NotImplementedError):
         em.get_outgoing_edges('some_inst')
     with pytest.raises(NotImplementedError):
@@ -16,7 +16,7 @@ def test_not_implemented() -> None:
 
 
 def test_evaluate_wire_seg() -> None:
-    em = Module(raw_path='a')
+    em = Module(name='a')
     em.create_wire('b')
     following_insts = em._evaluate_ws(WireSegmentPath(raw='a.b.0'))
     assert following_insts == []

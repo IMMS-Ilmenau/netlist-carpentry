@@ -1049,7 +1049,7 @@ class Multiplexer(PrimitiveGate, BaseModel):
         for idx in range(self.data_width):
             params = self.sync_parameters()
             params['WIDTH'] = 1
-            inst: Self = super_module.add_instance(self.__class__(raw_path=f'{self.raw_path}_{idx}', parameters=params))
+            inst: Self = super_module.add_instance(self.__class__(name=f'{self.name}_{idx}', parameters=params))
             for pname in list(inst.ports.keys()):
                 p = inst.ports[pname]
                 if pname != 'S':
@@ -1291,7 +1291,7 @@ class Demultiplexer(PrimitiveGate, BaseModel):
         for idx in range(self.data_width):
             params = self.sync_parameters()
             params['WIDTH'] = 1
-            inst: Self = super_module.add_instance(self.__class__(raw_path=f'{self.raw_path}_{idx}', parameters=params))
+            inst: Self = super_module.add_instance(self.__class__(name=f'{self.name}_{idx}', parameters=params))
             for pname in list(inst.ports.keys()):
                 p = inst.ports[pname]
                 if pname != 'S':
@@ -1445,7 +1445,7 @@ class DFF(ClkMixin, BaseModel):
 
         No connections are copied however, and the instance initially does not belong to any module.
         """
-        return self.scan_ff_equivalent(raw_path=self.raw_path + '_scan', parameters=self.sync_parameters())
+        return self.scan_ff_equivalent(name=self.name + '_scan', parameters=self.sync_parameters())
 
     def evaluate(self) -> None:
         """
@@ -1593,7 +1593,7 @@ def _build_gate_lib_map() -> None:
         # filter out all classes not being gates
         try:
             # Only works if a class extends _Primitive gate and will raise an exception otherwise
-            c_inst: Instance = c(raw_path='', module=None)
+            c_inst: Instance = c(name='', module=None)
 
             # Add the found class to the gate_lib_map
             _gate_lib_map[c_inst.instance_type] = c

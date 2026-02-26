@@ -128,12 +128,12 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if instance_name is None:
             instance_name = self._get_generic_inst_name(interface_definition)
         if isinstance(interface_definition, Module):
-            inst = Instance(raw_path=self.raw_path + self.path.sep + instance_name, instance_type=interface_definition.name, module=self)
+            inst = Instance(name=instance_name, instance_type=interface_definition.name, module=self)
             inst.parameters = params  # type: ignore
             for pname, p in interface_definition.ports.items():
                 inst.connect(pname, ws_path=None, direction=p.direction, width=p.width)
         else:
-            inst = interface_definition(raw_path=self.raw_path + self.path.sep + instance_name, module=self, parameters=params)  # type: ignore
+            inst = interface_definition(name=instance_name, module=self, parameters=params)  # type: ignore
         return self.add_instance(inst)
 
     def _get_generic_inst_name(self, module_or_inst_cls: Union[Module, Type[Instance]]) -> str:
@@ -168,12 +168,9 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         self.add_instance(new_instance)
         prev_module_name = new_instance.path.parts[0]
-        new_instance.raw_path = new_instance.path.replace(prev_module_name, self.name).raw
         for p in new_instance.ports.values():
-            p.raw_path = p.path.replace(prev_module_name, self.name).raw
             p.module_or_instance = new_instance
             for _, ps in p:
-                ps.raw_path = ps.path.replace(prev_module_name, self.name).raw
                 ps.set_ws_path('')
         if keep_inputs:
             for p in new_instance.input_ports:
@@ -307,10 +304,10 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             inst = self.instances[instance_name]
             if self.has_circuit and inst.path in self.circuit.instances[inst.instance_type]:
                 self.circuit.instances[inst.instance_type].remove(inst.path)
-            inst.module = None
             for p in inst.ports.values():
                 for _, ps in p:
                     self.disconnect(ps)
+            inst.module = None
         self.instances.remove(instance_name, locked=self.locked)
 
     def get_instance(self, instance_name: str) -> Optional[Instance]:
@@ -406,12 +403,11 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         # first use add/create wire and then call this function
         # this function automatically connects the ports to the wires provided in wire_connection_paths
-        e = f'{self.path.raw}.{port_name}'
-        p = Port(raw_path=e, direction=direction, module_or_instance=self)
+        p = Port(name=port_name, direction=direction, module_or_instance=self)
         self.add_port(p)
         p.create_port_segments(width, offset)
         p.change_mutability(is_now_locked=is_locked)
-        LOG.info(f'Created port {self.name}.{port_name}, {width} bit wide.')
+        LOG.info(f'Created port {p.raw_path}, {width} bit wide.')
         return p
 
     def remove_port(self, port: Union[str, Port[Module]]) -> None:
@@ -423,9 +419,9 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         port_name = port.name if isinstance(port, Port) else port
         if port_name in self.ports:
-            self.ports[port_name].module_or_instance = None
             for _, ps in self.ports[port_name]:
                 self.disconnect(ps.path)
+            self.ports[port_name].module_or_instance = None
         self.ports.remove(port_name, locked=self.locked)
 
     def get_port(self, port_name: str) -> Optional[Port[Module]]:
@@ -497,7 +493,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         self._raise_if_occupied(wire.name)
         if wire.has_parent and wire.module is not self:
-            raise SingleOwnershipError(f'Wire {self.raw_path} belongs to module {wire.module.name}. Cannot add it to module {self.name}!')
+            raise SingleOwnershipError(f'Wire {self.raw_path} belongs to module {wire.parent.name}. Cannot add it to module {self.name}!')
         wire.module = self
         return self.wires.add(wire.name, wire, locked=self.locked)
 
@@ -519,8 +515,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         if not wire_name:
             return self._create_generic_wire(width, is_locked, offset)
-        e = f'{self.path.raw}.{wire_name}'
-        w = Wire(raw_path=e, module=self)
+        w = Wire(name=wire_name, module=self)
         w.create_wire_segments(width, offset)
         w.change_mutability(is_now_locked=is_locked)
         return self.add_wire(w)
@@ -551,9 +546,9 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         wire_name = wire.name if isinstance(wire, Wire) else wire
         if wire_name in self.wires:
-            self.wires[wire_name].module = None
             for p in self.wires[wire_name].connected_port_segments:
                 self.disconnect(p.path)
+            self.wires[wire_name].module = None
         self.wires.remove(wire_name, locked=self.locked)
 
     def get_wire(self, wire_name: str) -> Optional[Wire]:

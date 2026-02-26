@@ -364,9 +364,7 @@ class GateTreeBuilder:
 
     def _create_gate(self, a: WireSegmentPath, b: WireSegmentPath, idx: int, is_final: bool) -> WireSegmentPath:
         name = f'{self.prefix}_L{self.level}_N{idx}'
-        path = f'{self.module.name}.{name}'
-
-        gate = self.cfg.gate_cls(raw_path=path)
+        gate = self.cfg.gate_cls(name=name)
         self.module.add_instance(gate)
         gate.connect_modify('A', ws_path=a, direction=Direction.IN, index=0)
         gate.connect_modify('B', ws_path=b, direction=Direction.IN, index=0)

@@ -89,7 +89,9 @@ class Wire(NetlistElement, BaseModel):
         Returns:
             WirePath: The hierarchical path of the netlist element.
         """
-        return WirePath(raw=self.raw_path)
+        if self.has_parent:
+            return WirePath(raw='.'.join([*self.parent.path.parts, self.name]))
+        return WirePath(raw=self.name)
 
     @property
     def type(self) -> EType:
@@ -104,10 +106,10 @@ class Wire(NetlistElement, BaseModel):
             return self.module
         elif self.module is None:
             raise ParentNotFoundError(
-                f'No parent module specified for wire {self.raw_path}. '
+                f'No parent module specified for wire {self.name}. '
                 + 'This is probably due to a bad instantiation (missing or bad "module" parameter), or a subsequent modification of the module, which corrupted the wire.'
             )
-        raise TypeError(f'Bad type: Parent object of wire {self.raw_path} is {type(self.module).__name__}, but should be {Module.__name__}')
+        raise TypeError(f'Bad type: Parent object of wire {self.name} is {type(self.module).__name__}, but should be {Module.__name__}')
 
     @property
     def segments(self) -> CustomDict[int, WireSegment]:
@@ -295,7 +297,7 @@ class Wire(NetlistElement, BaseModel):
         Returns:
             WireSegment: The WireSegment that was added to this wire.
         """
-        seg = WireSegment(raw_path=f'{self.raw_path}.{index}', wire=self)
+        seg = WireSegment(name=str(index), wire=self)
         self._add_wire_segment(seg)
         return seg
 
@@ -560,7 +562,6 @@ class Wire(NetlistElement, BaseModel):
         if old_name in self.parent.ports:
             raise UnsupportedOperationError(f'Cannot rename wire {self.raw_path}: Cannot rename a wire that has the same name as a module port!')
         for _, ws in self:
-            ws.raw_path = ws.path.replace(old_name, new_name).raw
             for ps in ws.port_segments:
                 ps.set_ws_path(ps.ws_path.replace(old_name, new_name))
 
@@ -573,8 +574,7 @@ class Wire(NetlistElement, BaseModel):
     def copy_object(self, new_name: str) -> Wire:
         if self.has_parent and self.parent.name_occupied(new_name):
             raise IdentifierConflictError(f'An object with name {new_name} already exists in module {self.parent.name}!')
-        new_path = WirePath(raw=self.raw_path).replace(self.name, new_name)
-        w = Wire(raw_path=new_path.raw, module=self.module)
+        w = Wire(name=new_name, module=self.module)
         w.create_wire_segments(self.width, self.offset or 0)
         if self.has_parent:
             self.parent.add_wire(w)

@@ -71,7 +71,9 @@ class PortSegment(_Segment, BaseModel):
         Returns:
             PortSegmentPath: The hierarchical path of the netlist element.
         """
-        return PortSegmentPath(raw=self.raw_path)
+        if self.has_parent:
+            return PortSegmentPath(raw='.'.join([*self.parent.path.parts, self.name]))
+        return PortSegmentPath(raw=self.name)
 
     @property
     def raw_ws_path(self) -> str:
@@ -100,10 +102,10 @@ class PortSegment(_Segment, BaseModel):
             return self.port
         elif self.port is None:
             raise ParentNotFoundError(
-                f'No parent port specified for port segment {self.raw_path}. '
+                f'No parent port specified for port segment {self.name}. '
                 + 'This is probably due to a bad instantiation (missing or bad "port" parameter), or a subsequent modification of the port, which corrupted the segment.'
             )
-        raise TypeError(f'Bad type: Parent object of port segment {self.raw_path} is {type(self.port).__name__}, but should be {Port.__name__}')
+        raise TypeError(f'Bad type: Parent object of port segment {self.name} is {type(self.port).__name__}, but should be {Port.__name__}')
 
     @property
     def ws_path(self) -> WireSegmentPath:
@@ -417,7 +419,7 @@ class PortSegment(_Segment, BaseModel):
 
         Example:
             ```python
-            >>> port_seg = PortSegment(raw_path='a.b.c.1')
+            >>> port_seg = PortSegment(name='0')
             >>> port_seg.set_signal(Signal.HIGH)
             True
             >>> port_seg.signal
