@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -161,21 +160,26 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         if isinstance(instance, str):
             instance = self.instances[instance]
-        new_instance = copy.deepcopy(instance)
-        if instance_name in self.instances:
-            raise IdentifierConflictError(
-                f'Error whilst copying instance {instance.raw_path}: Unable to set new name {instance_name}, as it is already occupied!'
-            )
-        new_instance.set_name(instance_name)
+        tmp_m = instance.module
+        instance.module = None  # Temporarily set to None, so no IdentifierConflicts arise when copying
+        new_instance = instance.copy_object(instance_name)
+        instance.module = tmp_m
         new_instance.module = None
 
         self.add_instance(new_instance)
-        ports = new_instance.ports.values() if not keep_inputs else new_instance.output_ports
-        for p in ports:
-            try:
-                self.disconnect(p)
-            except PathResolutionError:  # noqa: PERF203
-                new_instance.disconnect(p.name)
+        prev_module_name = new_instance.path.parts[0]
+        new_instance.raw_path = new_instance.path.replace(prev_module_name, self.name).raw
+        for p in new_instance.ports.values():
+            p.raw_path = p.path.replace(prev_module_name, self.name).raw
+            p.module_or_instance = new_instance
+            for _, ps in p:
+                ps.raw_path = ps.path.replace(prev_module_name, self.name).raw
+                ps.set_ws_path('')
+        if keep_inputs:
+            for p in new_instance.input_ports:
+                for idx, ps in p:
+                    instance.ports[p.name][idx].set_ws_path(instance.ports[p.name][idx].ws_path.replace(prev_module_name, self.name))
+                    self.connect(instance.ports[p.name][idx].ws_path, ps)
         return new_instance
 
     def refine_instance(self, old_instance: Union[str, Instance], new_type_definition: Union[Module, Type[Instance]]) -> None:
@@ -1133,9 +1137,9 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         splits = 0
         for inst in self.get_instances(type=type, fuzzy=fuzzy):
-            if isinstance(inst, PrimitiveGate) and inst.is_primitive and inst.splittable and inst.width > 1:
+            if isinstance(inst, PrimitiveGate) and inst.is_primitive and inst.splittable and inst.data_width > 1:
                 LOG.debug(
-                    f'Splitting {inst.width}-bit wide {inst.__class__.__name__} {inst.raw_path} into {inst.width} 1-bit wide {inst.__class__.__name__}...'
+                    f'Splitting {inst.data_width}-bit wide {inst.__class__.__name__} {inst.raw_path} into {inst.data_width} 1-bit wide {inst.__class__.__name__}...'
                 )
                 self.split(inst)
                 splits += 1
