@@ -23,6 +23,7 @@ from netlist_carpentry.utils.cfg import CFG
 from netlist_carpentry.utils.custom_list import CustomList
 
 if TYPE_CHECKING:
+    from netlist_carpentry.core.netlist_elements.module import Module
     from netlist_carpentry.core.netlist_elements.wire import Wire
 
 
@@ -90,6 +91,21 @@ class WireSegment(_Segment, BaseModel):
                 + 'This is probably due to a bad instantiation (missing or bad "wire" parameter), or a subsequent modification of the wire, which corrupted the wire segment.'
             )
         raise TypeError(f'Bad type: Parent object of wire segment {self.name} is {type(self.wire).__name__}, but should be {Wire.__name__}')
+
+    @property
+    def grandparent(self) -> 'Module':
+        """
+        Retrieves the module that contains this WireSegment.
+
+        If a parent is available (i.e. the hierarchy level is 2 or more), it is returned.
+
+        Returns:
+            Module: The module if it exists.
+
+        Raises:
+            ParentNotFoundError: If no parent or grandparent was found.
+        """
+        return self.parent.parent
 
     @property
     def signal(self) -> Signal:

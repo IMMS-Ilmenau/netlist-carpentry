@@ -104,6 +104,21 @@ class PortSegment(_Segment, BaseModel):
         raise TypeError(f'Bad type: Parent object of port segment {self.name} is {type(self.port).__name__}, but should be {Port.__name__}')
 
     @property
+    def grandparent(self) -> Union[Module, Instance]:
+        """
+        Retrieves the instance or module that contains this PortSegment.
+
+        If a parent is available (i.e. the hierarchy level is 2 or more), it is returned.
+
+        Returns:
+            Union[Module, Instance]: The instance or module if it exists.
+
+        Raises:
+            ParentNotFoundError: If no parent or grandparent was found.
+        """
+        return self.parent.parent  # parent of port segment parent: either module or instance to which the port belongs
+
+    @property
     def ws_path(self) -> WireSegmentPath:
         """
         The WireSegmentPath object of the wire segment connected to this port segment.
@@ -308,21 +323,6 @@ class PortSegment(_Segment, BaseModel):
     def direction(self) -> Direction:
         """Returns the direction of the port."""
         return self.parent.direction
-
-    @property
-    def grandparent(self) -> Union[Module, Instance]:
-        """
-        Retrieves the instance or module that contains this PortSegment.
-
-        If a parent is available (i.e. the hierarchy level is 2 or more), it is returned.
-
-        Returns:
-            Union[Module, Instance]: The instance or module if it exists.
-
-        Raises:
-            ParentNotFoundError: If no parent or grandparent was found.
-        """
-        return self.parent.parent  # parent of port segment parent: either module or instance to which the port belongs
 
     def set_ws_path(self, ws_path: Union[str, WireSegmentPath]) -> Self:
         """

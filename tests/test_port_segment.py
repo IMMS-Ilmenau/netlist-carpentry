@@ -91,6 +91,14 @@ def test_parent(port_segment: PortSegment, standard_port_in: Port[Instance]) -> 
         port_segment.parent
 
 
+def test_grandparent(port_segment: PortSegment, standard_port_in: Port[Instance]) -> None:
+    grandparent = standard_port_in[0].grandparent
+    assert grandparent == standard_port_in.module_or_instance
+
+    with pytest.raises(ParentNotFoundError):
+        port_segment.parent
+
+
 def test_ws(standard_port_in: Port[Instance]) -> None:
     with pytest.raises(ParentNotFoundError):
         standard_port_in[0].ws

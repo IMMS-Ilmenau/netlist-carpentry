@@ -113,6 +113,16 @@ def test_parent() -> None:
         WireSegment(name='0', wire=None).parent
 
 
+def test_grandparent() -> None:
+    from utils import standard_wire
+
+    m = Module(name='m')
+    w = standard_wire()
+    m.add_wire(w)
+    grandparent = w[1].grandparent
+    assert grandparent == m
+
+
 def test_eq(wire_segment: WireSegment) -> None:
     n2 = copy.deepcopy(wire_segment)
     assert wire_segment == n2
