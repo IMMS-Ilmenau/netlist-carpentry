@@ -25,6 +25,7 @@ from typing_extensions import NotRequired, Self
 from netlist_carpentry import LOG, Direction, Signal
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import (
+    IdentifierConflictError,
     InvalidDirectionError,
     ObjectLockedError,
     ObjectNotFoundError,
@@ -709,6 +710,25 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
             for p in self.segments.values():
                 p.change_mutability(is_now_locked=is_now_locked)
         return super().change_mutability(is_now_locked)
+
+    def copy_object(self, new_name: str) -> Port[T_PARENT]:
+        from netlist_carpentry import Instance, Module
+
+        if self.module_or_instance is not None:
+            name_in_module = isinstance(self.parent, Module) and self.module.name_occupied(new_name)
+            name_in_instance = isinstance(self.parent, Instance) and new_name in self.parent.ports
+            type_str = 'module' if name_in_module else 'instance'
+            if name_in_module or name_in_instance:
+                raise IdentifierConflictError(f'An object with name {new_name} already exists in {type_str} {self.parent.raw_path}!')
+        new_path = PortPath(raw=self.raw_path).replace(self.name, new_name)
+        p = Port(raw_path=new_path.raw, direction=self.direction, module_or_instance=self.module_or_instance)
+        p.create_port_segments(self.width, self.offset or 0)
+        if self.module_or_instance is not None:
+            if isinstance(self.module_or_instance, Module):
+                self.module_or_instance.add_port(p)
+            else:
+                self.module_or_instance.ports.add(p.name, p)
+        return p
 
     def normalize_metadata(
         self,

@@ -216,6 +216,25 @@ class NetlistElement(HooksMixin, BaseModel):
         self._locked = is_now_locked
         return self
 
+    def copy_object(self, new_name: str) -> NetlistElement:
+        """Creates a new object of this type and copies the contents of this object into the new one.
+
+        Requires a new name to be specified.
+        If a parent module exists:
+        - The name must still be available in the parent module (i.e. no wire, port or instance with this name exists).
+        - The new object is added to the respective dictionary.
+
+
+        When copying wires, ports or instances, the resulting copy is unconnected and must be connected manually afterwards.
+
+        Args:
+            new_name (str): The name for the newly created copy.
+
+        Returns:
+            NetlistElement: A new object of this class.
+        """
+        raise NotImplementedError(f'Not implemented for {self.type.name} objects by default! The problematic {self.type.value} is {self.raw_path}')
+
     def evaluate(self) -> None:
         """
         Evaluate the element depending on the incoming signals.

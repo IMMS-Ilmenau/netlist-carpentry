@@ -671,6 +671,45 @@ def test_change_mutability(standard_port_out: Port[Module]) -> None:
     assert standard_port_out[1].locked
 
 
+def test_copy_object_module(standard_port_out: Port[Module]) -> None:
+    new_p = standard_port_out.copy_object('new_port')
+    assert isinstance(new_p, Port)
+    assert new_p.raw_path == 'test_module1.new_port'
+    assert new_p.is_unconnected
+    assert new_p.connected_wire_segments != standard_port_out.connected_wire_segments
+    assert new_p.module_or_instance is not None
+    assert new_p.module_or_instance is standard_port_out.module_or_instance
+    assert new_p.width == standard_port_out.width
+    assert new_p.offset == standard_port_out.offset
+
+    with pytest.raises(IdentifierConflictError):
+        standard_port_out.copy_object('new_port')
+
+    standard_port_out.module_or_instance = None
+    new_p2 = standard_port_out.copy_object('new_port')
+    assert new_p2.module_or_instance is None
+    assert new_p2.module_or_instance is standard_port_out.module_or_instance
+
+
+def test_copy_object_instance(standard_port_in: Port[Instance]) -> None:
+    new_p = standard_port_in.copy_object('new_port')
+    assert isinstance(new_p, Port)
+    assert new_p.raw_path == 'test_module1.new_port'
+    assert new_p.is_unconnected
+    assert new_p.module_or_instance is not None
+    assert new_p.module_or_instance is standard_port_in.module_or_instance
+    assert new_p.width == standard_port_in.width
+    assert new_p.offset == standard_port_in.offset
+
+    with pytest.raises(IdentifierConflictError):
+        standard_port_in.copy_object('new_port')
+
+    standard_port_in.module_or_instance = None
+    new_p2 = standard_port_in.copy_object('new_port')
+    assert new_p2.module_or_instance is None
+    assert new_p2.module_or_instance is standard_port_in.module_or_instance
+
+
 def test_normalize_metadata(standard_port_out: Port[Module]) -> None:
     found = standard_port_out.normalize_metadata()
     assert found == {}

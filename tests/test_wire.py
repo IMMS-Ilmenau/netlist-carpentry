@@ -497,6 +497,29 @@ def test_change_mutability(standard_wire: Wire) -> None:
     assert next(iter(standard_wire.segments.values())).locked
 
 
+def test_copy_object(standard_wire: Wire) -> None:
+    new_w = standard_wire.copy_object('new_wire')
+    assert isinstance(new_w, Wire)
+    assert new_w.raw_path == 'test_module1.new_wire'
+    assert new_w.connected_port_segments == []
+    assert new_w.connected_port_segments != standard_wire.connected_port_segments
+    assert new_w.module is None
+    assert new_w.module is standard_wire.module
+    assert new_w.width == standard_wire.width
+    assert new_w.offset == standard_wire.offset
+
+    m = Module(raw_path='m')
+    m.add_wire(standard_wire)
+    assert standard_wire in m.wires.values()
+    new_w2 = standard_wire.copy_object('new_wire')
+    assert new_w2 in m.wires.values()
+    assert new_w2.module is m
+    assert new_w2.module is standard_wire.module
+
+    with pytest.raises(IdentifierConflictError):
+        standard_wire.copy_object('new_wire')
+
+
 def test_evaluate(standard_wire: Wire) -> None:
     for p in standard_wire.ports[1]:
         assert p.signal == Signal.UNDEFINED

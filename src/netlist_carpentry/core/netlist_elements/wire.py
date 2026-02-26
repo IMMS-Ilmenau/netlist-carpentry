@@ -10,7 +10,12 @@ from typing_extensions import Self
 
 from netlist_carpentry import LOG, Signal
 from netlist_carpentry.core.enums.element_type import EType
-from netlist_carpentry.core.exceptions import MultipleDriverError, ParentNotFoundError, UnsupportedOperationError
+from netlist_carpentry.core.exceptions import (
+    IdentifierConflictError,
+    MultipleDriverError,
+    ParentNotFoundError,
+    UnsupportedOperationError,
+)
 from netlist_carpentry.core.netlist_elements.element_path import WirePath
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT, NESTED_DICT
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
@@ -564,6 +569,16 @@ class Wire(NetlistElement, BaseModel):
             for w in self.segments.values():
                 w.change_mutability(is_now_locked=is_now_locked)
         return super().change_mutability(is_now_locked)
+
+    def copy_object(self, new_name: str) -> Wire:
+        if self.module is not None and self.module.name_occupied(new_name):
+            raise IdentifierConflictError(f'An object with name {new_name} already exists in module {self.module.name}!')
+        new_path = WirePath(raw=self.raw_path).replace(self.name, new_name)
+        w = Wire(raw_path=new_path.raw, module=self.module)
+        w.create_wire_segments(self.width, self.offset or 0)
+        if self.module is not None:
+            self.module.add_wire(w)
+        return w
 
     def evaluate(self) -> None:
         for s in self.segments.values():

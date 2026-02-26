@@ -511,6 +511,28 @@ def test_change_mutability(standard_instance_with_ports: Instance) -> None:
     assert standard_instance_with_ports.ports['PortC'].locked
 
 
+def test_copy_object(standard_instance_with_ports: Instance) -> None:
+    new_i = standard_instance_with_ports.copy_object('new_inst')
+    assert isinstance(new_i, Instance)
+    assert new_i.raw_path == 'test_module1.new_inst'
+    assert set(new_i.ports.keys()) == set(standard_instance_with_ports.ports.keys())
+    assert new_i.module is not None
+    assert new_i.module is standard_instance_with_ports.module
+    for p in standard_instance_with_ports.ports.values():
+        assert p.name in new_i.ports
+        assert p.direction is new_i.ports[p.name].direction
+        assert p.width == new_i.ports[p.name].width
+        assert p.offset == new_i.ports[p.name].offset
+
+    with pytest.raises(IdentifierConflictError):
+        standard_instance_with_ports.copy_object('new_inst')
+
+    standard_instance_with_ports.module = None
+    new_i2 = standard_instance_with_ports.copy_object('new_inst')
+    assert new_i2.module is None
+    assert new_i2.module is standard_instance_with_ports.module
+
+
 def test_normalize_metadata(standard_instance_with_ports: Instance) -> None:
     found = standard_instance_with_ports.normalize_metadata()
     assert found == {}

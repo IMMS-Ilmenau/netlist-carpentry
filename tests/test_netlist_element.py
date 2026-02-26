@@ -93,6 +93,11 @@ def test_is_placeholder_instance(netlist_element: NetlistElement) -> None:
     assert NetlistElement(raw_path='').is_placeholder_instance
 
 
+def test_copy_object(netlist_element: NetlistElement) -> None:
+    with pytest.raises(NotImplementedError):
+        netlist_element.copy_object('faaf')
+
+
 def test_evaluate(netlist_element: NetlistElement) -> None:
     with pytest.raises(NotImplementedError):
         netlist_element.evaluate()
