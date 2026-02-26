@@ -1206,9 +1206,8 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         self._flatten_add_content(inst.name, inst.module_definition)
         self._flatten_connect_interface(inst.name, inst.module_definition, inst.all_connections(include_unconnected=True))
         if recursive:
-            for sub_inst in self.instances.values():
-                if sub_inst.is_module_instance:
-                    sub_inst.module_definition.flatten(skip_name, skip_type, recursive)
+            for sub_inst in self.submodules:
+                sub_inst.module_definition.flatten(skip_name, skip_type, recursive)  # type: ignore[union-attr]
         self.remove_instance(inst)
 
     def _flatten_add_content(
@@ -1225,7 +1224,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             for pname, conns in mi_inst.connections.items():
                 for idx, ws_path in conns.items():
                     if ws_path.raw in CONST_MAP_VAL2OBJ:
-                        new_inst.ports[pname][idx].tie_signal(ws_path.raw)  # type: ignore[call-overload]
+                        new_inst.ports[pname][idx].tie_signal(CONST_MAP_VAL2OBJ[ws_path.raw].signal)
                     else:
                         new_ws_path = WireSegmentPath(raw=w_paths[ws_path.parent].raw + '.' + str(idx))
                         self.connect(new_ws_path, new_inst.ports[pname][idx])
