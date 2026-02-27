@@ -1179,14 +1179,15 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                     if ws_path.raw in CONST_MAP_VAL2OBJ:
                         new_inst.ports[pname][idx].tie_signal(CONST_MAP_VAL2OBJ[ws_path.raw].signal)
                     else:
-                        new_ws_path = WireSegmentPath(raw=w_paths[ws_path.parent].raw + '.' + str(idx))
+                        ws_idx = conns[idx].name
+                        new_ws_path = WireSegmentPath(raw=w_paths[ws_path.parent].raw + '.' + str(ws_idx))
                         self.connect(new_ws_path, new_inst.ports[pname][idx])
 
     def _flatten_connect_interface(self, inst_name: str, m_inst: Module, connections: Dict[str, Dict[int, WireSegmentPath]]) -> None:
         for port in m_inst.ports.values():
             for idx, ps in port:
                 if port.name in connections:
-                    old_port_ws = connections[port.name][idx]
+                    old_port_ws = connections[port.name][idx - (port.offset or 0)]
                     ws_ps = ps.ws.port_segments.copy()
                     ws_ps.remove(ps)
                     for ps in ws_ps:
