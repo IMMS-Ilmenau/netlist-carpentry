@@ -22,8 +22,8 @@ module M1 (
     input RSTN,
     input A,
     input B,
-    output W,
-    output Y
+    output reg W,
+    output reg Y
 );
     always @(posedge CLK or negedge RSTN) begin
         if (~RSTN) begin
@@ -43,8 +43,8 @@ module M2 (
     input RSTN,
     input [7:0] A,
     input B,
-    output W,
-    output [7:0] Y
+    output wire W,
+    output reg [7:0] Y
 );
     wire w1, w2;
     always @(posedge CLK) begin
@@ -60,7 +60,7 @@ endmodule
 module M21 (
     input CLK,
     input A,
-    output Y
+    output reg Y
 );
     always @(negedge CLK) begin
         Y <= A;
@@ -72,13 +72,13 @@ module M22 (
     input RSTN,
     input [7:0] A,
     input B,
-    output [7:0] Y
+    output reg [7:0] Y
 );
     wire w1;
     wire [7:0] w2;
     always @(posedge CLK or negedge RSTN) begin
         if (~RSTN) begin
-            w1 <= 0;
+            w1 <= 1'b0;
         end else begin
             w1 <= B;
         end
