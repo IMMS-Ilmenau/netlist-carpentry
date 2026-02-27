@@ -24,6 +24,7 @@ from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
 from netlist_carpentry.core.protocols.signals import LogicLevel, SignalDict, SignalOrLogicLevel
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.custom_list import CustomList
+from netlist_carpentry.utils.gate_lib_dataclasses import WireParams
 
 if TYPE_CHECKING:
     from netlist_carpentry import Module
@@ -39,6 +40,9 @@ class Wire(NetlistElement, BaseModel):
     """
 
     _segments = CustomDict[int, WireSegment]()
+
+    parameters: WireParams = {}
+
     msb_first: bool = True
     """Whether this port is MSB (most significant bit) first or not"""
     module: Optional['Module']

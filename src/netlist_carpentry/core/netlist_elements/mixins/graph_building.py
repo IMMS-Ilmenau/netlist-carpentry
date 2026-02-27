@@ -2,23 +2,64 @@
 
 from __future__ import annotations
 
-from typing import List
+from typing import Callable, List
 
 from tqdm import tqdm
 
+from netlist_carpentry.core.exceptions import PathResolutionError
 from netlist_carpentry.core.graph.module_graph import ModuleGraph
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.core.netlist_elements.mixins.module_base import ModuleBaseMixin
-from netlist_carpentry.core.protocols.netlist_elements import PortSegmentLike
+from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.utils.cfg import CFG
 
 
 class GraphBuildingMixin(ModuleBaseMixin):
-    def get_driving_ports(self, ws_path: WireSegmentPath) -> List[PortSegmentLike]:
-        raise NotImplementedError(f'Not implemented for mixin {self.__class__.__name__}. Any class using this mixin must implement this property.')
+    def _get_connected_nodes(self, ws_path: WireSegmentPath, ps_fc: Callable[[PortSegment], bool] = lambda ps: True) -> List[PortSegment]:
+        """Returns a list of port segment instances connected to the wire that is represented by the given wire segment path.
 
-    def get_load_ports(self, ws_path: WireSegmentPath) -> List[PortSegmentLike]:
-        raise NotImplementedError(f'Not implemented for mixin {self.__class__.__name__}. Any class using this mixin must implement this property.')
+        Args:
+            ws_path (WireSegmentPath): Path of the wire segment in question.
+            ps_fc (Callable[[PortSegment], bool], optional): Filter function to filter port segments based on a given condition.
+                Defaults to `lambda ps: True`, which does not filter any port segments and passes all connected port segments.
+                The filter function (if given) must take a port segment instance and return a bool.
+
+        Returns:
+            List[PortSegment]: A list of port segments that are connected to the given wire segment path
+                and match the filter function (if given).
+        """
+        try:
+            ws = self.get_from_path(ws_path)
+            return [ps for ps in ws.port_segments if ps_fc(ps)]
+        except PathResolutionError as e:
+            raise PathResolutionError(f'Unable to find wire segment {ws_path.raw} in module {self.name}!') from e
+
+    def get_driving_ports(self, ws_path: WireSegmentPath) -> List[PortSegment]:
+        """
+        Retrieves the driving port segments of a given wire segment (i.e. the instances driving this wire segment).
+
+        For each wire segment, the list of driving ports should contain exactly one entry,
+        otherwise driver conflicts will arise.
+
+        Args:
+            ws_path (WireSegmentPath): The path of the wire segment for which to retrieve driving ports.
+
+        Returns:
+            List[PortSegment]: A list of port segments driving the wire segment associated with the given path.
+        """
+        return self._get_connected_nodes(ws_path, ps_fc=lambda ps: ps.is_driver)
+
+    def get_load_ports(self, ws_path: WireSegmentPath) -> List[PortSegment]:
+        """
+        Retrieves the load port segments of a given wire segment (i.e. the instances driven by this wire segment).
+
+        Args:
+            ws_path (WireSegmentPath): The path of the wire segment for which to retrieve load ports.
+
+        Returns:
+            List[PortSegment]: A list of port segments being load of the wire segment associated with the given path.
+        """
+        return self._get_connected_nodes(ws_path, ps_fc=lambda ps: ps.is_load)
 
     def graph(self) -> ModuleGraph:
         """

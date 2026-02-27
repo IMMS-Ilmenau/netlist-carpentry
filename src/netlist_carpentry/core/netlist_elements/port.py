@@ -725,9 +725,9 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         p.create_port_segments(self.width, self.offset or 0)
         if self.has_parent:
             if isinstance(self.parent, Module):
-                self.parent.add_port(p)
+                self.parent.add_port(p)  # type: ignore[arg-type]
             else:
-                self.parent.ports.add(p.name, p)
+                self.parent.ports.add(p.name, p)  # type: ignore[arg-type]
         return p
 
     def normalize_metadata(

@@ -20,7 +20,6 @@ from netlist_carpentry.core.exceptions import (
     MultipleDriverError,
     ObjectLockedError,
     ObjectNotFoundError,
-    PathResolutionError,
     SingleOwnershipError,
     StructureMismatchError,
     UnsupportedOperationError,
@@ -84,7 +83,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         self._raise_if_occupied(instance.name)
         if instance.has_parent and instance.module is not self:
-            raise SingleOwnershipError(f'Instance {self.raw_path} belongs to module {instance.module.name}. Cannot add it to module {self.name}!')
+            raise SingleOwnershipError(f'Instance {self.raw_path} belongs to module {instance.parent.name}. Cannot add it to module {self.name}!')
         instance.module = self
         if self.has_circuit:
             self.circuit.update_instance(instance)
@@ -663,7 +662,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             ws = dr_seg.ws_path if dr_seg.is_connected else w[idx]
             if dr_seg.is_unconnected:
                 self.connect(ws, dr_seg)  # Only if a new wire was created
-            self.connect(ws, load[idx + load.offset])
+            self.connect(ws, load[idx + (load.offset or 0)])
 
     def _connect_p2w(self, wire_like: Union[WireSegment, Wire], port_like: Union[PortSegment, T_PORT]) -> None:
         """
@@ -686,11 +685,11 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 self.connect(wire_like[idx], port_like[idx])
             return
         if isinstance(wire_like, Wire) and wire_like.width == 1:
-            w = wire_like[wire_like.offset]  # equal to wire[0] in most cases
+            w = wire_like[wire_like.offset or 0]  # equal to wire[0] in most cases
         else:
             w = wire_like
         if isinstance(port_like, Port) and port_like.width == 1:
-            p = port_like[port_like.offset]  # equal to port[0] in most cases
+            p = port_like[port_like.offset or 0]  # equal to port[0] in most cases
         else:
             p = port_like
         if p.locked or (w.locked and not w.is_constant) or self.locked:
@@ -919,7 +918,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         inst = self.instances[instance_name]
         return {pname: edges[pname] for pname in edges if inst.ports[pname].is_input}
 
-    def _get_instance_from_ps_path(self, segment_path: PortSegmentPath) -> Optional[Union[Instance, Port]]:
+    def _get_instance_from_ps_path(self, segment_path: PortSegmentPath) -> Optional[Union[Instance, Port[Module]]]:
         if segment_path.hierarchy_level >= 2:
             inst_idx = -3  # Index of the instance or module name to which this port segment belongs to
             inst_name = segment_path.get(inst_idx)
@@ -929,25 +928,6 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             return node
         LOG.error(f'Cannot get connected instance from port segment with path {segment_path.raw} in module {self.name}: Path seems invalid!')
         return None
-
-    def _get_connected_nodes(self, ws_path: WireSegmentPath, ps_fc: Callable[[PortSegment], bool] = lambda ps: True) -> List[PortSegment]:
-        """Returns a list of port segment instances connected to the wire that is represented by the given wire segment path.
-
-        Args:
-            ws_path (WireSegmentPath): Path of the wire segment in question.
-            ps_fc (Callable[[PortSegment], bool], optional): Filter function to filter port segments based on a given condition.
-                Defaults to `lambda ps: True`, which does not filter any port segments and passes all connected port segments.
-                The filter function (if given) must take a port segment instance and return a bool.
-
-        Returns:
-            List[PortSegment]: A list of port segments that are connected to the given wire segment path
-                and match the filter function (if given).
-        """
-        try:
-            ws = self.get_from_path(ws_path)
-            return [ps for ps in ws.port_segments if ps_fc(ps)]
-        except PathResolutionError as e:
-            raise PathResolutionError(f'Unable to find wire segment {ws_path.raw} in module {self.name}!') from e
 
     def get_wire_ports(self, ws_path: WireSegmentPath) -> List[PortSegment]:
         """
@@ -960,33 +940,6 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             List[PortSegment]: A list of port segments connected to the wire segment associated with the given path.
         """
         return self._get_connected_nodes(ws_path)
-
-    def get_driving_ports(self, ws_path: WireSegmentPath) -> List[PortSegment]:
-        """
-        Retrieves the driving port segments of a given wire segment (i.e. the instances driving this wire segment).
-
-        For each wire segment, the list of driving ports should contain exactly one entry,
-        otherwise driver conflicts will arise.
-
-        Args:
-            ws_path (WireSegmentPath): The path of the wire segment for which to retrieve driving ports.
-
-        Returns:
-            List[PortSegment]: A list of port segments driving the wire segment associated with the given path.
-        """
-        return self._get_connected_nodes(ws_path, ps_fc=lambda ps: ps.is_driver)
-
-    def get_load_ports(self, ws_path: WireSegmentPath) -> List[PortSegment]:
-        """
-        Retrieves the load port segments of a given wire segment (i.e. the instances driven by this wire segment).
-
-        Args:
-            ws_path (WireSegmentPath): The path of the wire segment for which to retrieve load ports.
-
-        Returns:
-            List[PortSegment]: A list of port segments being load of the wire segment associated with the given path.
-        """
-        return self._get_connected_nodes(ws_path, ps_fc=lambda ps: ps.is_load)
 
     def get_neighbors(self, instance_name: str) -> Dict[str, Dict[int, List[PortSegment]]]:
         """
@@ -1294,8 +1247,8 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
     @overload
     def show(self, interactive: bool = True) -> Dash: ...
     @overload
-    def show(self, interactive: bool = False, figpath: Optional[str] = None, **fwd_params: Optional[Dict[str, object]]) -> Optional[Dash]: ...
-    def show(self, interactive: bool = False, figpath: Optional[str] = None, **fwd_params: Optional[Dict[str, object]]) -> Optional[Dash]:
+    def show(self, interactive: bool = False, figpath: Optional[str] = None, **fwd_params: Optional[object]) -> Optional[Dash]: ...
+    def show(self, interactive: bool = False, figpath: Optional[str] = None, **fwd_params: Optional[object]) -> Optional[Dash]:
         from netlist_carpentry.core.graph.visualization import CytoscapeGraph, Plotting
 
         if fwd_params is None:

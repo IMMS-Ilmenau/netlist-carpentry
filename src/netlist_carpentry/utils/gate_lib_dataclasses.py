@@ -16,6 +16,10 @@ class InstanceParams(TypedParams):
     pass
 
 
+class WireParams(TypedParams):
+    signed: NotRequired[int]
+
+
 class _CombinationalParams(TypedParams):
     Y_WIDTH: NotRequired[PositiveInt]
     A_WIDTH: NotRequired[PositiveInt]
