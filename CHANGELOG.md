@@ -15,6 +15,8 @@
 
 ## FIXED
 - Fixed issue where `netlist_carpentry.Module.copy_instance()` would take very long because of excessive deepcopying
+- Fixed crashes within `netlist_carpentry.Module.flatten()` method
+- Minor runtime optimizations and internal improvements
 
 ## REMOVED
 - `netlist_carpentry.PortSegment.parent_name`: Use `netlist_carpentry.PortSegment.parent.name` instead
