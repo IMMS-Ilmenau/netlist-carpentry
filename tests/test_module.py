@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from netlist_carpentry import WIRE_SEGMENT_X
+from netlist_carpentry import WIRE_SEGMENT_X, run_equiv
 from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.core.enums.direction import Direction as Dir
 from netlist_carpentry.core.enums.element_type import EType
@@ -1671,6 +1671,12 @@ def test_flatten(dff_circuit: Circuit) -> None:
     assert dff_m2.ports['D'][0].raw_ws_path == m21_conn['A'][0].raw
     assert dff_m2.ports['Q'][0].raw_ws_path == m21_conn['Y'][0].raw
     assert dff_m2.ports['CLK'][0].raw_ws_path == m21_conn['CLK'][0].raw
+
+    orig = 'tests/files/dff_circuit.v'
+    flat = 'tests/files/gen/flat.v'
+    dff_circuit.write(flat, overwrite=True)
+    proc = run_equiv(orig, flat, 'Top', 'Top')
+    assert proc.returncode == 0
 
 
 def test_flatten_recursive(dff_circuit: Circuit) -> None:
