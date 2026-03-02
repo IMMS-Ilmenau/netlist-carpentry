@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import time
-from typing import Sequence, Union
+from typing import List, Optional, Sequence, Union
 
 from netlist_carpentry import LOG, Circuit
 from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader
@@ -32,6 +32,8 @@ def read(
     circuit_name: str = '',
     verbose: bool = False,
     out: Union[str, Path] = '',
+    source_paths: Optional[List[str]] = None,
+    no_hierarchy: bool = False,
 ) -> Circuit:
     """
     Reads a Verilog file and converts it to a Circuit object using the YosysNetlistReader.
@@ -48,6 +50,11 @@ def read(
         verbose (bool, optional): Whether to show output from the Yosys tool. Defaults to False.
         out (Union[str, Path]): A path to a directory, where the generated JSON file will be located. Defaults to '', in which case
             the generated JSON netlist is saved in a temporary directory.
+        source_paths (Optional[List[str]], optional): A list of paths to files to source before running Yosys.
+            Can be used to enable plugins or activate environments, e.g. the OSS CAD SUITE.
+            Defaults to None, in which case no additional files are sourced.
+        no_hierarchy (bool, optional): Whether to resolve the hierarchy of the given circuit or not.
+            If True, the yosys "hierarchy" path is skipped. Defaults to False.
 
     Returns:
         Circuit: A Circuit object representing the circuit defined in the Verilog file.
@@ -65,7 +72,7 @@ def read(
         json_path = out_path / f'{paths[0].stem}.json'
         LOG.debug(f'Generating Yosys netlist from {len(paths)} files...')
         start = time()
-        gen_process = build_and_execute(script_path, paths, json_path, verbose=verbose, top=top)
+        gen_process = build_and_execute(script_path, paths, json_path, verbose=verbose, top=top, source_paths=source_paths, no_hierarchy=no_hierarchy)
         LOG.debug(f'Generated Yosys netlist from {len(paths)} files in {round(time() - start, 2)}s!')
         if gen_process.stderr:
             for err in gen_process.stderr.decode().splitlines():
@@ -82,6 +89,7 @@ def generate_json_netlist(
     top_module_name: str = '',
     verbose: bool = False,
     yosys_script_path: Union[str, Path] = '',
+    no_hierarchy: bool = False,
 ) -> subprocess.CompletedProcess[bytes]:
     """Generate a JSON netlist from the given input file using Yosys.
 
@@ -92,6 +100,8 @@ def generate_json_netlist(
         verbose (bool, optional): Whether to print Yosys log to the console. Defaults to False.
         yosys_script_path (Union[str, Path], optional): Path to a custom Yosys synthesis script.
             If empty, an appropriate script is generated with common synthesis settings. Defaults to ''.
+        no_hierarchy (bool, optional): Whether to resolve the hierarchy of the given circuit or not.
+            If True, the yosys "hierarchy" path is skipped. Defaults to False.
 
     Returns:
         subprocess.CompletedProcess[bytes]: The return object of the subprocess that executed Yosys.
@@ -108,4 +118,12 @@ def generate_json_netlist(
     with tempfile.NamedTemporaryFile('w', delete_on_close=False) as tmp:  # type: ignore[call-overload, misc]
         path = Path(tmp.name) if not yosys_script_path else Path(yosys_script_path)  # type: ignore[misc]
         tmp.close()  # type: ignore[misc]
-        return build_and_execute(path, [input_file_path], output_file_path, verbose=verbose, top=top_module_name, techmap_paths=[pmux2mux_path])  # type: ignore[misc]
+        return build_and_execute(
+            path,
+            [input_file_path],
+            output_file_path,
+            verbose=verbose,
+            top=top_module_name,
+            techmap_paths=[pmux2mux_path],  # type: ignore[misc]
+            no_hierarchy=no_hierarchy,
+        )

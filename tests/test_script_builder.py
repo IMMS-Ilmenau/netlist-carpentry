@@ -8,7 +8,7 @@ from netlist_carpentry.scripts.script_builder import build_and_execute, build_sc
 
 
 def test_build_script_simple() -> None:
-    build_script(Path('tests/files/test_script'), [Path('tests/files/thermo_enc.v')], Path('thermo_enc.json'))
+    build_script(Path('tests/files/test_script'), [Path('tests/files/thermo_enc.v')], Path('thermo_enc.json'), no_hierarchy=True)
     with open('tests/files/test_script') as f:
         content = f.read()
     assert content.startswith('#!/bin/bash')

@@ -403,7 +403,7 @@ def test_build_pattern_yosys() -> None:
 
 
 def test_graph_from_file_fail() -> None:
-    generate_json_netlist('tests/files/dec.v', 'tests/files/dec.json')
+    generate_json_netlist('tests/files/dec.v', 'tests/files/dec.json', no_hierarchy=True)
     with pytest.raises(ValueError):
         # Contains multiple modules
         PatternGenerator._module_from_json('tests/files/dec.json', remove_ports=True)

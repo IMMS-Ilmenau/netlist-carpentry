@@ -2,10 +2,11 @@
 
 import subprocess
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Optional
 
 verilog_template = """#!/bin/bash
 
+{source_files}
 yosys {modules}-p "
     {read_str}
     {hierarchy}
@@ -33,6 +34,15 @@ def _yosys_read_cmd(input_file_paths: List[Path]) -> str:
     return '\n\t'.join(read_lst)
 
 
+def _source_files_cmd(source_paths: List[str]) -> str:
+    source_lst = []
+    for source_path in source_paths:
+        path = Path(source_path).expanduser().resolve()
+        path.chmod(path.stat().st_mode | 0o111)
+        source_lst.append(f'source {path}\n')
+    return ''.join(source_lst)
+
+
 def build_script(
     script_path: Path,
     input_file_paths: List[Path],
@@ -41,6 +51,8 @@ def build_script(
     insbuf: bool = True,
     process_memory: bool = True,
     techmap_paths: List[Path] = [],
+    source_paths: Optional[List[str]] = None,
+    no_hierarchy: bool = False,
 ) -> None:
     """
     Build a Yosys script for synthesis.
@@ -59,18 +71,31 @@ def build_script(
         insbuf (bool, optional): Whether to insert buffers whenever wires are directly assigned to other wires. Defaults to True.
         process_memory (bool, optional): Whether to process memory (split into primitive cells). Defaults to True.
         techmap_paths (List[Path], optional): List of paths to techmap files. Defaults to [].
+        source_paths (Optional[List[str]], optional): A list of paths to files to source before running Yosys.
+            Can be used to enable plugins or activate environments, e.g. the OSS CAD SUITE.
+            Defaults to None, in which case no additional files are sourced.
+        no_hierarchy (bool, optional): Whether to resolve the hierarchy of the given circuit or not.
+            If True, the yosys "hierarchy" path is skipped. Defaults to False.
     """
+    source_files = _source_files_cmd(source_paths or [])
     vhdl_given = any(fpath.suffix == '.vhdl' for fpath in input_file_paths)
     modules = '-m ghdl ' if vhdl_given else ''
     read_str = _yosys_read_cmd(input_file_paths)
-    top = f'-top {top}' if top else ''
+    top = f'-top {top}' if top else '-auto-top' if not no_hierarchy else ''
     hierarchy = f'hierarchy {top} -libdir .'
     memory = 'memory' if process_memory else ''
     techmaps = '\n'.join(f'techmap -map {techmap.expanduser().resolve()}\n' for techmap in techmap_paths)
     insbuf_str = 'insbuf; proc' if insbuf else ''
     write_str = f'write_json {output_file_path.expanduser().resolve()}'
     yosys = verilog_template.format(
-        modules=modules, read_str=read_str, hierarchy=hierarchy, memory=memory, techmaps=techmaps, insbuf_str=insbuf_str, write_str=write_str
+        source_files=source_files,
+        modules=modules,
+        read_str=read_str,
+        hierarchy=hierarchy,
+        memory=memory,
+        techmaps=techmaps,
+        insbuf_str=insbuf_str,
+        write_str=write_str,
     )
     with open(script_path, 'w') as f:
         f.write(yosys)

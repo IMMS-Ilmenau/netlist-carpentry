@@ -38,7 +38,7 @@ def test_decentral_mux(log_setup: Log) -> None:
 
 
 def test_edge_detector(log_setup: Log) -> None:
-    c = read('tests/files/edge_detector.v')
+    c = read('tests/files/edge_detector.v', no_hierarchy=True)
     save_results(P2VTransformer().circuit2v(c), 'v')
     assert len(c.modules) == 3
     ms = iter(c)

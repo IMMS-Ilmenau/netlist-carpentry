@@ -23,7 +23,7 @@ def log_setup() -> Log:
 
 
 def test_decentral_mux(log_setup: Log) -> None:
-    c = read('tests/files/decentral_mux.v')
+    c = read('tests/files/decentral_mux.v', no_hierarchy=True)
     assert len(c.modules) == 1
     mux = c.first
     c.set_top(mux)
@@ -35,7 +35,7 @@ def test_decentral_mux(log_setup: Log) -> None:
 
 
 def test_decentral_mux_signedness(log_setup: Log) -> None:
-    c = read('tests/files/decentral_mux.v')
+    c = read('tests/files/decentral_mux.v', no_hierarchy=True)
     assert len(c.modules) == 1
     mux = c.first
     c.set_top(mux)
@@ -66,7 +66,7 @@ def test_decentral_mux_signedness(log_setup: Log) -> None:
 
 
 def test_signed_example(log_setup: Log) -> None:
-    c = read('tests/files/signed_example.v')
+    c = read('tests/files/signed_example.v', no_hierarchy=True)
     assert len(c.modules) == 1
     signed_module = c.first
     c.set_top(signed_module)
