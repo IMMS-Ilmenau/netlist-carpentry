@@ -5,6 +5,11 @@
 - `netlist_carpentry.NetlistElement.has_parent` property as a more convenient way to check if a netlist element has a parent object (e.g. a wire might be part of a module or not, e.g. if it was just removed from a module, but the object itself still exists in Python)
 - `netlist_carpentry.PortSegment.grandparent` property returning the grandparent of the port segment, which is either a module or an instance, depending on whether the port (to which the segment belongs) is a module port or an instance port
 - `netlist_carpentry.WireSegment.grandparent` property returning the grandparent of the wire segment, which is the module containing the wire to which the segment belongs
+- `netlist_carpentry.read()` now supports sourcing files (e.g. activating an environment, such as the OSS CAD SUITE) via the parameter `source_paths` (expects a list of strings, being the paths to the files to source)
+- `netlist_carpentry.read()` now supports reading VHDL files using the Yosys plugin GHDL
+  - Yosys loads GHDL via `yosys -m ghdl`, which requires GHDL to be present in the PATH variable
+  - The currently recommended way of reading VHDL files is to install and activate the OSS CAD SUITE (activation can be achieved by providing the path of the `oss_cad_suite/environment` script to the `source_paths` parameter)
+  - Due to the sourcing mechanism, reading VHDL files is currently only supported on Linux systems
 
 ## CHANGED
 - Completely rewrote ElementPath behavior and handling
@@ -12,6 +17,10 @@
   - This ensures that the path is actually a "real path", since each level of the path actually exists
   - When creating `netlist_carpentry.NetlistElement` objects, now "name" parameter is required instead of "raw_path"
   - `netlist_carpentry.NetlistElement.raw_path` can no longer be changed or set - the individual elements of the path are updated if `set_name()` is called on the corresponding object
+  - `netlist_carpentry.read()` without a top module now auto-selects the top module
+    - Precisely, instead of skipping the Yosys command "hierarchy -top top_name" if no top_name is given, "hierarchy -auto-top" is called instead
+    - Accordingly, the hierarchy is now always built be default, whereas no hierarchy elaboration was executed previously if no top name was specified
+    - Previous functionality can be restored by setting the "no_hierarchy" parameter to `True` (defaults to False)
 
 ## FIXED
 - Fixed issue where `netlist_carpentry.Module.copy_instance()` would take very long because of excessive deepcopying
