@@ -4,9 +4,9 @@ import subprocess
 from pathlib import Path
 from typing import Any, List
 
-template_str = """#!/bin/bash
+verilog_template = """#!/bin/bash
 
-yosys -p "
+yosys {modules}-p "
     {read_str}
     {hierarchy}
     proc
@@ -17,6 +17,20 @@ yosys -p "
     {write_str}
 "
 """
+
+
+def _yosys_read_cmd(input_file_paths: List[Path]) -> str:
+    read_lst = []
+    for input_file_path in input_file_paths:
+        if input_file_path.is_dir():
+            raise IsADirectoryError('Input file path is a directory!')
+        file_ext = input_file_path.suffix.lstrip('.').lower()
+        if file_ext == 'vhdl':
+            read_lst.append(f'ghdl -read {input_file_path.expanduser().resolve()}')
+        else:
+            sv_ext = '-sv ' if file_ext == 'sv' else ''
+            read_lst.append(f'read_verilog {sv_ext}{input_file_path.expanduser().resolve()}')
+    return '\n\t'.join(read_lst)
 
 
 def build_script(
@@ -46,20 +60,18 @@ def build_script(
         process_memory (bool, optional): Whether to process memory (split into primitive cells). Defaults to True.
         techmap_paths (List[Path], optional): List of paths to techmap files. Defaults to [].
     """
-    read_str = ''
-    for input_file_path in input_file_paths:
-        if input_file_path.is_dir():
-            raise IsADirectoryError('Input file path is a directory!')
-        file_ext = input_file_path.suffix.lstrip('.').lower()
-        sv_ext = '-sv ' if file_ext == 'sv' else ''
-        read_str += f'read_verilog {sv_ext}{input_file_path.expanduser().resolve()}\n'
+    vhdl_given = any(fpath.suffix == '.vhdl' for fpath in input_file_paths)
+    modules = '-m ghdl ' if vhdl_given else ''
+    read_str = _yosys_read_cmd(input_file_paths)
     top = f'-top {top}' if top else ''
     hierarchy = f'hierarchy {top} -libdir .'
     memory = 'memory' if process_memory else ''
     techmaps = '\n'.join(f'techmap -map {techmap.expanduser().resolve()}\n' for techmap in techmap_paths)
     insbuf_str = 'insbuf; proc' if insbuf else ''
     write_str = f'write_json {output_file_path.expanduser().resolve()}'
-    yosys = template_str.format(read_str=read_str, hierarchy=hierarchy, memory=memory, techmaps=techmaps, insbuf_str=insbuf_str, write_str=write_str)
+    yosys = verilog_template.format(
+        modules=modules, read_str=read_str, hierarchy=hierarchy, memory=memory, techmaps=techmaps, insbuf_str=insbuf_str, write_str=write_str
+    )
     with open(script_path, 'w') as f:
         f.write(yosys)
 
