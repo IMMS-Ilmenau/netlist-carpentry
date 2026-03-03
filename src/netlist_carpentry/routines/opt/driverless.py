@@ -35,12 +35,12 @@ def opt_driverless_wires(module: Module) -> bool:
     for wname, w in tqdm(module.wires.items(), leave=False):
         for ws in w.segments.values():
             if ws.has_no_driver():
-                LOG.debug(f'WireSegment {ws.path} has no driver!')
+                LOG.debug(f'\tWireSegment {ws.path} has no driver!')
                 marked_for_deletion.add((wname, ws.index))
     if not marked_for_deletion:
-        LOG.info('No more wires to delete!')
+        LOG.debug('No more wires to delete!')
         return False
-    LOG.info(f'Removing {len(marked_for_deletion)} driverless wires...')
+    LOG.debug(f'Removing {len(marked_for_deletion)} driverless wires...')
     for wname, idx in marked_for_deletion:
         if wname in module.wires:
             module.wires[wname].remove_wire_segment(idx)
@@ -56,12 +56,12 @@ def opt_driverless_instances(module: Module) -> bool:
         for p in inst.input_ports:
             no_driver &= all(p.raw == 'X' or p.raw == '0' or p.raw == '1' for p in p.connected_wire_segments.values())
         if no_driver:
-            LOG.debug(f'Instance {inst_name} has no drivers!')
+            LOG.debug(f'\tInstance {inst_name} has no drivers!')
             marked_for_deletion.add(inst_name)
     if not marked_for_deletion:
-        LOG.info('No more instances to delete!')
+        LOG.debug('No more instances to delete!')
         return False
-    LOG.info(f'Removing {len(marked_for_deletion)} driverless instances...')
+    LOG.debug(f'Removing {len(marked_for_deletion)} driverless instances...')
     for iname in marked_for_deletion:
         module.remove_instance(iname)
     return True

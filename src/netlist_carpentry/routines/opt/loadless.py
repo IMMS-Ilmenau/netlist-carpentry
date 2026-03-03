@@ -43,12 +43,12 @@ def opt_loadless_wires(module: Module) -> bool:
     marked_for_deletion = set()
     for wname, w in tqdm(module.wires.items(), leave=False):
         if w.has_no_loads():
-            LOG.debug(f'Wire {w.name} has no loads!')
+            LOG.debug(f'\tWire {w.name} has no loads!')
             marked_for_deletion.add(wname)
     if not marked_for_deletion:
-        LOG.info('No more wires to delete!')
+        LOG.debug('No more wires to delete!')
         return False
-    LOG.info(f'Removing {len(marked_for_deletion)} loadless wires...')
+    LOG.debug(f'Removing {len(marked_for_deletion)} loadless wires...')
     for wname in marked_for_deletion:
         module.remove_wire(wname)
     return True
@@ -73,12 +73,12 @@ def opt_loadless_instances(module: Module) -> bool:
         for p in inst.output_ports:
             no_load &= all(p.raw.lower() == 'x' or p.raw == '' for p in p.connected_wire_segments.values())
         if no_load:
-            LOG.debug(f'Instance {inst_name} has no loads!')
+            LOG.debug(f'\tInstance {inst_name} has no loads!')
             marked_for_deletion.add(inst_name)
     if not marked_for_deletion:
-        LOG.info('No more instances to delete!')
+        LOG.debug('No more instances to delete!')
         return False
-    LOG.info(f'Removing {len(marked_for_deletion)} loadless instances...')
+    LOG.debug(f'Removing {len(marked_for_deletion)} loadless instances...')
     for iname in marked_for_deletion:
         module.remove_instance(iname)
     return True
