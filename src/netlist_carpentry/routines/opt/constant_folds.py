@@ -196,7 +196,11 @@ def _tied_en_inactive(inst: EnMixin) -> bool:
     return inst.en_port.is_tied and inst.en_polarity is not inst.en_port.signal
 
 
-def _opt_constant_propagate_dff(module: Module, inst: DFF) -> bool:
+def _tied_en_active(inst: EnMixin) -> bool:
+    return inst.en_port.is_tied and inst.en_polarity is inst.en_port.signal
+
+
+def _opt_constant_propagate_dff(module: Module, inst: DFF) -> bool:  # type:ignore
     # Order: Reset highest prio, then clk, then data
     ff_id = f'{inst.__class__.__name__} {inst.raw_path}'
     propagates = False
@@ -214,7 +218,7 @@ def _opt_constant_propagate_dff(module: Module, inst: DFF) -> bool:
                 f'Found {ff_id} with disabled Enable signal ({ff_id} never active, except for reset). Constant propagation not implemented for this edge case!'
             )
 
-    if inst.ports['D'].is_tied and not _tied_clk(inst) and (not isinstance(inst, EnMixin) or not _tied_en_inactive(inst)):  # type: ignore
+    if inst.ports['D'].is_tied and not _tied_clk(inst) and (isinstance(inst, EnMixin) and _tied_en_active(inst)):  # type: ignore
         _propagate_output_port(module, inst, 'Q', inst.ports['D'].signal_array)  # Propagate data to output
         propagates = True
     return propagates
