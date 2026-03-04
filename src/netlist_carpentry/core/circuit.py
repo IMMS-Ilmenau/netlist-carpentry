@@ -584,6 +584,14 @@ class Circuit(BaseModel):
                 self.remove_module(m)
         return mapdict
 
+    def flatten(self, skip_modules: Optional[List[str]] = None) -> None:
+        if skip_modules is None:
+            skip_modules = []
+        for m in self:
+            if m.name not in skip_modules:
+                LOG.info(f'Flattening {m.name}...')
+                m.flatten(skip_type=skip_modules)
+
     def create_blackbox_modules(self) -> None:
         for m in list(self):
             for inst in m.instances.values():

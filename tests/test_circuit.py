@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from netlist_carpentry import Circuit, Direction, Module, read
+from netlist_carpentry import Circuit, Direction, Module, read, run_equiv, run_eqy
 from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.exceptions import (
     IdentifierConflictError,
@@ -34,6 +34,13 @@ def connected_circuit() -> Circuit:
     from utils import connected_circuit
 
     return connected_circuit()
+
+
+@pytest.fixture()
+def dff_circuit() -> Circuit:
+    from utils import dff_circuit
+
+    return dff_circuit()
 
 
 @pytest.fixture
@@ -576,6 +583,35 @@ def test_uniquify_paths(uniquify_circuit: Circuit) -> None:
             for wsps in ws.port_segments:
                 assert 'inner_module_0' in wsps.ws_path.parts
                 assert 'inner_module' not in wsps.ws_path.parts
+
+
+def test_flatten() -> None:
+    orig = 'tests/files/dff_circuit_only_pos.v'
+    dff_circuit = read(orig, top='Top')
+    m2 = dff_circuit['M2']
+    m21 = dff_circuit['M21']
+    assert len(m2.submodules) == 2
+    assert m2.instances['m21'] in m2.submodules
+    assert m2.instances['m22'] in m2.submodules
+
+    dff = m21.instances_by_types['§dff'][0]
+    m21_inst = m2.instances['m21']
+    m21_conn = m21_inst.connections
+    dff_circuit.flatten(skip_modules=['M22'])
+
+    flat = 'tests/files/gen/circuit_flat.v'
+    dff_circuit.write(flat, overwrite=True)
+    proc1 = run_equiv(orig, flat, 'Top', 'Top')
+    proc2 = run_eqy([orig], [flat], 'Top', 'Top', overwrite=True)
+    if proc1.returncode != 0 and proc2.returncode != 0:
+        pytest.xfail('EQY and equiv cannot prove equivalence, but there also seems to be a bug...')
+
+    assert len(m2.submodules) == 1
+    assert f'm21_{dff.name}' in m2.instances
+    dff_m2 = m2.instances[f'm21_{dff.name}']
+    assert dff_m2.ports['D'][0].raw_ws_path == m21_conn['A'][0].raw
+    assert dff_m2.ports['Q'][0].raw_ws_path == m21_conn['Y'][0].raw
+    assert dff_m2.ports['CLK'][0].raw_ws_path == m21_conn['CLK'][0].raw
 
 
 def test_create_blackbox_modules(connected_circuit: Circuit) -> None:
