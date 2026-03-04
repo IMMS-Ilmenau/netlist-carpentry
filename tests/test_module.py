@@ -1768,6 +1768,17 @@ def test_set_name(connected_module: Module) -> None:
     assert connected_module.name == 'SOME_MODULE'
 
 
+def test_equal_content(connected_module: Module) -> None:
+    assert connected_module.equal_content(connected_module)
+
+    cm2 = connected_module.model_copy(deep=True)
+    assert connected_module.equal_content(cm2)
+
+    cm2.ports.clear()
+    assert not connected_module.equal_content(cm2)
+    assert not cm2.equal_content(connected_module)
+
+
 def test_change_mutability(standard_module: Module) -> None:
     assert not standard_module.locked
     standard_module.change_mutability(is_now_locked=True)
