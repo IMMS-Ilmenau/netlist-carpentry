@@ -527,6 +527,7 @@ def test_remove_instance(empty_module: Module, locked_module: Module, connected_
     assert len(empty_module.instances) == 0
     assert i.module is None
 
+    c.modules.pop('m2')
     c.add_module(m2)
     i = empty_module.create_instance(m2, 'inst2')
     assert c.instances['m2'] == [i.path]

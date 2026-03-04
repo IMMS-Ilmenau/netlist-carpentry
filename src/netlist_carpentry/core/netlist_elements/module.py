@@ -14,6 +14,7 @@ from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from netlist_carpentry import LOG, Direction, Instance, Port, Wire
 from netlist_carpentry.core.exceptions import (
     AlreadyConnectedError,
+    CircuitStructureError,
     IdentifierConflictError,
     InvalidDirectionError,
     MissingConnectionError,
@@ -106,6 +107,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         If `interface_definition` is a module, this creates a submodule instance inside this module, based on the given
         instance name and module definition.
+        The module is also added to the circuit if no module with this name already already exists.
 
         If `interface_definition` is a **class** (not an instance) that extends `netlist_carpentry.Instance` (e.g. a gate
         from the internal gate library), this creates a primitive gate instance inside this module.
@@ -131,6 +133,13 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             inst.parameters = params  # type: ignore
             for pname, p in interface_definition.ports.items():
                 inst.connect(pname, ws_path=None, direction=p.direction, width=p.width)
+            if self.has_circuit:
+                if interface_definition.name not in self.circuit:
+                    self.circuit.add_module(interface_definition)
+                elif self.circuit[interface_definition.name] != interface_definition:
+                    raise CircuitStructureError(
+                        f'New module {interface_definition.name} is structurally different to already present module {interface_definition.name}'
+                    )
         else:
             inst = interface_definition(name=instance_name, module=self, parameters=params)  # type: ignore
         return self.add_instance(inst)

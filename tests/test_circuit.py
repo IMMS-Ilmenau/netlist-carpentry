@@ -580,6 +580,7 @@ def test_uniquify_paths(uniquify_circuit: Circuit) -> None:
 
 def test_create_blackbox_modules(connected_circuit: Circuit) -> None:
     connected_circuit.first.create_instance(Module(name='foo'), 'foo_inst')
+    connected_circuit.modules.pop('foo')
 
     assert 'foo' not in connected_circuit
     connected_circuit.create_blackbox_modules()
