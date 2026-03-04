@@ -554,8 +554,9 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         wire_name = wire.name if isinstance(wire, Wire) else wire
         if wire_name in self.wires:
-            for p in self.wires[wire_name].connected_port_segments:
-                self.disconnect(p.path)
+            for plist in self.wires[wire_name].connected_port_segments.values():
+                for p in plist.copy():
+                    self.disconnect(p.path)
             self.wires[wire_name].module = None
         self.wires.remove(wire_name, locked=self.locked)
 

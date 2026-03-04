@@ -23,7 +23,6 @@ from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
 from netlist_carpentry.core.protocols.signals import LogicLevel, SignalDict, SignalOrLogicLevel
 from netlist_carpentry.utils.custom_dict import CustomDict
-from netlist_carpentry.utils.custom_list import CustomList
 from netlist_carpentry.utils.gate_lib_dataclasses import WireParams
 
 if TYPE_CHECKING:
@@ -249,13 +248,9 @@ class Wire(NetlistElement, BaseModel):
         return port_dict
 
     @property
-    def connected_port_segments(self) -> List[PortSegment]:
-        """Retrieves a list of all (unique) port segments connected to this wire."""
-        unique_ps = CustomList[PortSegment]()
-        for s in self.segments.values():
-            for p in s.port_segments:
-                unique_ps.add(p)
-        return unique_ps
+    def connected_port_segments(self) -> Dict[PositiveInt, List[PortSegment]]:
+        """Retrieves a dictionary of all wire segments and their corresponding port segments."""
+        return {idx: s.port_segments for idx, s in self}
 
     @property
     def nr_connected_port_segments(self) -> int:
