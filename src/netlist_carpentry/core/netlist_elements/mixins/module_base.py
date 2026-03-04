@@ -300,6 +300,15 @@ class ModuleBaseMixin(NetlistElement):
         for i in self.instances.values():
             i._set_name_recursively(old_name, new_name)
 
+    def equal_content(self, other: 'ModuleBaseMixin') -> bool:
+        try:
+            equal_instance_connections = all(other.instances[iname].connections == self.instances[iname].connections for iname in self.instances)
+            equal_ports = all(other.ports[pname].connected_wire_segments == self.ports[pname].connected_wire_segments for pname in self.ports)
+            equal_wires = all(other.wires[wname].connected_port_segments == self.wires[wname].connected_port_segments for wname in self.wires)
+            return all([equal_instance_connections, equal_ports, equal_wires])
+        except Exception:
+            return False
+
     def change_mutability(self, is_now_locked: bool, recursive: bool = False) -> Self:
         """
         Change the mutability of this Module instance.

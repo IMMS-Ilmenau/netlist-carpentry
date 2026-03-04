@@ -136,7 +136,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             if self.has_circuit:
                 if interface_definition.name not in self.circuit:
                     self.circuit.add_module(interface_definition)
-                elif self.circuit[interface_definition.name] != interface_definition:
+                elif not self.circuit[interface_definition.name].equal_content(interface_definition):
                     raise CircuitStructureError(
                         f'New module {interface_definition.name} is structurally different to already present module {interface_definition.name}'
                     )
