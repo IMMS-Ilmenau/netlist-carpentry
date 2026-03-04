@@ -300,7 +300,7 @@ class ModuleBaseMixin(NetlistElement):
         for i in self.instances.values():
             i._set_name_recursively(old_name, new_name)
 
-    def equal_content(self, other: 'ModuleBaseMixin') -> bool:
+    def equal_connections(self, other: 'ModuleBaseMixin') -> bool:
         try:
             has_all_elements = (
                 self.instances.keys() == other.instances.keys()

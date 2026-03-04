@@ -13,7 +13,6 @@ from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.exceptions import (
     AlreadyConnectedError,
-    CircuitStructureError,
     EvaluationError,
     HierarchyError,
     IdentifierConflictError,
@@ -318,13 +317,6 @@ def test_create_instance(empty_module: Module, connected_module: Module) -> None
     empty_module._inst_gen_i = 0
     inst = empty_module.create_instance(connected_module)
     assert inst.name == f'_{connected_module.name}_2_'
-
-    m2 = Module(name='foo')
-    empty_module.create_instance(m2, 'm2_inst')
-    m2_2 = Module(name='foo')
-    m2_2.create_wire('bar')
-    with pytest.raises(CircuitStructureError):
-        empty_module.create_instance(m2_2, 'm2_2_inst')
 
 
 def test_create_instance_gatelib(empty_module: Module) -> None:
@@ -1768,15 +1760,15 @@ def test_set_name(connected_module: Module) -> None:
     assert connected_module.name == 'SOME_MODULE'
 
 
-def test_equal_content(connected_module: Module) -> None:
-    assert connected_module.equal_content(connected_module)
+def test_equal_connections(connected_module: Module) -> None:
+    assert connected_module.equal_connections(connected_module)
 
     cm2 = connected_module.model_copy(deep=True)
-    assert connected_module.equal_content(cm2)
+    assert connected_module.equal_connections(cm2)
 
     cm2.ports.clear()
-    assert not connected_module.equal_content(cm2)
-    assert not cm2.equal_content(connected_module)
+    assert not connected_module.equal_connections(cm2)
+    assert not cm2.equal_connections(connected_module)
 
 
 def test_change_mutability(standard_module: Module) -> None:

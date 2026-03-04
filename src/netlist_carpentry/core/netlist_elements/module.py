@@ -14,7 +14,6 @@ from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from netlist_carpentry import LOG, Direction, Instance, Port, Wire
 from netlist_carpentry.core.exceptions import (
     AlreadyConnectedError,
-    CircuitStructureError,
     IdentifierConflictError,
     InvalidDirectionError,
     MissingConnectionError,
@@ -136,10 +135,6 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             if self.has_circuit:
                 if interface_definition.name not in self.circuit:
                     self.circuit.add_module(interface_definition)
-                elif not self.circuit[interface_definition.name].equal_content(interface_definition):
-                    raise CircuitStructureError(
-                        f'New module {interface_definition.name} is structurally different to already present module {interface_definition.name}'
-                    )
         else:
             inst = interface_definition(name=instance_name, module=self, parameters=params)  # type: ignore
         return self.add_instance(inst)
