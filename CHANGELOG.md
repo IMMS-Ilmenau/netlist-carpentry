@@ -10,6 +10,8 @@
   - Yosys loads GHDL via `yosys -m ghdl`, which requires GHDL to be present in the PATH variable
   - The currently recommended way of reading VHDL files is to install and activate the OSS CAD SUITE (activation can be achieved by providing the path of the `oss_cad_suite/environment` script to the `source_paths` parameter)
   - Due to the sourcing mechanism, reading VHDL files is currently only supported on Linux systems
+- `netlist_carpentry.Module.equal_content()` to compare two modules whether they have the same content, ignoring metadata and only focusing on the structural aspects, i.e. ports, wires and instances
+
 
 ## CHANGED
 - Completely rewrote ElementPath behavior and handling
@@ -17,14 +19,17 @@
   - This ensures that the path is actually a "real path", since each level of the path actually exists
   - When creating `netlist_carpentry.NetlistElement` objects, now "name" parameter is required instead of "raw_path"
   - `netlist_carpentry.NetlistElement.raw_path` can no longer be changed or set - the individual elements of the path are updated if `set_name()` is called on the corresponding object
-  - `netlist_carpentry.read()` without a top module now auto-selects the top module
-    - Precisely, instead of skipping the Yosys command "hierarchy -top top_name" if no top_name is given, "hierarchy -auto-top" is called instead
-    - Accordingly, the hierarchy is now always built be default, whereas no hierarchy elaboration was executed previously if no top name was specified
-    - Previous functionality can be restored by setting the "no_hierarchy" parameter to `True` (defaults to False)
+- `netlist_carpentry.read()` without a top module now auto-selects the top module
+  - Precisely, instead of skipping the Yosys command "hierarchy -top top_name" if no top_name is given, "hierarchy -auto-top" is called instead
+  - Accordingly, the hierarchy is now always built be default, whereas no hierarchy elaboration was executed previously if no top name was specified
+  - Previous functionality can be restored by setting the "no_hierarchy" parameter to `True` (defaults to False)
+- Changed a bunch of Log messages log levels from "Info" to "Debug" to decrease console spam
+- `netlist_carpentry.Module.create_instance()` now automatically adds the given module to the circuit if a module definition is provided and a parent circuit is specified, raising an error if a module with the same name but different content already exists
 
 ## FIXED
 - Fixed issue where `netlist_carpentry.Module.copy_instance()` would take very long because of excessive deepcopying
 - Fixed crashes within `netlist_carpentry.Module.flatten()` method
+- Fixed issue in `netlist_carpentry.Module.optimize()` routine for D-FF with tied D signals
 - Minor runtime optimizations and internal improvements
 
 ## REMOVED
