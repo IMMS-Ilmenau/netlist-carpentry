@@ -578,6 +578,14 @@ def test_uniquify_paths(uniquify_circuit: Circuit) -> None:
                 assert 'inner_module' not in wsps.ws_path.parts
 
 
+def test_create_blackbox_modules(connected_circuit: Circuit) -> None:
+    connected_circuit.first.create_instance(Module(name='foo'), 'foo_inst')
+
+    assert 'foo' not in connected_circuit
+    connected_circuit.create_blackbox_modules()
+    assert 'foo' in connected_circuit
+
+
 def test_connected_circuit(connected_circuit: Circuit) -> None:
     assert connected_circuit.creator == 'SomeCreator'
     assert connected_circuit.module_count == 2

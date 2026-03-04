@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Callable, DefaultDict, Dict, Iterator, List, L
 
 from pydantic import BaseModel, NonNegativeInt
 
-from netlist_carpentry import Signal
+from netlist_carpentry import Direction, Signal
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import ObjectNotFoundError, PathResolutionError, SignalAssignmentError
 from netlist_carpentry.core.netlist_elements.element_path import (
@@ -583,6 +583,15 @@ class Circuit(BaseModel):
             if not keep_original_module:
                 self.remove_module(m)
         return mapdict
+
+    def create_blackbox_modules(self) -> None:
+        for m in list(self):
+            for inst in m.instances.values():
+                if inst.is_blackbox and inst.instance_type not in self:
+                    m = self.create_module(inst.instance_type)
+                    for pname in inst.ports:
+                        dir = Direction.OUT if pname == 'Y' or pname == 'Q' else Direction.IN
+                        m.create_port(pname, dir)
 
     @overload
     def set_signal(self, path: str, signal_value: LogicLevel) -> None: ...
