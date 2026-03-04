@@ -58,7 +58,8 @@ def test_wire_creation(standard_wire: Wire) -> None:
     assert standard_wire.signal_int is None
     assert len(standard_wire.segments) == 1
     assert standard_wire[1] == standard_wire[1]
-    assert standard_wire.nr_connected_port_segments == 1
+    assert len(standard_wire.connected_port_segments) == 1
+    assert len(standard_wire.connected_port_segments[1]) == 3
     # assert standard_wire.is_connected is False
     # assert standard_wire.is_unconnected is False
     # assert standard_wire.is_undefined is not True
@@ -114,20 +115,6 @@ def test_parent(standard_wire: Wire) -> None:
     standard_wire.module = None
     with pytest.raises(ParentNotFoundError):
         standard_wire.parent
-
-
-def test_nr_connected_ports(standard_wire: Wire) -> None:
-    assert len(standard_wire[1].port_segments) == 3
-    assert len(standard_wire.connected_port_segments[1]) == 3
-    assert standard_wire.nr_connected_port_segments == 1
-    _add_multidriver(standard_wire)
-    assert len(standard_wire[1].port_segments) == 4
-    assert len(standard_wire.connected_port_segments[1]) == 4
-    assert standard_wire.nr_connected_port_segments == 1
-    _add_multidriver(standard_wire, 'p5')
-    assert len(standard_wire[1].port_segments) == 5
-    assert len(standard_wire.connected_port_segments[1]) == 5
-    assert standard_wire.nr_connected_port_segments == 1
 
 
 def test_wire_offset() -> None:
@@ -406,7 +393,7 @@ def test_has_no_loads(standard_wire: Wire) -> None:
     standard_wire.ports[1].pop(-1)
     assert standard_wire.has_no_loads()
     assert standard_wire.has_no_loads(get_mapping=True) == {1: True}
-    assert standard_wire.nr_connected_port_segments == 1
+    assert len(standard_wire.connected_port_segments[1]) == 1
 
 
 def test_is_dangling(standard_wire: Wire) -> None:

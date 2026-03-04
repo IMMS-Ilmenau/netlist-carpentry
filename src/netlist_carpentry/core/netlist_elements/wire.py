@@ -252,18 +252,6 @@ class Wire(NetlistElement, BaseModel):
         """Retrieves a dictionary of all wire segments and their corresponding port segments."""
         return {idx: s.port_segments for idx, s in self}
 
-    @property
-    def nr_connected_port_segments(self) -> int:
-        """
-        The total number of unique port segments connected to this wire.
-
-        Sums up the number of connected port segments for each wire segment in the wire.
-
-        Returns:
-            The total number of connected port segments (int).
-        """
-        return len(self.connected_port_segments)
-
     def set_name(self, new_name: str) -> None:
         self.parent.wires[new_name] = self.parent.wires.pop(self.name)
         super().set_name(new_name)
