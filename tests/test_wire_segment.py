@@ -127,6 +127,9 @@ def test_eq(wire_segment: WireSegment) -> None:
     n2 = copy.deepcopy(wire_segment)
     assert wire_segment == n2
 
+    n2.port_segments.clear()
+    assert wire_segment != n2
+
     n3 = WireSegment(name='42', wire=None)
     assert wire_segment != n3
 

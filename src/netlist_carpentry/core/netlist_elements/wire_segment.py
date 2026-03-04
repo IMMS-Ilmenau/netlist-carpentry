@@ -50,7 +50,9 @@ class WireSegment(_Segment, BaseModel):
             return NotImplemented
         if not super().__eq__(value):
             return False
-        return (not self.has_parent and not value.has_parent) or (self.parent.path == value.parent.path)
+        same_parents = (not self.has_parent and not value.has_parent) or (self.parent.path == value.parent.path)
+        same_port_segments = {ps.path for ps in value.port_segments} == {ps.path for ps in self.port_segments}
+        return same_parents and same_port_segments
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         if not self.has_parent:

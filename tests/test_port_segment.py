@@ -78,6 +78,19 @@ def test_port_segment_basics(port_segment: PortSegment, const_port_segment: Port
     assert port_segment.can_carry_signal
 
 
+def test_eq(port_segment: PortSegment) -> None:
+    assert port_segment == port_segment
+
+    w2 = port_segment.model_copy(deep=True)
+    assert w2 == port_segment
+    assert port_segment == w2
+
+    w3 = port_segment.model_copy(deep=True)
+    w3.set_ws_path('a.b.c')
+    assert not w3 == port_segment
+    assert not port_segment == w3
+
+
 def test_hierarchy_level(standard_port_in: Port[Instance]) -> None:
     assert standard_port_in.hierarchy_level == 1
     assert standard_port_in[0].hierarchy_level == 2

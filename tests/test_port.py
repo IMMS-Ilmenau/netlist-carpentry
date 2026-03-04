@@ -100,6 +100,32 @@ def test_port_iter(standard_port_in: Port[Instance], standard_port_out: Port[Mod
         assert standard_port_out[idx] == seg
 
 
+def test_eq(standard_port_in: Port[Instance]) -> None:
+    p1 = standard_port_in.model_copy(deep=True)
+    assert standard_port_in == p1
+
+    p2 = Port(name='wrong_path', direction=Direction.IN, module_or_instance=None)
+    assert standard_port_in != p2
+
+    p3 = 'wrong_type'
+    assert standard_port_in != p3
+    assert standard_port_in.__eq__(p3) == NotImplemented
+
+    p4 = standard_port_in.model_copy(deep=True)
+    assert p4 == standard_port_in
+    assert standard_port_in == p4
+
+    p5 = standard_port_in.model_copy(deep=True)
+    p5[0].set_ws_path('a.b.c')
+    assert not p5 == standard_port_in
+    assert not standard_port_in == p5
+
+    p6 = standard_port_in.model_copy(deep=True)
+    p6.segments.clear()
+    assert not p6 == standard_port_in
+    assert not standard_port_in == p6
+
+
 def test_port_parent_init() -> None:
     with pytest.raises(ValidationError):
         Port(name='abc', direction=Direction.IN, module_or_instance=NetlistElement(name='foo'))

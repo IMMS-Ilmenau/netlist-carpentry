@@ -73,7 +73,8 @@ class Wire(NetlistElement, BaseModel):
             return NotImplemented
         if not super().__eq__(value):
             return False
-        return self.segments == value.segments
+        same_parents = (not self.has_parent and not value.has_parent) or (self.parent.path == value.parent.path)
+        return same_parents and self.segments == value.segments
 
     @property
     def path(self) -> WirePath:

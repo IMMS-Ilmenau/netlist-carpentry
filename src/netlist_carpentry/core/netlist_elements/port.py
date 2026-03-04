@@ -98,6 +98,14 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
     def __iter__(self) -> Generator[Tuple[int, PortSegment], None, None]:  # type: ignore[override]
         return iter(s for s in self.segments.items())
 
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, Port):
+            return NotImplemented
+        if not super().__eq__(value):
+            return False
+        same_parents: bool = (not self.has_parent and not value.has_parent) or (self.parent.path == value.parent.path)  # type: ignore[misc]
+        return same_parents and self.segments == value.segments
+
     @property
     def path(self) -> PortPath:
         """

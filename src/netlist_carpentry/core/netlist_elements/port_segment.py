@@ -45,9 +45,12 @@ class PortSegment(_Segment, BaseModel):
     port: Optional[NetlistElement]
 
     def __eq__(self, value: object) -> bool:
-        if isinstance(value, PortSegment):
-            return self.raw_path == value.raw_path and self.raw_ws_path == value.raw_ws_path
-        return False
+        if not isinstance(value, PortSegment):
+            return NotImplemented
+        if not super().__eq__(value):
+            return False
+        same_parents = (not self.has_parent and not value.has_parent) or (self.parent.path == value.parent.path)
+        return same_parents and self.ws_path == value.ws_path
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         if not self.has_parent:

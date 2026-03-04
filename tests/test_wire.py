@@ -1,5 +1,4 @@
 # mypy: disable-error-code="unreachable,comparison-overlap"
-import copy
 import os
 
 import pytest
@@ -87,15 +86,29 @@ def test_wire_iter(standard_wire: Wire) -> None:
 
 
 def test_eq(standard_wire: Wire) -> None:
-    n2 = copy.deepcopy(standard_wire)
-    assert standard_wire == n2
+    w1 = standard_wire.model_copy(deep=True)
+    assert standard_wire == w1
 
-    n3 = Wire(name='wrong_path', module=None)
-    assert standard_wire != n3
+    w2 = Wire(name='wrong_path', module=None)
+    assert standard_wire != w2
 
-    n4 = 'wrong_type'
-    assert standard_wire != n4
-    assert standard_wire.__eq__(n4) == NotImplemented
+    w3 = 'wrong_type'
+    assert standard_wire != w3
+    assert standard_wire.__eq__(w3) == NotImplemented
+
+    w4 = standard_wire.model_copy(deep=True)
+    assert w4 == standard_wire
+    assert standard_wire == w4
+
+    w5 = standard_wire.model_copy(deep=True)
+    w5[1].port_segments.clear()
+    assert not w5 == standard_wire
+    assert not standard_wire == w5
+
+    w6 = standard_wire.model_copy(deep=True)
+    w6.segments.clear()
+    assert not w6 == standard_wire
+    assert not standard_wire == w6
 
 
 def test_wire_parent_init() -> None:
