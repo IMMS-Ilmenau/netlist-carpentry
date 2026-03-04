@@ -25,6 +25,7 @@
   - Previous functionality can be restored by setting the "no_hierarchy" parameter to `True` (defaults to False)
 - Changed a bunch of Log messages log levels from "Info" to "Debug" to decrease console spam
 - `netlist_carpentry.Module.create_instance()` now automatically adds the given module to the circuit if a module definition is provided and a parent circuit is specified, raising an error if a module with the same name but different content already exists
+- `netlist_carpentry.Wire.connected_port_segments` now returns a dictionary, containing the connected port segments for each wire segment index
 
 ## FIXED
 - Fixed issue where `netlist_carpentry.Module.copy_instance()` would take very long because of excessive deepcopying
@@ -37,6 +38,7 @@
 - `netlist_carpentry.PortSegment.grandparent_name`: Use `netlist_carpentry.PortSegment.grandparent.name` instead
 - `netlist_carpentry.WireSegment.super_wire_name`: Use `netlist_carpentry.WireSegment.parent.name` instead
 - `netlist_carpentry.WireSegment.super_module_name`: Use `netlist_carpentry.WireSegment.grandparent.name` instead
+- `netlist_carpentry.Wire.nr_connected_port_segments`: Use `len(netlist_carpentry.Wire.connected_port_segments)` instead
 
 # Older Versions
 
