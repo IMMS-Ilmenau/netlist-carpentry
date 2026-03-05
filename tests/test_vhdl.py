@@ -5,9 +5,9 @@ import pytest
 from netlist_carpentry import read
 
 
-@pytest.mark.skipif(os.environ.get('CI_SKIP_EQY') == 'true', reason='OSS CAD SUITE missing in CI')
 def test_vhdl_simple_counter() -> None:
-    c = read('tests/files/vhdl/simple_counter.vhdl', source_paths=['~/oss_cad_suite/environment'])
+    source_path = 'oss-cad-suite/environment' if os.environ.get('CI_SKIP_EQY') == 'true' else '~/oss_cad_suite/environment'
+    c = read('tests/files/vhdl/simple_counter.vhdl', source_paths=[source_path])
     assert len(c) == 1
     assert c.has_top
     assert '§buf' in c.instances

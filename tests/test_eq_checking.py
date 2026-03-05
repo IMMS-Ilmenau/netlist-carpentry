@@ -62,7 +62,6 @@ def test_decentral_mux_eqy_creation() -> None:
     os.remove(eqy_path)
 
 
-@pytest.mark.skipif(os.environ.get('CI_SKIP_EQY') == 'true', reason='EQY missing in CI')
 def test_decentral_mux_eqy_run() -> None:
     name = 'decentral_mux'
     eqy_path = f'tests/files/gen/{name}.eqy'
