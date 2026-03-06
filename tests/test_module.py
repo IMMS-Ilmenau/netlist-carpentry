@@ -1693,6 +1693,43 @@ def test_flatten_recursive(dff_circuit: Circuit) -> None:
     assert len(top.get_instances(type='dff', fuzzy=True)) == dffs
 
 
+def test_flatten_instance(dff_circuit: Circuit) -> None:
+    from utils import save_results
+
+    from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
+
+    m2 = dff_circuit['M2']
+    m21 = dff_circuit['M21']
+    assert len(m2.submodules) == 2
+    assert m2.instances['m21'] in m2.submodules
+    assert m2.instances['m22'] in m2.submodules
+
+    dff = m21.instances_by_types['§dff'][0]
+    m21_inst = m2.instances['m21']
+    m21_conn = m21_inst.connections
+    m2.flatten_instance('m21')
+    save_results(P2V().module2v(m2), 'v')
+    assert len(m2.submodules) == 1
+    assert f'm21_{dff.name}' in m2.instances
+    dff_m2 = m2.instances[f'm21_{dff.name}']
+    assert dff_m2.ports['D'][0].raw_ws_path == m21_conn['A'][0].raw
+    assert dff_m2.ports['Q'][0].raw_ws_path == m21_conn['Y'][0].raw
+    assert dff_m2.ports['CLK'][0].raw_ws_path == m21_conn['CLK'][0].raw
+
+    orig = 'tests/files/dff_circuit.v'
+    flat = 'tests/files/gen/flat.v'
+    dff_circuit.write(flat, overwrite=True)
+    proc = run_equiv(orig, flat, 'Top', 'Top')
+    assert proc.returncode == 0
+
+    with pytest.raises(ObjectNotFoundError):
+        m2.flatten_instance('m21')
+
+    m2.flatten_instance(m2.instances['m22'])
+    assert len(m2.submodules) == 0
+    assert 'm22' not in m2.instances
+
+
 def test_optimize(connected_module: Module) -> None:
     assert len(connected_module.wires) == 12
     assert len(connected_module.instances) == 5
