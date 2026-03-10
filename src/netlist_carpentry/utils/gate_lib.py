@@ -589,6 +589,17 @@ class ShiftRight(ShiftGate, BaseModel):
 
 
 class ShiftX(ShiftGate, BaseModel):
+    """
+    A SHIFT-X gate.
+
+    A SHIFT-X gate is a gate that returns its first input shifted right or left by the number on the second input,
+    based on whether the second input is signed and negative or not.
+
+    Attributes:
+        name (str): The name of the gate instance.
+        instance_type (str): The type of the gate.
+    """
+
     instance_type: str = f'{CFG.id_internal}shiftx'
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
