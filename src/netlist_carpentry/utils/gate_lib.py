@@ -18,6 +18,7 @@ from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
 from netlist_carpentry import CFG, Direction, Instance, Port, Signal
+from netlist_carpentry.core.exceptions import CircuitStructureError
 from netlist_carpentry.utils.gate_lib_base_classes import (
     ArithmeticGate,
     BinaryGate,
@@ -585,6 +586,55 @@ class ShiftRight(ShiftGate, BaseModel):
         val_b = Signal.dict_to_int(self.ports['B'].signal_array, msb_first=self.ports['B'].msb_first)
         out_val = val_a >> val_b
         return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
+
+
+class ShiftX(ShiftGate, BaseModel):
+    instance_type: str = f'{CFG.id_internal}shiftx'
+
+    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+        """
+        Initializes the gate's ports and connections.
+
+        This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
+        """
+        a_width = int(self.parameters['A_WIDTH']) if 'A_WIDTH' in self.parameters else 1
+        b_width = int(self.parameters['B_WIDTH']) if 'B_WIDTH' in self.parameters else 1
+        y_width = int(self.parameters['Y_WIDTH']) if 'Y_WIDTH' in self.parameters else 1
+        self.connect('A', None, direction=Direction.IN, width=a_width)
+        self.connect('B', None, direction=Direction.IN, width=b_width)
+        self.connect('Y', None, direction=Direction.OUT, width=y_width)
+
+    @property
+    def verilog_template(self) -> str:
+        return 'assign {out} = {in1}[{in2} +: {width}];'
+
+    @property
+    def verilog_net_map(self) -> Dict[str, str]:
+        out_str = self.p2v(self.ports['Y'])
+        in1_str = self.p2v(self.ports['A'])
+        in2_str = self.p2v(self.ports['B'])
+        return {'Y': out_str, 'A': in1_str, 'B': in2_str}
+
+    @property
+    def verilog(self) -> str:
+        if any(self.ports['Y'][i].is_connected for i in self.ports['Y'].segments):
+            out = self.verilog_net_map['Y']
+            if not self.ports['A'].is_connected_1to1:
+                raise CircuitStructureError(f'Instance {self.raw_path} does not support bit slicing or concatenation for port A!')
+            in1, in2 = self._check_signal_signed(self.verilog_net_map['A'], self.verilog_net_map['B'])
+            width = self.output_port.width
+            return self.verilog_template.format(out=out, in1=in1, in2=in2, width=width)
+        return ''
+
+    def _check_signal_signed(self, a: str, b: str) -> Tuple[str, str]:
+        if self.a_signed:
+            a = f'$signed({a})'
+        if self.b_signed:
+            b = f'$signed({b})'
+        return (a, b)
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        return super()._calc_output(idx)  # TODO implement for indexed part-select operator
 
 
 class LogicAnd(BinaryNto1Gate, BaseModel):
