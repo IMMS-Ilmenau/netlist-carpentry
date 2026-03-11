@@ -18,7 +18,6 @@ from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
 from netlist_carpentry import CFG, Direction, Instance, Port, Signal
-from netlist_carpentry.core.exceptions import CircuitStructureError
 from netlist_carpentry.utils.gate_lib_base_classes import (
     ArithmeticGate,
     BinaryGate,
@@ -630,11 +629,19 @@ class ShiftX(ShiftGate, BaseModel):
     def verilog(self) -> str:
         if any(self.ports['Y'][i].is_connected for i in self.ports['Y'].segments):
             out = self.verilog_net_map['Y']
-            if not self.ports['A'].is_connected_1to1:
-                raise CircuitStructureError(f'Instance {self.raw_path} does not support bit slicing or concatenation for port A!')
             in1, in2 = self._check_signal_signed(self.verilog_net_map['A'], self.verilog_net_map['B'])
+            if not self.ports['A'].is_connected_1to1:
+                wdt = self.ports['A'].width
+                off = self.ports['A'].offset or 0
+                i = 0
+                while self.parent.name_occupied(f'{self.name}_A{i}'):
+                    i += 1
+                new_wire = f'wire [{wdt + off}:{off}] {f"{self.name}_A{i}"} = {self.verilog_net_map["A"]};\n'
+                in1 = f'{self.name}_A{i}'
+            else:
+                new_wire = ''
             width = self.output_port.width
-            return self.verilog_template.format(out=out, in1=in1, in2=in2, width=width)
+            return new_wire + self.verilog_template.format(out=out, in1=in1, in2=in2, width=width)
         return ''
 
     def _check_signal_signed(self, a: str, b: str) -> Tuple[str, str]:

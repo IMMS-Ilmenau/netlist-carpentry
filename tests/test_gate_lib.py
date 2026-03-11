@@ -9,7 +9,7 @@ from netlist_carpentry import WIRE_SEGMENT_X
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.enums.signal import Signal
-from netlist_carpentry.core.exceptions import CircuitStructureError, EvaluationError
+from netlist_carpentry.core.exceptions import EvaluationError
 from netlist_carpentry.core.netlist_elements.element_path import PortPath, WireSegmentPath
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
@@ -1093,8 +1093,7 @@ def test_shiftx_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    with pytest.raises(CircuitStructureError):
-        g.verilog
+    assert g.verilog == "wire [4:0] shiftx_inst_A0 = {wireA2, 2'bx1, wireA1[0]};\nassign wire = shiftx_inst_A0[{wireB[3], 1'bx, wireB[1:0]} +: 4];"
     simple_module.disconnect(g.ports['A'])
     simple_module.connect(simple_module.create_wire('w4', 4), g.ports['A'])
     assert g.verilog == "assign wire = w4[{wireB[3], 1'bx, wireB[1:0]} +: 4];"
