@@ -1,4 +1,4 @@
-# Changelog 0.3.5
+# Changelog 0.3.5 (2026-03-11)
 
 ## ADDED
 - `netlist_carpentry.NetlistElement.copy_object()` as a simple way to duplicate netlist elements (ports, wires, instances), whilst giving them a new name to prevent naming collisions
@@ -10,7 +10,16 @@
   - Yosys loads GHDL via `yosys -m ghdl`, which requires GHDL to be present in the PATH variable
   - The currently recommended way of reading VHDL files is to install and activate the OSS CAD SUITE (activation can be achieved by providing the path of the `oss_cad_suite/environment` script to the `source_paths` parameter)
   - Due to the sourcing mechanism, reading VHDL files is currently only supported on Linux systems
-- `netlist_carpentry.Module.equal_content()` to compare two modules whether they have the same content, ignoring metadata and only focusing on the structural aspects, i.e. ports, wires and instances
+- `netlist_carpentry.Module.equal_connections()` to compare two modules whether they have the same connections, ignoring metadata and only focusing on the structural aspects, i.e. whether ports, wires and instances have the same connections (WIP)
+- `netlist_carpentry.Circuit.flatten()` to flatten the whole circuit (supports deselecting/skipping modules) as a convenience extension to `netlist_carpentry.Module.flatten()`
+- `netlist_carpentry.Module.flatten_instance()` to flatten a single module instance ("shallow flattening", ignoring any submodules inside the module instance), such that the content of the module is pasted into the parent module (transferring previous instance connections directly into the module) and the instance itself is removed
+- `netlist_carpentry.Port.is_connected_1to1` property that is True if the port is connected completely `1:1` to a given wire
+  - The port and the wire must have the same width
+  - No index of the port is connected to another wire
+  - No index of the port is tied
+  - Connections indices between the port and the wire are in matching order (i.e. port[0]<=>wire[0], port[1]<=>wire[1], ...), offset is preserved
+  - If this property is true, the Verilog assignment matches `assign port = wire;` or `assign wire = port;`, i.e. without slicing or concatenation
+- `netlist_carpentry.utils.gate_lib.ShiftX` implementing the Yosys `$shiftx` cell, i.e. the Verilog index part-select expression, e.g. `assign Y = A[B +: 4]`, which assigns Y to `[A[B+3], A[B+2], A[B+1], A[B]]`
 
 
 ## CHANGED
@@ -32,6 +41,8 @@
 - Fixed crashes within `netlist_carpentry.Module.flatten()` method
 - Fixed issue in `netlist_carpentry.Module.optimize()` routine for D-FF with tied D signals
 - Minor runtime optimizations and internal improvements
+- Fixed issues with equality operations (e.g. `==` and `!=`) for `netlist_carpentry.Port`, `netlist_carpentry.Wire`, `netlist_carpentry.PortSegment` and `netlist_carpentry.WireSegment`
+- Fixed issues with support for techmaps when reading the Verilog files via Yosys, now also directly applying `pmux2mux.v` script to resolve pmux cells
 
 ## REMOVED
 - `netlist_carpentry.PortSegment.parent_name`: Use `netlist_carpentry.PortSegment.parent.name` instead
