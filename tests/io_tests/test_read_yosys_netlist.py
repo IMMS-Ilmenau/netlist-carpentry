@@ -490,6 +490,16 @@ def test_build_parameters(simple_reader: YNR) -> None:
     assert m.parameters['qux'] == 420
 
 
+def test_get_inst(hierarchical_reader: YNR) -> None:
+    inst = hierarchical_reader._get_inst('§nonexisting_cell', 'inst')
+    inst.module = Circuit(name='c').create_module('m')
+    assert inst.name == 'inst'
+    assert inst.instance_type == '§nonexisting_cell'
+    assert not inst.is_primitive
+    assert inst.is_blackbox
+    assert not inst.is_module_instance
+
+
 def test_instance_post_processing(hierarchical_reader: YNR) -> None:
     inst = ADFF(name='abc', instance_type='§adff', module=None)
     inst_data = {'parameters': {'ARST_VALUE': '001100'}}  # 12

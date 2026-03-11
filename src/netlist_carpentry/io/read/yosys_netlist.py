@@ -381,11 +381,12 @@ class YosysNetlistReader(AbstractReader):
     def _get_inst(self, type_str: str, inst_name: str) -> Instance:
         is_primitive = type_str[0] == CFG.id_internal
         if is_primitive and type_str not in self.module_definitions:
-            inst_cls: Instance = get(type_str)  # type:ignore
-            return inst_cls(name=inst_name, is_primitive=True, module=None)  # type:ignore
-        else:
-            self._module_instantiations.add(type_str)
-            return Instance(name=inst_name, instance_type=type_str, module=None)
+            inst_cls = get(type_str)
+            if inst_cls is not None:
+                return inst_cls(name=inst_name, is_primitive=True, module=None)  # type:ignore
+            LOG.warn(f'No matching gate found for seemingly primitive instance type {type_str}! Creating a blackbox instead...')
+        self._module_instantiations.add(type_str)
+        return Instance(name=inst_name, instance_type=type_str, module=None)
 
     def _dict_must_be_prepared(self, inst_type: str) -> int:
         return CFG.id_internal in inst_type and ('dff' in inst_type or 'mux' in inst_type)
