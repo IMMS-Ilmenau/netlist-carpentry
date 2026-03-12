@@ -83,6 +83,7 @@ def test_from_int() -> None:
     assert Signal.from_int(42) == {5: Signal.HIGH, 4: Signal.LOW, 3: Signal.HIGH, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.LOW}
     assert Signal.from_int(42, fixed_width=3) == {2: Signal.LOW, 1: Signal.HIGH, 0: Signal.LOW}
     assert Signal.from_int(-4) == {2: Signal.HIGH, 1: Signal.LOW, 0: Signal.LOW}
+    assert Signal.from_int(-4, fixed_width=5) == {4: Signal.HIGH, 3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.LOW}
 
 
 def test_to_int() -> None:
@@ -131,9 +132,12 @@ def test_from_bin() -> None:
 
 def test_to_bin() -> None:
     assert Signal.to_bin([]) == '0'
+    assert Signal.to_bin([], pad_value='1') == '1'
     assert Signal.to_bin([Signal.LOW]) == '0'
     assert Signal.to_bin([Signal.HIGH, Signal.LOW, Signal.HIGH, Signal.LOW, Signal.HIGH, Signal.LOW]) == '101010'
+    assert Signal.to_bin([Signal.HIGH, Signal.LOW, Signal.HIGH, Signal.LOW, Signal.HIGH, Signal.LOW], fixed_width=8) == '00101010'
     assert Signal.to_bin([Signal.HIGH, Signal.LOW, Signal.HIGH, Signal.LOW, Signal.HIGH, Signal.LOW], msb_first=False) == '010101'
+    assert Signal.to_bin([Signal.HIGH, Signal.LOW, Signal.HIGH, Signal.LOW, Signal.HIGH, Signal.LOW], msb_first=False, fixed_width=8) == '01010100'
     with pytest.raises(ValueError):
         Signal.to_bin([Signal.FLOATING])
     with pytest.raises(ValueError):
@@ -142,11 +146,14 @@ def test_to_bin() -> None:
 
 def test_dict_to_bin() -> None:
     assert Signal.dict_to_bin({}) == '0'
+    assert Signal.dict_to_bin({}, pad_value='1') == '1'
     assert Signal.dict_to_bin({0: Signal.LOW}) == '0'
     assert Signal.dict_to_bin({3: Signal.HIGH}) == '1000'
     sigs = {5: Signal.HIGH, 4: Signal.LOW, 3: Signal.HIGH, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.LOW}
     assert Signal.dict_to_bin(sigs) == '101010'
     assert Signal.dict_to_bin(sigs, msb_first=False) == '010101'
+    assert Signal.dict_to_bin(sigs, fixed_width=8) == '00101010'
+    assert Signal.dict_to_bin(sigs, msb_first=False, fixed_width=8) == '01010100'
     with pytest.raises(ValueError):
         Signal.dict_to_bin({0: Signal.FLOATING})
     with pytest.raises(ValueError):

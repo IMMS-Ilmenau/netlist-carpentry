@@ -279,7 +279,9 @@ class Signal(Enum):
         return sig_dict
 
     @staticmethod
-    def to_bin(sig_list: List['Signal'], msb_first: bool = True) -> str:
+    def to_bin(
+        sig_list: List['Signal'], msb_first: bool = True, fixed_width: Optional[PositiveInt] = None, pad_value: Literal['0', '1'] = '0'
+    ) -> str:
         """
         Converts a list of signals to a binary value.
 
@@ -290,6 +292,12 @@ class Signal(Enum):
         Args:
             sig_list (List[Signal]): A list of signals representing binary digits.
             msb_first (bool): Whether to interpret the bits as most significant bit first. Defaults to True.
+            fixed_width (Optional[PositiveInt], optional): The desired number of bits.
+                - If the resulting string is shorter than `fixed_width`, it is left-padded
+                  with '0' or '1' (depending on the signedness).
+                - If longer, it is truncated from the left (MSB side).
+                - Defaults to None, using the size of `signal_dict` as provided.
+            pad_value (Literal['0', '1'], optional): The value used for padding. May be either 0 or 1. Defaults to 0.
 
         Returns:
             int: The binary value represented by the signal list.
@@ -307,10 +315,12 @@ class Signal(Enum):
             dict is {2: Signal.HIGH, 1: Signal.UNDEFINED, 0: Signal.HIGH}!
         """
         # Since enumerate starts from 0, the dict is LSB-first, so 'msb_first' must be inverted
-        return Signal.dict_to_bin({i: s for i, s in enumerate(sig_list)}, not msb_first)
+        return Signal.dict_to_bin({i: s for i, s in enumerate(reversed(sig_list))}, msb_first, fixed_width, pad_value)
 
     @staticmethod
-    def dict_to_bin(signal_dict: Dict[int, 'Signal'], msb_first: bool = True) -> str:
+    def dict_to_bin(
+        signal_dict: Dict[int, 'Signal'], msb_first: bool = True, fixed_width: Optional[PositiveInt] = None, pad_value: Literal['0', '1'] = '0'
+    ) -> str:
         """
         Converts a dictionary of signals to a binary value.
 
@@ -321,6 +331,12 @@ class Signal(Enum):
         Args:
             signal_dict (Dict[int, Signal]): A dictionary of Signal enums representing binary digits, where keys represent bit positions.
             msb_first (bool): Whether to interpret the bits as most significant bit first. Defaults to True.
+            fixed_width (Optional[PositiveInt], optional): The desired number of bits.
+                - If the resulting string is shorter than `fixed_width`, it is left-padded
+                  with '0' or '1' (depending on the signedness).
+                - If longer, it is truncated from the left (MSB side).
+                - Defaults to None, using the size of `signal_dict` as provided.
+            pad_value (Literal['0', '1'], optional): The value used for padding. May be either 0 or 1. Defaults to 0.
 
         Returns:
             int: The binary value represented by the signal dictionary.
@@ -340,16 +356,17 @@ class Signal(Enum):
             dict is {2: Signal.HIGH, 1: Signal.UNDEFINED, 0: Signal.HIGH}!
         """
         if not signal_dict:
-            return '0'
+            return pad_value
         if any(s.is_undefined for s in signal_dict.values()):
             raise ValueError(
                 f'Cannot convert signals to integer or binary value: At least one entry is neither Signal.HIGH nor Signal.LOW, dict is {signal_dict}!'
             )
-        max_index = max(signal_dict.keys())
-        binary_list = ['0'] * (max_index + 1)
+        width = fixed_width or max(signal_dict.keys()) + 1
+        binary_list = [pad_value] * width
 
         for index, signal in signal_dict.items():
-            binary_list[index] = signal.value
+            if index < len(binary_list):
+                binary_list[index] = signal.value  # type: ignore[call-overload]
 
         if msb_first:
             binary_list.reverse()
