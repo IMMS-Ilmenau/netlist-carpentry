@@ -42,7 +42,6 @@ from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.wire_segment import WIRE_SEGMENT_0
 from netlist_carpentry.utils.gate_factory import adff, adffe
 from netlist_carpentry.utils.gate_lib import ADFFE, DFF, AndGate
-from netlist_carpentry.utils.log import LOG
 
 
 @pytest.fixture()
@@ -483,14 +482,6 @@ def test_substitute_instance(dff_module: Module) -> None:
     assert '§dff' in dff_module.instances_by_types
 
 
-def test_substitute_instance_silent(dff_module: Module) -> None:
-    dff = dff_module.instances_by_types['§dff'][0]
-    adffe = ADFFE(name='adffe_inst', parameters={'WIDTH': 4})
-    warns = LOG.warns_quantity
-    dff_module.substitute_instance(dff, adffe, silent=True)
-    assert LOG.warns_quantity == warns
-
-
 def test_add_instance_multi_type(standard_module: Module) -> None:
     assert len(standard_module.instances_by_types['§and']) == 1
 
@@ -585,7 +576,7 @@ def test_get_instances(standard_module: Module) -> None:
     assert i6 == []
 
     m2 = c.add_module(Module(name='m2'))
-    inst3 = m2.create_instance(c.add_module(Module(name='some_and')), instance_name='test_instance3')
+    inst3 = m2.create_instance(c.add_module(Module(name='some_and')), name='test_instance3')
     standard_module.create_instance(m2, 'inst2')
 
     i2 = standard_module.get_instances(name='test_instance', fuzzy=True)

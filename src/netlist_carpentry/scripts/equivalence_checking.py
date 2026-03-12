@@ -110,20 +110,22 @@ class EquivalenceChecking:
         Returns:
             subprocess.CompletedProcess: The result of the execution plus some metadata.
         """
-        self._create_eqy_file(overwrite)
+        if not self.script_path.exists() or overwrite:
+            self._create_eqy_file(overwrite)
         # Use the path if the given path is not None, otherwise use a temporary directory
         context = tempfile.TemporaryDirectory() if output_path is None else nullcontext(output_path)
         if output_path is not None:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
         with context as workdir:
-            if overwrite and os.path.exists(workdir):
-                shutil.rmtree(workdir, ignore_errors=True)
+            eqy_dir = workdir if output_path is not None else workdir + '/eqy'
+            if overwrite and os.path.exists(eqy_dir):
+                shutil.rmtree(eqy_dir, ignore_errors=True)
             dir_path = os.path.dirname(os.path.abspath(__file__))
             stdout = subprocess.PIPE if quiet else None
             stderr = subprocess.PIPE if quiet else None
             process = subprocess.run(
-                [f'{dir_path}/eqy.sh', str(self.script_path.resolve()), str(Path(workdir).resolve())], stdout=stdout, stderr=stderr
+                [f'{dir_path}/eqy.sh', str(self.script_path.resolve()), str(Path(eqy_dir).resolve())], stdout=stdout, stderr=stderr
             )
         return process
 

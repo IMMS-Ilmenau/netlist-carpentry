@@ -381,6 +381,34 @@ def test_connected_wires(standard_port_in: Port[Instance], standard_port_out: Po
     assert standard_port_out.connected_wires == {WirePath(raw='test_module1.wire1'), WirePath(raw='test_module1.d')}
 
 
+def test_is_connected_1to1() -> None:
+    m = Module(name='m')
+    w = m.create_wire('w', width=4, offset=4)
+    w2 = m.create_wire('w2', width=4, offset=4)
+    p = m.create_port('p', direction=Direction.IN, width=4, offset=2)
+    assert not p.is_connected_1to1
+    m.connect(w[4], p[2])
+    m.connect(w2[5], p[3])
+    assert not p.is_connected_1to1
+    m.disconnect(p[3])
+    m.connect(w[4], p[3])
+    assert not p.is_connected_1to1
+    m.disconnect(p[3])
+    m.connect(w[6], p[3])
+    assert not p.is_connected_1to1
+    m.disconnect(p[3])
+    m.connect(w[5], p[3])
+    m.connect(w[6], p[4])
+    m.connect(w[7], p[5])
+    assert p.is_connected_1to1
+    w.create_wire_segment(8)
+    assert not p.is_connected_1to1
+    w.remove_wire_segment(8)
+    assert p.is_connected_1to1
+    p.create_port_segment(6)
+    assert not p.is_connected_1to1
+
+
 def test_add_port_segment(standard_port_in: Port[Instance], locked_port: Port[Module]) -> None:
     seg2 = PortSegment(name='1', port=standard_port_in)
     added = standard_port_in._add_port_segment(seg2)

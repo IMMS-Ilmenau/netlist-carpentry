@@ -91,15 +91,13 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
     @overload
     def create_instance(
-        self, interface_definition: Type[T_INSTANCE], instance_name: Optional[str] = None, params: Optional[Dict[str, object]] = None
+        self, interface_definition: Type[T_INSTANCE], name: Optional[str] = None, params: Optional[Dict[str, object]] = None
     ) -> T_INSTANCE: ...
     @overload
-    def create_instance(
-        self, interface_definition: Module, instance_name: Optional[str] = None, params: Optional[Dict[str, object]] = None
-    ) -> Instance: ...
+    def create_instance(self, interface_definition: Module, name: Optional[str] = None, params: Optional[Dict[str, object]] = None) -> Instance: ...
 
     def create_instance(
-        self, interface_definition: Union[Module, Type[T_INSTANCE]], instance_name: Optional[str] = None, params: Optional[Dict[str, object]] = None
+        self, interface_definition: Union[Module, Type[T_INSTANCE]], name: Optional[str] = None, params: Optional[Dict[str, object]] = None
     ) -> Instance:
         """
         Creates an instance within this module based on the given interface definition, instance name and parameters.
@@ -117,7 +115,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Args:
             interface_definition (Union[Module, Instance]): The module whose interface is to be copied to the new instance.
                 Alternatively, the primitive instance **class**, whose interface is to be copied to the new instance.
-            instance_name (str): The target name of the instance to be created.
+            name (str): The target name of the instance to be created.
             params (Dict[str, object]): A dictionary containing parameters for the instance to be created
 
         Returns:
@@ -125,10 +123,10 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         if params is None:
             params = {}
-        if instance_name is None:
-            instance_name = self._get_generic_inst_name(interface_definition)
+        if name is None:
+            name = self._get_generic_inst_name(interface_definition)
         if isinstance(interface_definition, Module):
-            inst = Instance(name=instance_name, instance_type=interface_definition.name, module=self)
+            inst = Instance(name=name, instance_type=interface_definition.name, module=self)
             inst.parameters = params  # type: ignore
             for pname, p in interface_definition.ports.items():
                 inst.connect(pname, ws_path=None, direction=p.direction, width=p.width)
@@ -136,7 +134,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 if interface_definition.name not in self.circuit:
                     self.circuit.add_module(interface_definition)
         else:
-            inst = interface_definition(name=instance_name, module=self, parameters=params)  # type: ignore
+            inst = interface_definition(name=name, module=self, parameters=params)  # type: ignore
         return self.add_instance(inst)
 
     def _get_generic_inst_name(self, module_or_inst_cls: Union[Module, Type[Instance]]) -> str:
@@ -145,19 +143,19 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             self._inst_gen_i += 1
         return f'_{type_abbrev}_{self._inst_gen_i}_'
 
-    def copy_instance(self, instance: Union[str, Instance], instance_name: str, keep_inputs: bool = False) -> Instance:
+    def copy_instance(self, instance: Union[str, Instance], new_name: str, keep_inputs: bool = False) -> Instance:
         """
         Copies the given instance within this module.
 
         Takes either an Instance object or a string (which must be a name of an already existing instance within this module.
         The instance is then copied and is completely identical to the given instance (or the instance with the given name,
-        if a string is passed instead), except for the given `instance_name`.
+        if a string is passed instead), except for the given `name`.
         Also, all ports of the new instance are initially unconnected.
 
         Args:
             instance (Union[str, Instance]): The instance to copy. If a string is provided, it must be the name of an instance
                 that exists within this module.
-            instance_name (str): The name of the copied instance. Must be a name that is not already given to another instance.
+            new_name (str): The new name of the copied instance. Must be a name that is not already given to another instance.
             keep_inputs (bool, optional): Whether to disconnect the input ports of the instance (so it is entirely unconnected).
                 Defaults to True.
         """
@@ -165,7 +163,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             instance = self.instances[instance]
         tmp_m = instance.module
         instance.module = None  # Temporarily set to None, so no IdentifierConflicts arise when copying
-        new_instance = instance.copy_object(instance_name)
+        new_instance = instance.copy_object(new_name)
         instance.module = tmp_m
         new_instance.module = None
 
@@ -217,7 +215,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         new_instance.set_name(old_instance.name)
         self._substitute_connect(new_instance, connections)
 
-    def substitute_instance(self, old_instance: Union[str, Instance], new_instance: Instance, silent: bool = False) -> None:
+    def substitute_instance(self, old_instance: Union[str, Instance], new_instance: Instance) -> None:
         """Replaces an existing instance in the module with a new instance.
 
         This method validates the existence of the instance to be replaced
@@ -227,8 +225,6 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             old_instance (Union[str, Instance]): The instance to be replaced. Can be either the
                 instance name (str) or the Instance object itself.
             new_instance (Instance): The new instance (submodule or gate) to be inserted.
-            silent (bool, optional): If True, suppresses warnings during the reconnection
-                process if ports are left unconnected. Defaults to False.
 
         Raises:
             ObjectNotFoundError: If `old_instance` does not exist in the module.
@@ -248,9 +244,9 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 f'Error whilst replacing instance {old_instance} with {new_instance.raw_path}: '
                 + f'An instance with name {new_instance.name} already exists in module {self.name}!'
             )
-        self._substitute_instance(self.instances[old_instance], new_instance, silent)
+        self._substitute_instance(self.instances[old_instance], new_instance)
 
-    def _substitute_instance(self, old_instance: Instance, new_instance: Instance, silent: bool) -> None:
+    def _substitute_instance(self, old_instance: Instance, new_instance: Instance) -> None:
         """Performs the internal logic of swapping instances and reconnecting nets.
 
         This method verifies port compatibility (presence and width), removes the
@@ -260,8 +256,6 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Args:
             old_instance (Instance): The Instance object to be removed.
             new_instance (Instance): The Instance object to be added.
-            silent (bool, optional): If False, logs a warning for every port in the new instance
-                that did not exist in the old instance and is consequently left unconnected.
 
         Raises:
             StructureMismatchError: If the new instance is missing ports that
@@ -313,19 +307,19 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             inst.module = None
         self.instances.remove(instance_name, locked=self.locked)
 
-    def get_instance(self, instance_name: str) -> Optional[Instance]:
+    def get_instance(self, name: str) -> Optional[Instance]:
         """
         Retrieves an instance by its name.
 
-        Guarded alternative to Module.instances[instance_name], with fallback to return None if not found.
+        Guarded alternative to Module.instances[name], with fallback to return None if not found.
 
         Args:
-            instance_name (str): The name of the instance to be retrieved.
+            name (str): The name of the instance to be retrieved.
 
         Returns:
             Optional[Instance]: The instance with the specified name if found, otherwise None.
         """
-        return self.instances.get(instance_name, None)
+        return self.instances.get(name, None)
 
     def get_instances(
         self, *, name: Optional[str] = None, type: Optional[str] = None, fuzzy: bool = False, recursive: bool = False
@@ -382,7 +376,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
     def create_port(
         self,
-        port_name: str,
+        name: str,
         direction: Direction = Direction.UNKNOWN,
         width: PositiveInt = 1,
         offset: NonNegativeInt = 0,
@@ -395,7 +389,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         If the port was not created (because it already exists), the provided wire segment paths are ignored.
 
         Args:
-            port_name (str): The name of the port to be created.
+            name (str): The name of the port to be created.
             direction (Direction, optional): The direction of the port. Defaults to Direction.UNKNOWN.
             width (PositiveInt, optional): The width of the port. Defaults to 1, which means the port is 1 bit wide.
             offset (NonNegativeInt, optional): The index offset for port slices. Defaults to 0, which means the port indexing starts at 0.
@@ -406,7 +400,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         # first use add/create wire and then call this function
         # this function automatically connects the ports to the wires provided in wire_connection_paths
-        p = Port(name=port_name, direction=direction, module_or_instance=self)
+        p = Port(name=name, direction=direction, module_or_instance=self)
         self.add_port(p)
         p.create_port_segments(width, offset)
         p.change_mutability(is_now_locked=is_locked)
@@ -427,19 +421,19 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             self.ports[port_name].module_or_instance = None
         self.ports.remove(port_name, locked=self.locked)
 
-    def get_port(self, port_name: str) -> Optional[Port[Module]]:
+    def get_port(self, name: str) -> Optional[Port[Module]]:
         """
         Retrieves a port by its name.
 
-        Guarded alternative to Module.port[port_name], with fallback to return None if not found.
+        Guarded alternative to Module.port[name], with fallback to return None if not found.
 
         Args:
-            port_name (str): The name of the port to be retrieved.
+            name (str): The name of the port to be retrieved.
 
         Returns:
             Port: The port with the specified name if found, otherwise None.
         """
-        return self.ports.get(port_name, None)
+        return self.ports.get(name, None)
 
     def get_ports(self, *, name: Optional[str] = None, direction: Optional[Direction] = None, fuzzy: bool = False) -> List[Port[Module]]:
         """
@@ -500,14 +494,14 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         wire.module = self
         return self.wires.add(wire.name, wire, locked=self.locked)
 
-    def create_wire(self, wire_name: Optional[str] = None, width: PositiveInt = 1, is_locked: bool = False, offset: NonNegativeInt = 0) -> Wire:
+    def create_wire(self, name: Optional[str] = None, width: PositiveInt = 1, is_locked: bool = False, offset: NonNegativeInt = 0) -> Wire:
         """
         Creates a new wire within the module.
 
         Returns the wire object, if it was created successfully (i.e. no wire with the same name exists already), or None otherwise.
 
         Args:
-            wire_name (Optional[str]): The name of the wire to be created. Defaults to None, in which case a generic wire is created.
+            name (Optional[str]): The name of the wire to be created. Defaults to None, in which case a generic wire is created.
                 In this case, the name of the wire is `_ncgen_{index}_`.
             width (PositiveInt, optional): The number of segments in the wire. Defaults to 1.
             is_locked (bool, optional): Whether the wire should be unchangeable after creation or not. Defaults to False.
@@ -516,9 +510,9 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Returns:
             Optional[Wire]: The wire if the wire was successfully created and added, None otherwise (if a wire with this name already exists).
         """
-        if not wire_name:
+        if not name:
             return self._create_generic_wire(width, is_locked, offset)
-        w = Wire(name=wire_name, module=self)
+        w = Wire(name=name, module=self)
         w.create_wire_segments(width, offset)
         w.change_mutability(is_now_locked=is_locked)
         return self.add_wire(w)
@@ -535,7 +529,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Returns:
             Wire: The created wire.
         """
-        while f'_ncgen_{self._wire_gen_i}_' in self.wires:
+        while self.name_occupied(f'_ncgen_{self._wire_gen_i}_'):
             self._wire_gen_i += 1
         gen_name = f'_ncgen_{self._wire_gen_i}_'
         return self.create_wire(gen_name, width=width, is_locked=is_locked, offset=offset)
@@ -555,19 +549,19 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             self.wires[wire_name].module = None
         self.wires.remove(wire_name, locked=self.locked)
 
-    def get_wire(self, wire_name: str) -> Optional[Wire]:
+    def get_wire(self, name: str) -> Optional[Wire]:
         """
         Retrieves a wire by its name.
 
-        Guarded alternative to Module.wires[wire_name], with fallback to return None if not found.
+        Guarded alternative to Module.wires[name], with fallback to return None if not found.
 
         Args:
-            wire_name (str): The name of the wire to be retrieved.
+            name (str): The name of the wire to be retrieved.
 
         Returns:
             Wire: The wire with the specified name if found, otherwise None.
         """
-        return self.wires.get(wire_name, None)
+        return self.wires.get(name, None)
 
     def get_wires(self, *, name: Optional[str] = None, fuzzy: bool = False) -> List[Wire]:
         """

@@ -80,7 +80,7 @@ def test_gate_lib_map(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import _build_gate_lib_map, _gate_lib_map
 
     _build_gate_lib_map()
-    assert len(_gate_lib_map) == 43  # Currently 43 gates in library
+    assert len(_gate_lib_map) == 44  # Currently 44 gates in library
 
 
 def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
@@ -1067,6 +1067,40 @@ def test_shr_gate(simple_module: Module) -> None:
     g.ports['B'].set_signals('0100')
     g.evaluate()
     assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.LOW}
+
+
+def test_shiftx_gate(simple_module: Module) -> None:
+    from netlist_carpentry.utils.gate_lib import ShiftX
+
+    g = ShiftX(name='shiftx_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
+    simple_module.add_instance(g)
+    assert g.name == 'shiftx_inst'
+    assert g.instance_type == '§shiftx'
+    assert g.verilog_template == 'assign {out} = {in1}[{in2} +: {width}];'
+    assert g.verilog == ''
+
+    g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
+    g.tie_port('A', index=1, sig_value='1')
+    # 2nd is missing on purpose: g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
+    g.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
+
+    g.modify_connection('B', WireSegmentPath(raw='a.wireB.0'), index=0)
+    g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
+    # 2nd is missing on purpose: g.modify_connection('B', WireSegmentPath(raw='a.wireB.2'), index=2)
+    g.modify_connection('B', WireSegmentPath(raw='a.wireB.3'), index=3)
+
+    g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
+    g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
+    g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
+    g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
+    assert g.verilog == "wire [4:0] shiftx_inst_A0 = {wireA2, 2'bx1, wireA1[0]};\nassign wire = shiftx_inst_A0[{wireB[3], 1'bx, wireB[1:0]} +: 4];"
+    simple_module.disconnect(g.ports['A'])
+    simple_module.connect(simple_module.create_wire('w4', 4), g.ports['A'])
+    assert g.verilog == "assign wire = w4[{wireB[3], 1'bx, wireB[1:0]} +: 4];"
+    g.parameters['A_SIGNED'] = True
+    assert g.verilog == "assign wire = $signed(w4)[{wireB[3], 1'bx, wireB[1:0]} +: 4];"
+    g.parameters['B_SIGNED'] = True  # B_SIGNED == 1 should not change Verilog output
+    assert g.verilog == "assign wire = $signed(w4)[$signed({wireB[3], 1'bx, wireB[1:0]}) +: 4];"
 
 
 def test_comparison_gate(simple_module: Module) -> None:

@@ -587,6 +587,74 @@ class ShiftRight(ShiftGate, BaseModel):
         return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
 
 
+class ShiftX(ShiftGate, BaseModel):
+    """
+    A SHIFT-X gate.
+
+    A SHIFT-X gate is a gate that returns its first input shifted right or left by the number on the second input,
+    based on whether the second input is signed and negative or not.
+
+    Attributes:
+        name (str): The name of the gate instance.
+        instance_type (str): The type of the gate.
+    """
+
+    instance_type: str = f'{CFG.id_internal}shiftx'
+
+    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+        """
+        Initializes the gate's ports and connections.
+
+        This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
+        """
+        a_width = int(self.parameters['A_WIDTH']) if 'A_WIDTH' in self.parameters else 1
+        b_width = int(self.parameters['B_WIDTH']) if 'B_WIDTH' in self.parameters else 1
+        y_width = int(self.parameters['Y_WIDTH']) if 'Y_WIDTH' in self.parameters else 1
+        self.connect('A', None, direction=Direction.IN, width=a_width)
+        self.connect('B', None, direction=Direction.IN, width=b_width)
+        self.connect('Y', None, direction=Direction.OUT, width=y_width)
+
+    @property
+    def verilog_template(self) -> str:
+        return 'assign {out} = {in1}[{in2} +: {width}];'
+
+    @property
+    def verilog_net_map(self) -> Dict[str, str]:
+        out_str = self.p2v(self.ports['Y'])
+        in1_str = self.p2v(self.ports['A'])
+        in2_str = self.p2v(self.ports['B'])
+        return {'Y': out_str, 'A': in1_str, 'B': in2_str}
+
+    @property
+    def verilog(self) -> str:
+        if any(self.ports['Y'][i].is_connected for i in self.ports['Y'].segments):
+            out = self.verilog_net_map['Y']
+            in1, in2 = self._check_signal_signed(self.verilog_net_map['A'], self.verilog_net_map['B'])
+            if not self.ports['A'].is_connected_1to1:
+                wdt = self.ports['A'].width
+                off = self.ports['A'].offset or 0
+                i = 0
+                while self.parent.name_occupied(f'{self.name}_A{i}'):
+                    i += 1
+                new_wire = f'wire [{wdt + off}:{off}] {f"{self.name}_A{i}"} = {self.verilog_net_map["A"]};\n'
+                in1 = f'{self.name}_A{i}'
+            else:
+                new_wire = ''
+            width = self.output_port.width
+            return new_wire + self.verilog_template.format(out=out, in1=in1, in2=in2, width=width)
+        return ''
+
+    def _check_signal_signed(self, a: str, b: str) -> Tuple[str, str]:
+        if self.a_signed:
+            a = f'$signed({a})'
+        if self.b_signed:
+            b = f'$signed({b})'
+        return (a, b)
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        return super()._calc_output(idx)  # TODO implement for indexed part-select operator
+
+
 class LogicAnd(BinaryNto1Gate, BaseModel):
     """
     A LOGIC-AND gate.

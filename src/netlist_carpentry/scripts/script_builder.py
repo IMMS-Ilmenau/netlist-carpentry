@@ -26,7 +26,7 @@ def _yosys_read_cmd(input_file_paths: List[Path]) -> str:
         if input_file_path.is_dir():
             raise IsADirectoryError('Input file path is a directory!')
         file_ext = input_file_path.suffix.lstrip('.').lower()
-        if file_ext == 'vhdl':
+        if file_ext == 'vhdl' or file_ext == 'vhd':
             read_lst.append(f'ghdl -read {input_file_path.expanduser().resolve()}')
         else:
             sv_ext = '-sv ' if file_ext == 'sv' else ''
@@ -41,6 +41,12 @@ def _source_files_cmd(source_paths: List[str]) -> str:
         path.chmod(path.stat().st_mode | 0o111)
         source_lst.append(f'source {path}\n')
     return ''.join(source_lst)
+
+
+def _get_techmap_paths(techmaps: List[Path]) -> List[str]:
+    map_lst = [str(Path(techmap).expanduser().resolve()) for techmap in techmaps]
+    pmux_map = str(Path(__file__).parent.resolve()) + '/hdl/pmux2mux.v'
+    return [*map_lst, pmux_map]
 
 
 def build_script(
@@ -78,13 +84,13 @@ def build_script(
             If True, the yosys "hierarchy" path is skipped. Defaults to False.
     """
     source_files = _source_files_cmd(source_paths or [])
-    vhdl_given = any(fpath.suffix == '.vhdl' for fpath in input_file_paths)
+    vhdl_given = any(fpath.suffix == '.vhdl' or fpath.suffix == '.vhd' for fpath in input_file_paths)
     modules = '-m ghdl ' if vhdl_given else ''
     read_str = _yosys_read_cmd(input_file_paths)
     top = f'-top {top}' if top else '-auto-top' if not no_hierarchy else ''
     hierarchy = f'hierarchy {top} -libdir .'
     memory = 'memory' if process_memory else ''
-    techmaps = '\n'.join(f'techmap -map {techmap.expanduser().resolve()}\n' for techmap in techmap_paths)
+    techmaps = '\n'.join(f'techmap -map {Path(techmap).expanduser().resolve()}\n' for techmap in _get_techmap_paths(techmap_paths))
     insbuf_str = 'insbuf; proc' if insbuf else ''
     write_str = f'write_json {output_file_path.expanduser().resolve()}'
     yosys = verilog_template.format(

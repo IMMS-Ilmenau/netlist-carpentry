@@ -378,7 +378,7 @@ class GateTreeBuilder:
             return self.boundary.output
         if self.available_wires:
             return self.available_wires.pop(0)
-        wire = self.module.create_wire(wire_name=f'{name}_Y', width=1)
+        wire = self.module.create_wire(name=f'{name}_Y', width=1)
         return WireSegmentPath(raw=f'{self.module.name}.{wire.name}.0')
 
 

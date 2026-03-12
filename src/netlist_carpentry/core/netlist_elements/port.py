@@ -488,6 +488,30 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         # "if" clause skips constant wire segments, which do not have a parent by definition
         return set(ws.parent for ws in self.connected_wire_segments.values() if ws.has_parent())
 
+    @property
+    def is_connected_1to1(self) -> bool:
+        """
+        True if this port is connected completely to a certain wire.
+
+        True if this conforms to the Verilog expression `assign port = wire;`.
+        False, if this conforms to other cases including bit slicing or concatenation, e.g.
+        `assign port[1:0] = {wire1, wire2}`
+        """
+        w = None
+        offset = self.offset or 0
+        for idx, ps in self:
+            if ps.is_tied:
+                return False
+            if w is None:
+                w = ps.ws.parent
+                if w.width != self.width:
+                    return False
+            if w is not ps.ws.parent:
+                return False
+            if idx - offset != ps.ws.index - (w.offset or 0):
+                return False
+        return True
+
     def set_name(self, new_name: str) -> None:
         old_name = self.name
         self.parent.ports[new_name] = self.parent.ports.pop(old_name)  # type: ignore[assignment]
