@@ -593,13 +593,21 @@ class Circuit(BaseModel):
                 m.flatten(skip_type=skip_modules)
 
     def create_blackbox_modules(self) -> None:
+        """Implements empty modules for all blackbox cells.
+
+        This method iterates through all instances of this circuit and checks whether the instance is a blackbox cell.
+        If the instance is a blackbox, this method creates a module with the same interface as the blackbox cell,
+        i.e. the same ports while assuming directions based on common output port names (e.g. `Q`, `QN`, `Y` are common output names).
+        Every port with a name that is not a common output port name is automatically assumed to be an input port.
+        """
+        common_output_port_names = {'Q', 'QN', 'Y'}
         for m in list(self):
             for inst in m.instances.values():
                 if inst.is_blackbox and inst.instance_type not in self:
                     m = self.create_module(inst.instance_type)
                     for pname in inst.ports:
-                        dir = Direction.OUT if pname == 'Y' or pname == 'Q' else Direction.IN
-                        m.create_port(pname, dir)
+                        direction = Direction.OUT if pname in common_output_port_names else Direction.IN
+                        m.create_port(pname, direction)
 
     @overload
     def set_signal(self, path: str, signal_value: LogicLevel) -> None: ...
