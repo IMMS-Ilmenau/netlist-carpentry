@@ -53,6 +53,15 @@ class PrimitiveGate(Instance, BaseModel):
         self.parameters['Y_WIDTH'] = new_width
 
     @property
+    def a_width(self) -> PositiveInt:
+        """Width of the gate's `A` port."""
+        return int(self.parameters['A_WIDTH']) if 'A_WIDTH' in self.parameters else self.width  # type: ignore[misc]
+
+    @a_width.setter
+    def a_width(self, new_width: PositiveInt) -> None:
+        self.parameters['A_WIDTH'] = new_width
+
+    @property
     def is_combinational(self) -> bool:
         """Whether instances of this gate are considered combinational gates.
 

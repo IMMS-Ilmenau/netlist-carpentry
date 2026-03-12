@@ -98,6 +98,19 @@ def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
     with pytest.raises(NotImplementedError):
         primitive_gate.verilog_net_map
 
+    assert primitive_gate.width == 1
+    assert primitive_gate.a_width == 1
+
+    primitive_gate.width = 8
+    assert primitive_gate.width == 8
+    assert primitive_gate.a_width == 8
+
+    primitive_gate.a_width = 4
+    assert primitive_gate.width == 8
+    assert primitive_gate.a_width == 4
+    assert primitive_gate.parameters['Y_WIDTH'] == 8
+    assert primitive_gate.parameters['A_WIDTH'] == 4
+
 
 def test_unary_gate(unary_gate: UnaryGate) -> None:
     assert unary_gate.name == 'unary_gate_inst'
@@ -119,6 +132,14 @@ def test_unary_gate(unary_gate: UnaryGate) -> None:
     assert unary_gate.signal_out(0) is Signal.UNDEFINED
     unary_gate.sync_parameters()
     assert unary_gate.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 1, 'Y_WIDTH': 1}
+
+    unary_gate.width = 4
+    assert unary_gate.width == 4
+    assert unary_gate.a_width == 1
+
+    unary_gate.a_width = 8
+    assert unary_gate.width == 4
+    assert unary_gate.a_width == 8
 
     unary_gate.ports['A'].parameters['signed'] = True
     warns = LOG.warns_quantity
