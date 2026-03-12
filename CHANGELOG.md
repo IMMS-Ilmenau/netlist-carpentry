@@ -1,5 +1,7 @@
 # Changelog 0.3.6
 
+## FIXED
+- Minor fixes with equivalence checking structure, if "overwrite" parameter is False
 
 # Older Versions
 
