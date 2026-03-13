@@ -14,7 +14,7 @@ from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
 from netlist_carpentry import CFG, LOG, Direction, Instance, Module, Port, Signal
-from netlist_carpentry.core.exceptions import EvaluationError
+from netlist_carpentry.core.exceptions import EvaluationError, UnsupportedOperationError
 from netlist_carpentry.core.netlist_elements.port import ANY_PORT
 from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2OBJ, WIRE_SEGMENT_X, WireSegment
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
@@ -282,6 +282,10 @@ class UnaryGate(PrimitiveGate, BaseModel):
     def a_signed(self) -> bool:
         """The signedness of input port A."""
         return self._fix_signedness_mismatch('A', 'A_SIGNED')
+
+    @property
+    def b_width(self) -> PositiveInt:
+        raise UnsupportedOperationError('Unary gates do not have a port B and thus no b_width!')
 
     @property
     def output_port(self) -> Port[Instance]:

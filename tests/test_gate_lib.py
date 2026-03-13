@@ -9,7 +9,7 @@ from netlist_carpentry import WIRE_SEGMENT_X
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.enums.signal import Signal
-from netlist_carpentry.core.exceptions import EvaluationError
+from netlist_carpentry.core.exceptions import EvaluationError, UnsupportedOperationError
 from netlist_carpentry.core.netlist_elements.element_path import PortPath, WireSegmentPath
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
@@ -140,6 +140,8 @@ def test_unary_gate(unary_gate: UnaryGate) -> None:
     unary_gate.ports['A'].create_port_segments(7, 1)
     assert unary_gate.y_width == 4
     assert unary_gate.a_width == 8
+    with pytest.raises(UnsupportedOperationError):
+        unary_gate.b_width
 
     unary_gate.ports['A'].parameters['signed'] = True
     warns = LOG.warns_quantity
