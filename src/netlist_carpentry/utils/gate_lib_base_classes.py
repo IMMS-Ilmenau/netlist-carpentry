@@ -46,20 +46,20 @@ class PrimitiveGate(Instance, BaseModel):
     @property
     def width(self) -> PositiveInt:
         """Width of the gate, based on a certain port's width, depending on the actual gate."""
+        self._try_sync_parameters()
         return int(self.parameters['Y_WIDTH']) if 'Y_WIDTH' in self.parameters else 1  # type: ignore[misc]
-
-    @width.setter
-    def width(self, new_width: PositiveInt) -> None:
-        self.parameters['Y_WIDTH'] = new_width
 
     @property
     def a_width(self) -> PositiveInt:
         """Width of the gate's `A` port."""
+        self._try_sync_parameters()
         return int(self.parameters['A_WIDTH']) if 'A_WIDTH' in self.parameters else self.width  # type: ignore[misc]
 
-    @a_width.setter
-    def a_width(self, new_width: PositiveInt) -> None:
-        self.parameters['A_WIDTH'] = new_width
+    @property
+    def b_width(self) -> PositiveInt:
+        """Width of the gate's `B` port."""
+        self._try_sync_parameters()
+        return int(self.parameters['B_WIDTH']) if 'B_WIDTH' in self.parameters else self.width  # type: ignore[misc]
 
     @property
     def is_combinational(self) -> bool:
@@ -125,6 +125,12 @@ class PrimitiveGate(Instance, BaseModel):
         ```
         """
         raise NotImplementedError(f'Not implemented in base class {self.__class__.__name__}!')
+
+    def _try_sync_parameters(self) -> None:
+        try:
+            self.sync_parameters()
+        except KeyError:  # Happens during initialization phase, where ports do not have a width yet
+            pass
 
     def sync_parameters(self) -> InstanceParams:
         return self.parameters

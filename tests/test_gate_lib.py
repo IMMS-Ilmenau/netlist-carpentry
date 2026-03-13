@@ -101,11 +101,11 @@ def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
     assert primitive_gate.width == 1
     assert primitive_gate.a_width == 1
 
-    primitive_gate.width = 8
+    primitive_gate.parameters['Y_WIDTH'] = 8
     assert primitive_gate.width == 8
     assert primitive_gate.a_width == 8
 
-    primitive_gate.a_width = 4
+    primitive_gate.parameters['A_WIDTH'] = 4
     assert primitive_gate.width == 8
     assert primitive_gate.a_width == 4
     assert primitive_gate.parameters['Y_WIDTH'] == 8
@@ -133,11 +133,11 @@ def test_unary_gate(unary_gate: UnaryGate) -> None:
     unary_gate.sync_parameters()
     assert unary_gate.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 1, 'Y_WIDTH': 1}
 
-    unary_gate.width = 4
+    unary_gate.ports['Y'].create_port_segments(3, 1)
     assert unary_gate.width == 4
     assert unary_gate.a_width == 1
 
-    unary_gate.a_width = 8
+    unary_gate.ports['A'].create_port_segments(7, 1)
     assert unary_gate.width == 4
     assert unary_gate.a_width == 8
 
