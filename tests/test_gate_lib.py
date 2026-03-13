@@ -80,7 +80,7 @@ def test_gate_lib_map(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import _build_gate_lib_map, _gate_lib_map
 
     _build_gate_lib_map()
-    assert len(_gate_lib_map) == 44  # Currently 44 gates in library
+    assert len(_gate_lib_map) == 45  # Currently 45 gates in library
 
 
 def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
@@ -280,6 +280,62 @@ def test_not_gate(simple_module: Module) -> None:
     _test_signal_conf1_n(g, Signal.LOW, Signal.UNDEFINED, Signal.HIGH)
     _test_signal_conf1_n(g, Signal.HIGH, Signal.HIGH, Signal.LOW)
     _test_signal_conf1_n(g, Signal.FLOATING, Signal.LOW, Signal.UNDEFINED)
+
+
+def test_pos_gate(simple_module: Module) -> None:
+    from netlist_carpentry.utils.gate_lib import PosGate
+
+    g = PosGate(name='pos_inst', parameters={'Y_WIDTH': 8, 'A_WIDTH': 4}, module=simple_module)
+    assert g.verilog_template == 'assign {out} = +{in1};'
+    assert g.name == 'pos_inst'
+    assert g.instance_type == '§pos'
+
+    simple_module.create_wire('wire2_4', width=4)
+
+    g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
+    g.tie_port('A', index=1, sig_value='1')
+    # 2nd is missing on purpose: g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
+    g.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
+
+    g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
+    g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
+    # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
+    g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
+    g.modify_connection('Y', WireSegmentPath(raw='a.wire2_4.0'), index=4)
+    g.modify_connection('Y', WireSegmentPath(raw='a.wire2_4.1'), index=5)
+    g.modify_connection('Y', WireSegmentPath(raw='a.wire2_4.2'), index=6)
+    g.modify_connection('Y', WireSegmentPath(raw='a.wire2_4.3'), index=7)
+    assert g.verilog == "assign {wire2_4, wire[3], wire[1:0]} = +{wireA2, 1'b1, wireA1[0]};"
+
+    g.ports['A'][0].set_signal(Signal.HIGH)
+    g.ports['A'][2].tie_signal(Signal.HIGH)
+    g.ports['A'][3].set_signal(Signal.LOW)  # 0111 -> 7 ==> pos makes it sign-extended ==> 00000111
+    g.evaluate()
+    assert g.output_port.signal_array == {
+        0: Signal.HIGH,
+        1: Signal.HIGH,
+        2: Signal.HIGH,
+        3: Signal.LOW,
+        4: Signal.LOW,
+        5: Signal.LOW,
+        6: Signal.LOW,
+        7: Signal.LOW,
+    }
+    g.parameters['A_SIGNED'] = True
+    g.ports['A'][0].set_signal(Signal.HIGH)
+    g.ports['A'][2].tie_signal(Signal.HIGH)
+    g.ports['A'][3].set_signal(Signal.HIGH)  # 1111 -> -1 ==> pos makes it sign-extended ==> 11111111
+    g.evaluate()
+    assert g.output_port.signal_array == {
+        0: Signal.HIGH,
+        1: Signal.HIGH,
+        2: Signal.HIGH,
+        3: Signal.HIGH,
+        4: Signal.HIGH,
+        5: Signal.HIGH,
+        6: Signal.HIGH,
+        7: Signal.HIGH,
+    }
 
 
 def test_neg_gate(simple_module: Module) -> None:

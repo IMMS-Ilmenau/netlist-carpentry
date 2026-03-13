@@ -100,6 +100,35 @@ class NotGate(UnaryGate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
+class PosGate(UnaryGate, BaseModel):
+    """
+    An arithmetic plus gate.
+
+    An arithmetic plus gate is a gate that just returns its input signal, sign extended.
+
+    Attributes:
+        name (str): The name of the gate instance.
+        instance_type (str): The type of the gate.
+    """
+
+    instance_type: str = f'{CFG.id_internal}pos'
+
+    @property
+    def verilog_template(self) -> str:
+        return 'assign {out} = +{in1};'
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        """
+        Calculates the gate's output signal.
+
+        For an arithmetic negator gate, the output signal is the two's complement of the input signal.
+        """
+        if all(self.signal_in(i).is_defined for i in self.input_port.segments):
+            int_val = Signal.dict_to_int(self.input_port.signal_array, msb_first=self.input_port.msb_first, signed=self.a_signed)
+            return Signal.from_int(int_val, msb_first=self.output_port.msb_first, fixed_width=self.output_port.width)
+        return {idx: Signal.UNDEFINED}
+
+
 class NegGate(UnaryGate, BaseModel):
     """
     An arithmetic negator gate.
