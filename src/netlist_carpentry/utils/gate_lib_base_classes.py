@@ -362,10 +362,6 @@ class ReduceGate(UnaryGate, BaseModel):
         """Width of the gate, based on a certain port's width, depending on the actual gate."""
         return self.parameters['A_WIDTH'] if 'A_WIDTH' in self.parameters else 1
 
-    @y_width.setter
-    def y_width(self, new_width: PositiveInt) -> None:
-        self.parameters['A_WIDTH'] = new_width
-
     @property
     def splittable(self) -> bool:
         return False
@@ -505,7 +501,7 @@ class ShiftGate(BinaryGate, BaseModel):
         return a, b
 
 
-class ArithmeticGate(PrimitiveGate, BaseModel):
+class ArithmeticGate(BinaryGate, BaseModel):
     """
     A base class for arithmetic gates.
 
@@ -545,16 +541,9 @@ class ArithmeticGate(PrimitiveGate, BaseModel):
         """The signedness of input port B."""
         return self._fix_signedness_mismatch('B', 'B_SIGNED')
 
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
-        """
-        Initializes the gate's ports and connections.
-
-        This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
-        """
-        self.connect('A', None, direction=Direction.IN, width=self.a_width)
-        self.connect('B', None, direction=Direction.IN, width=self.b_width)
-        self.connect('Y', None, direction=Direction.OUT, width=self.y_width)
-        return super().model_post_init(__context)
+    @property
+    def splittable(self) -> bool:
+        return False
 
     def _check_signal_signed(self, a: str, b: str) -> Tuple[str, str]:
         if self.a_signed:
@@ -634,10 +623,6 @@ class BinaryNto1Gate(BinaryGate, BaseModel):
         """Width of the gate, based on a certain port's width, depending on the actual gate."""
         return self.parameters['A_WIDTH'] if 'A_WIDTH' in self.parameters else 1
 
-    @y_width.setter
-    def y_width(self, new_width: PositiveInt) -> None:
-        self.parameters['A_WIDTH'] = new_width
-
     @property
     def splittable(self) -> bool:
         return False
@@ -679,10 +664,6 @@ class StorageGate(PrimitiveGate, BaseModel):
     @property
     def y_width(self) -> PositiveInt:
         return self.parameters['WIDTH'] if 'WIDTH' in self.parameters else 1
-
-    @y_width.setter
-    def y_width(self, new_width: PositiveInt) -> None:
-        self.parameters['WIDTH'] = new_width
 
     @property
     def is_combinational(self) -> bool:
