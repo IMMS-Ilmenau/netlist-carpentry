@@ -1568,8 +1568,9 @@ def test_split_instance(dff_module: Module) -> None:
     assert dff.name not in dff_module.instances
     assert len(dffs) == 4
     for idx, inst in dffs.items():
+        assert isinstance(inst, DFF)
         assert inst.name in dff_module.instances
-        assert inst.width == 1
+        assert inst.data_width == 1
         assert inst.ports['D'].width == 1
         assert inst.ports['CLK'].width == 1
         assert inst.ports['Q'].width == 1

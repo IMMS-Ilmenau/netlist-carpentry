@@ -44,7 +44,7 @@ class PrimitiveGate(Instance, BaseModel):
     """Parameters of this gate, e.g. data width, signedness or polarity."""
 
     @property
-    def width(self) -> PositiveInt:
+    def y_width(self) -> PositiveInt:
         """Width of the gate, based on a certain port's width, depending on the actual gate."""
         self._try_sync_parameters()
         return int(self.parameters['Y_WIDTH']) if 'Y_WIDTH' in self.parameters else 1  # type: ignore[misc]
@@ -53,13 +53,13 @@ class PrimitiveGate(Instance, BaseModel):
     def a_width(self) -> PositiveInt:
         """Width of the gate's `A` port."""
         self._try_sync_parameters()
-        return int(self.parameters['A_WIDTH']) if 'A_WIDTH' in self.parameters else self.width  # type: ignore[misc]
+        return int(self.parameters['A_WIDTH']) if 'A_WIDTH' in self.parameters else self.y_width  # type: ignore[misc]
 
     @property
     def b_width(self) -> PositiveInt:
         """Width of the gate's `B` port."""
         self._try_sync_parameters()
-        return int(self.parameters['B_WIDTH']) if 'B_WIDTH' in self.parameters else self.width  # type: ignore[misc]
+        return int(self.parameters['B_WIDTH']) if 'B_WIDTH' in self.parameters else self.y_width  # type: ignore[misc]
 
     @property
     def is_combinational(self) -> bool:
@@ -270,7 +270,7 @@ class UnaryGate(PrimitiveGate, BaseModel):
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
         self.connect('A', None, direction=Direction.IN, width=self.a_width)
-        self.connect('Y', None, direction=Direction.OUT, width=self.width)
+        self.connect('Y', None, direction=Direction.OUT, width=self.y_width)
         return super().model_post_init(__context)
 
     @property
@@ -354,16 +354,16 @@ class ReduceGate(UnaryGate, BaseModel):
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        self.connect('A', None, direction=Direction.IN, width=self.width)
+        self.connect('A', None, direction=Direction.IN, width=self.y_width)
         self.connect('Y', None, direction=Direction.OUT)
 
     @property
-    def width(self) -> PositiveInt:
+    def y_width(self) -> PositiveInt:
         """Width of the gate, based on a certain port's width, depending on the actual gate."""
         return self.parameters['A_WIDTH'] if 'A_WIDTH' in self.parameters else 1
 
-    @width.setter
-    def width(self, new_width: PositiveInt) -> None:
+    @y_width.setter
+    def y_width(self, new_width: PositiveInt) -> None:
         self.parameters['A_WIDTH'] = new_width
 
     @property
@@ -411,7 +411,7 @@ class BinaryGate(PrimitiveGate, BaseModel):
         """
         self.connect('A', None, direction=Direction.IN, width=self.a_width)
         self.connect('B', None, direction=Direction.IN, width=self.b_width)
-        self.connect('Y', None, direction=Direction.OUT, width=self.width)
+        self.connect('Y', None, direction=Direction.OUT, width=self.y_width)
         return super().model_post_init(__context)
 
     @property
@@ -553,7 +553,7 @@ class ArithmeticGate(PrimitiveGate, BaseModel):
         """
         self.connect('A', None, direction=Direction.IN, width=self.a_width)
         self.connect('B', None, direction=Direction.IN, width=self.b_width)
-        self.connect('Y', None, direction=Direction.OUT, width=self.width)
+        self.connect('Y', None, direction=Direction.OUT, width=self.y_width)
         return super().model_post_init(__context)
 
     def _check_signal_signed(self, a: str, b: str) -> Tuple[str, str]:
@@ -630,12 +630,12 @@ class BinaryNto1Gate(BinaryGate, BaseModel):
         self.connect('Y', None, direction=Direction.OUT)
 
     @property
-    def width(self) -> PositiveInt:
+    def y_width(self) -> PositiveInt:
         """Width of the gate, based on a certain port's width, depending on the actual gate."""
         return self.parameters['A_WIDTH'] if 'A_WIDTH' in self.parameters else 1
 
-    @width.setter
-    def width(self, new_width: PositiveInt) -> None:
+    @y_width.setter
+    def y_width(self, new_width: PositiveInt) -> None:
         self.parameters['A_WIDTH'] = new_width
 
     @property
@@ -670,18 +670,18 @@ class StorageGate(PrimitiveGate, BaseModel):
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        self.connect('D', None, direction=Direction.IN, width=self.width)
-        self.connect('Q', None, direction=Direction.OUT, width=self.width)
+        self.connect('D', None, direction=Direction.IN, width=self.y_width)
+        self.connect('Q', None, direction=Direction.OUT, width=self.y_width)
 
         self._curr_out = [Signal.UNDEFINED for i in range(self.data_width)]
         return super().model_post_init(__context)
 
     @property
-    def width(self) -> PositiveInt:
+    def y_width(self) -> PositiveInt:
         return self.parameters['WIDTH'] if 'WIDTH' in self.parameters else 1
 
-    @width.setter
-    def width(self, new_width: PositiveInt) -> None:
+    @y_width.setter
+    def y_width(self, new_width: PositiveInt) -> None:
         self.parameters['WIDTH'] = new_width
 
     @property
@@ -1086,8 +1086,8 @@ class ScanMixin(StorageGate):
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         super().model_post_init(__context)
         self.connect('SE', None, direction=Direction.IN)
-        self.connect('SI', None, direction=Direction.IN, width=self.width)
-        self.connect('SO', None, direction=Direction.OUT, width=self.width)
+        self.connect('SI', None, direction=Direction.IN, width=self.y_width)
+        self.connect('SO', None, direction=Direction.OUT, width=self.y_width)
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         if self.se_signal is Signal.HIGH:

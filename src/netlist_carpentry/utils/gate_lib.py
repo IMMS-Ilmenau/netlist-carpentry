@@ -928,18 +928,18 @@ class Multiplexer(PrimitiveGate, BaseModel):
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
         for i in range(1 << self.bit_width):
-            self.connect(f'D{i}', None, direction=Direction.IN, width=self.width)
+            self.connect(f'D{i}', None, direction=Direction.IN, width=self.y_width)
         self.connect('S', None, direction=Direction.IN, width=self.bit_width)
-        self.connect('Y', None, direction=Direction.OUT, width=self.width)
+        self.connect('Y', None, direction=Direction.OUT, width=self.y_width)
         return super().model_post_init(__context)
 
     @property
-    def width(self) -> PositiveInt:
+    def y_width(self) -> PositiveInt:
         """Width of the gate, based on a certain port's width, depending on the actual gate."""
         return self.parameters['WIDTH'] if 'WIDTH' in self.parameters else 1
 
-    @width.setter
-    def width(self, new_width: PositiveInt) -> None:
+    @y_width.setter
+    def y_width(self, new_width: PositiveInt) -> None:
         self.parameters['WIDTH'] = new_width
 
     @property
@@ -1093,7 +1093,7 @@ class Multiplexer(PrimitiveGate, BaseModel):
 
     def sync_parameters(self) -> MuxParams:
         super().sync_parameters()
-        self.parameters['WIDTH'] = self.width
+        self.parameters['WIDTH'] = self.y_width
         self.parameters['BIT_WIDTH'] = self.bit_width
         return self.parameters
 
@@ -1161,19 +1161,19 @@ class Demultiplexer(PrimitiveGate, BaseModel):
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        self.connect('D', None, direction=Direction.IN, width=self.width)
+        self.connect('D', None, direction=Direction.IN, width=self.y_width)
         self.connect('S', None, direction=Direction.IN, width=self.bit_width)
         for i in range(1 << self.bit_width):
-            self.connect(f'Y{i}', None, direction=Direction.OUT, width=self.width)
+            self.connect(f'Y{i}', None, direction=Direction.OUT, width=self.y_width)
         return super().model_post_init(__context)
 
     @property
-    def width(self) -> PositiveInt:
+    def y_width(self) -> PositiveInt:
         """Width of the gate, based on a certain port's width, depending on the actual gate."""
         return self.parameters['WIDTH'] if 'WIDTH' in self.parameters else 1
 
-    @width.setter
-    def width(self, new_width: PositiveInt) -> None:
+    @y_width.setter
+    def y_width(self, new_width: PositiveInt) -> None:
         self.parameters['WIDTH'] = new_width
 
     @property
@@ -1310,7 +1310,7 @@ class Demultiplexer(PrimitiveGate, BaseModel):
 
     def sync_parameters(self) -> MuxParams:
         super().sync_parameters()
-        self.parameters['WIDTH'] = self.width
+        self.parameters['WIDTH'] = self.y_width
         self.parameters['BIT_WIDTH'] = self.bit_width
         return self.parameters
 

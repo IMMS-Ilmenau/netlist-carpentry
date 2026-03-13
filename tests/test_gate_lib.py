@@ -98,15 +98,15 @@ def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
     with pytest.raises(NotImplementedError):
         primitive_gate.verilog_net_map
 
-    assert primitive_gate.width == 1
+    assert primitive_gate.y_width == 1
     assert primitive_gate.a_width == 1
 
     primitive_gate.parameters['Y_WIDTH'] = 8
-    assert primitive_gate.width == 8
+    assert primitive_gate.y_width == 8
     assert primitive_gate.a_width == 8
 
     primitive_gate.parameters['A_WIDTH'] = 4
-    assert primitive_gate.width == 8
+    assert primitive_gate.y_width == 8
     assert primitive_gate.a_width == 4
     assert primitive_gate.parameters['Y_WIDTH'] == 8
     assert primitive_gate.parameters['A_WIDTH'] == 4
@@ -134,11 +134,11 @@ def test_unary_gate(unary_gate: UnaryGate) -> None:
     assert unary_gate.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 1, 'Y_WIDTH': 1}
 
     unary_gate.ports['Y'].create_port_segments(3, 1)
-    assert unary_gate.width == 4
+    assert unary_gate.y_width == 4
     assert unary_gate.a_width == 1
 
     unary_gate.ports['A'].create_port_segments(7, 1)
-    assert unary_gate.width == 4
+    assert unary_gate.y_width == 4
     assert unary_gate.a_width == 8
 
     unary_gate.ports['A'].parameters['signed'] = True
@@ -187,7 +187,7 @@ def test_unary_gate_split(simple_module: Module) -> None:
     assert len(splitted) == 8
     for idx, inst in splitted.items():
         assert inst.name in simple_module.instances
-        assert inst.width == 1
+        assert inst.y_width == 1
         assert inst.ports['A'].width == 1
         assert inst.ports['Y'].width == 1
         assert inst.ports['A'][0].ws_path == connections['A'][idx]
@@ -213,7 +213,7 @@ def _test_signal_conf1(gate: UnaryGate, sin: Signal, sout_prev: Signal, sout_new
 
 
 def _test_signal_conf1_n(gate: UnaryGate, sin: Signal, sout_prev: Signal, sout_new: Signal) -> None:
-    for i in range(gate.width):
+    for i in range(gate.y_width):
         if i == 1:
             assert gate.signal_in(i) is Signal.HIGH
             gate.input_port.set_signal(sin, index=i)
@@ -317,7 +317,7 @@ def test_neg_gate(simple_module: Module) -> None:
 
 def _test_signal_confr_n(gate: UnaryGate, sin: Signal, sout_prev: Signal, sout_new: Signal) -> None:
     assert gate.signal_out() == sout_prev
-    for i in range(gate.width):
+    for i in range(gate.y_width):
         gate.input_port.set_signal(sin, index=i)
         if i == 1:
             assert gate.signal_in(i) == Signal.HIGH
@@ -650,7 +650,7 @@ def test_binary_gate_split(simple_module: Module) -> None:
     assert len(splitted) == 8
     for idx, inst in splitted.items():
         assert inst.name in simple_module.instances
-        assert inst.width == 1
+        assert inst.y_width == 1
         assert inst.ports['A'].width == 1
         assert inst.ports['B'].width == 1
         assert inst.ports['Y'].width == 1
@@ -690,7 +690,7 @@ def _test_signal_conf2(gate: BinaryGate, sin1: Signal, sin2: Signal, sout_prev: 
 
 
 def _test_signal_conf2_n(gate: BinaryGate, sin1: Signal, sin2: Signal, sout_prev: Signal, sout_new: Signal) -> None:
-    for i in range(gate.width):
+    for i in range(gate.y_width):
         _test_signal_conf2(gate, sin1, sin2, sout_prev, sout_new, i)
 
 
@@ -1455,7 +1455,7 @@ def test_mux_split(simple_module: Module) -> None:
     assert len(splitted) == 4
     for idx, inst in splitted.items():
         assert inst.name in simple_module.instances
-        assert inst.width == 1
+        assert inst.y_width == 1
         assert inst.ports['D0'].width == 1
         assert inst.ports['D7'].width == 1
         assert inst.ports['S'].width == 3
@@ -1603,7 +1603,7 @@ def test_demux_split(simple_module: Module) -> None:
     assert len(splitted) == 4
     for idx, inst in splitted.items():
         assert inst.name in simple_module.instances
-        assert inst.width == 1
+        assert inst.y_width == 1
         assert inst.ports['D'].width == 1
         assert inst.ports['S'].width == 3
         assert inst.ports['Y0'].width == 1
@@ -2095,7 +2095,7 @@ def test_clocked_gate_split(simple_module: Module) -> None:
     assert len(splitted) == 8
     for idx, inst in splitted.items():
         assert inst.name in simple_module.instances
-        assert inst.width == 1
+        assert inst.y_width == 1
         assert inst.ports['D'].width == 1
         assert inst.ports['CLK'].width == 1
         assert inst.ports['RST'].width == 1
