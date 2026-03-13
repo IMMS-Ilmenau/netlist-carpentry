@@ -269,7 +269,7 @@ class UnaryGate(PrimitiveGate, BaseModel):
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        self.connect('A', None, direction=Direction.IN, width=self.width)
+        self.connect('A', None, direction=Direction.IN, width=self.a_width)
         self.connect('Y', None, direction=Direction.OUT, width=self.width)
         return super().model_post_init(__context)
 
@@ -409,8 +409,8 @@ class BinaryGate(PrimitiveGate, BaseModel):
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        self.connect('A', None, direction=Direction.IN, width=self.width)
-        self.connect('B', None, direction=Direction.IN, width=self.width)
+        self.connect('A', None, direction=Direction.IN, width=self.a_width)
+        self.connect('B', None, direction=Direction.IN, width=self.b_width)
         self.connect('Y', None, direction=Direction.OUT, width=self.width)
         return super().model_post_init(__context)
 
@@ -536,21 +536,6 @@ class ArithmeticGate(PrimitiveGate, BaseModel):
         return self.ports['Y']
 
     @property
-    def y_width(self) -> PositiveInt:
-        """Width of the gate output."""
-        return int(self.parameters['Y_WIDTH']) if 'Y_WIDTH' in self.parameters else 1
-
-    @property
-    def a_width(self) -> PositiveInt:
-        """Width of the first gate input."""
-        return int(self.parameters['A_WIDTH']) if 'A_WIDTH' in self.parameters else 1
-
-    @property
-    def b_width(self) -> PositiveInt:
-        """Width of the second gate input."""
-        return int(self.parameters['B_WIDTH']) if 'B_WIDTH' in self.parameters else 1
-
-    @property
     def a_signed(self) -> bool:
         """The signedness of input port A."""
         return self._fix_signedness_mismatch('A', 'A_SIGNED')
@@ -568,7 +553,7 @@ class ArithmeticGate(PrimitiveGate, BaseModel):
         """
         self.connect('A', None, direction=Direction.IN, width=self.a_width)
         self.connect('B', None, direction=Direction.IN, width=self.b_width)
-        self.connect('Y', None, direction=Direction.OUT, width=self.y_width)
+        self.connect('Y', None, direction=Direction.OUT, width=self.width)
         return super().model_post_init(__context)
 
     def _check_signal_signed(self, a: str, b: str) -> Tuple[str, str]:

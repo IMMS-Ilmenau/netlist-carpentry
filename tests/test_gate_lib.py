@@ -162,6 +162,15 @@ def test_unary_gate_8bit(simple_module: Module) -> None:
     assert list(range(8)) == list(g.input_port.segments.keys())
     assert g.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 8, 'Y_WIDTH': 8}
 
+    g = UnaryGate(name='unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8, 'A_WIDTH': 4}, module=simple_module)
+    assert len(g.connections['A']) == 4
+    assert len(g.connections['Y']) == 8
+    assert g.output_port.width == 8
+    assert g.input_port.width == 4
+    assert list(range(8)) == list(g.output_port.segments.keys())
+    assert list(range(4)) == list(g.input_port.segments.keys())
+    assert g.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 4, 'Y_WIDTH': 8}
+
 
 def test_unary_gate_split(simple_module: Module) -> None:
     g = UnaryGate(name='unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
@@ -611,6 +620,17 @@ def test_binary_gate_8bit(simple_module: Module) -> None:
     assert list(range(8)) == list(g.output_port.segments.keys())
     assert list(range(8)) == list(g.input_ports[0].segments.keys())
     assert list(range(8)) == list(g.input_ports[1].segments.keys())
+
+    g = BinaryGate(name='binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8, 'A_WIDTH': 4, 'B_WIDTH': 6}, module=simple_module)
+    assert len(g.connections['A']) == 4
+    assert len(g.connections['B']) == 6
+    assert len(g.connections['Y']) == 8
+    assert g.output_port.width == 8
+    assert g.input_ports[0].width == 4
+    assert g.input_ports[1].width == 6
+    assert list(range(8)) == list(g.output_port.segments.keys())
+    assert list(range(4)) == list(g.input_ports[0].segments.keys())
+    assert list(range(6)) == list(g.input_ports[1].segments.keys())
 
 
 def test_binary_gate_split(simple_module: Module) -> None:
