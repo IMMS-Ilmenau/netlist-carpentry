@@ -1,4 +1,4 @@
-# Changelog 0.3.6
+# Changelog 0.3.6 (2026-03-23)
 
 ## ADDED
 - `netlist_carpentry.gate_lib.PrimitiveGate.a_width` to retrieve the width of the input port A directly for all gates with such port in the gate library
