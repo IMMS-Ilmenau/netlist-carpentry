@@ -1,7 +1,17 @@
 # Changelog 0.3.6
 
+## ADDED
+- `netlist_carpentry.gate_lib.PrimitiveGate.a_width` to retrieve the width of the input port A directly for all gates with such port in the gate library
+- `netlist_carpentry.gate_lib.BinaryGate.b_width` to retrieve the width of the port B (second input port) for binary gates of the gate library
+- `netlist_carpentry.gate_lib.PosGate` implementing the Verilog pos operator (`+net`, as opposed to `-net`, e.g. used for sign-extension)
+
+## CHANGED
+- `netlist_carpentry.gate_lib.PrimitiveGate.width` → `netlist_carpentry.gate_lib.PrimitiveGate.y_width`
+- Gates from the gate library can no longer get their port width assigned via `Gate.width = new_width`, instead the width is always directly coupled to the width of the corresponding port
+
 ## FIXED
 - Minor fixes with equivalence checking structure, if "overwrite" parameter is False
+- Fixed issue with reg-wire detection if the driving instance has a "dff" or "dlatch" in its instance type
 
 # Older Versions
 
