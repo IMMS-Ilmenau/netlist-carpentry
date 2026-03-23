@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, Generator, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
@@ -40,17 +40,17 @@ class GateAnalysis:
             self.constant_input_gates += 1
 
     def summary(self) -> str:
-        parts = [f"{k}-input: {v}" for k, v in sorted(self.by_input_count.items())]
-        return f"Total: {self.total_gates} ({', '.join(parts)})"
+        parts = [f'{k}-input: {v}' for k, v in sorted(self.by_input_count.items())]
+        return f'Total: {self.total_gates} ({", ".join(parts)})'
 
 
 @dataclass
 class ChainBoundary:
     """Defines the input/output boundary of a gate-chain."""
 
-    inputs: List["WireSegmentPath"]
-    output: "WireSegmentPath"
-    internal_wires: List["WireSegmentPath"]
+    inputs: List['WireSegmentPath']
+    output: 'WireSegmentPath'
+    internal_wires: List['WireSegmentPath']
 
 
 @dataclass
@@ -104,9 +104,9 @@ class ChainInfo:
 
     def __repr__(self) -> str:
         if self.was_replaced:
-            const_info = f", {self.num_constant_inputs} constants" if self.num_constant_inputs else ""
-            return f"ChainInfo({self.length} gates -> {self.num_inputs} inputs{const_info}, {self.status.name})"
-        return f"ChainInfo({self.length} gates, {self.status.name}: {self.error_message})"
+            const_info = f', {self.num_constant_inputs} constants' if self.num_constant_inputs else ''
+            return f'ChainInfo({self.length} gates -> {self.num_inputs} inputs{const_info}, {self.status.name})'
+        return f'ChainInfo({self.length} gates, {self.status.name}: {self.error_message})'
 
 
 @dataclass
@@ -119,8 +119,8 @@ class ModuleReport:
     chains_replaced: int = 0
     chains_skipped: int = 0
     chains_failed: int = 0
-    skipped_details: List[Dict] = field(default_factory=list)
-    failed_details: List[Dict] = field(default_factory=list)
+    skipped_details: List[Dict[str, object]] = field(default_factory=list)
+    failed_details: List[Dict[str, object]] = field(default_factory=list)
 
 
 @dataclass
@@ -135,10 +135,7 @@ class ReplacementResult:
 
     def summary(self) -> str:
         return (
-            f"Detected: {len(self.chains_detected)}, "
-            f"Replaced: {self.chains_replaced}, "
-            f"Skipped: {self.chains_skipped}, "
-            f"Failed: {self.chains_failed}"
+            f'Detected: {len(self.chains_detected)}, Replaced: {self.chains_replaced}, Skipped: {self.chains_skipped}, Failed: {self.chains_failed}'
         )
 
     def skipped_chains(self) -> List[ChainInfo]:
@@ -166,11 +163,11 @@ class CircuitOptimizationResult:
 
     def summary(self) -> str:
         return (
-            f"Modules: {self.modules_processed} ({self.modules_with_chains} with chains)\n"
-            f"Chains: {self.total_chains_detected} detected, "
-            f"{self.total_chains_replaced} replaced, "
-            f"{self.total_chains_skipped} skipped, "
-            f"{self.total_chains_failed} failed"
+            f'Modules: {self.modules_processed} ({self.modules_with_chains} with chains)\n'
+            f'Chains: {self.total_chains_detected} detected, '
+            f'{self.total_chains_replaced} replaced, '
+            f'{self.total_chains_skipped} skipped, '
+            f'{self.total_chains_failed} failed'
         )
 
     def all_chain_details(self) -> List[Tuple[str, ChainInfo]]:
@@ -200,34 +197,34 @@ class CircuitOptimizationResult:
     def _keys_preview(keys: List[str], limit: int = 3) -> str:
         """Return a compact preview string for a list of keys."""
         if not keys:
-            return ""
-        keys_str = ", ".join(keys[:limit])
+            return ''
+        keys_str = ', '.join(keys[:limit])
         if len(keys) > limit:
-            keys_str += f"... (+{len(keys) - limit} more)"
+            keys_str += f'... (+{len(keys) - limit} more)'
         return keys_str
 
     @staticmethod
     def _log_header(log: Callable[[str], None]) -> None:
         """Log report header."""
-        log("")
-        log("=" * 70)
-        log("GATE CHAIN OPTIMIZATION - FINAL REPORT")
-        log("=" * 70)
+        log('')
+        log('=' * 70)
+        log('GATE CHAIN OPTIMIZATION - FINAL REPORT')
+        log('=' * 70)
 
     def _log_overall_summary(self, log: Callable[[str], None]) -> Tuple[int, int]:
         """Log overall summary and return (degenerate_count, problematic_count)."""
         degenerate_count = len(self.all_degenerate())
         problematic_count = len(self.all_problematic())
 
-        log("")
-        log("### OVERALL SUMMARY ###")
-        log(f"  Modules processed:     {self.modules_processed}")
-        log(f"  Modules with chains:   {self.modules_with_chains}")
-        log(f"  Total chains found:    {self.total_chains_detected}")
-        log(f"  Successfully replaced: {self.total_chains_replaced}")
-        log(f"  Skipped (degenerate):  {degenerate_count} (expected - only constant inputs)")
-        log(f"  Skipped (problematic): {problematic_count}")
-        log(f"  Failed:                {self.total_chains_failed}")
+        log('')
+        log('### OVERALL SUMMARY ###')
+        log(f'  Modules processed:     {self.modules_processed}')
+        log(f'  Modules with chains:   {self.modules_with_chains}')
+        log(f'  Total chains found:    {self.total_chains_detected}')
+        log(f'  Successfully replaced: {self.total_chains_replaced}')
+        log(f'  Skipped (degenerate):  {degenerate_count} (expected - only constant inputs)')
+        log(f'  Skipped (problematic): {problematic_count}')
+        log(f'  Failed:                {self.total_chains_failed}')
 
         return degenerate_count, problematic_count
 
@@ -235,12 +232,12 @@ class CircuitOptimizationResult:
     def _log_success_footer(log: Callable[[str], None], degenerate_count: int) -> None:
         """Log success footer when no problems remain."""
         if degenerate_count > 0:
-            log(f"\n✓ All viable chains replaced! ({degenerate_count} degenerate chains skipped as expected)")
+            log(f'\n✓ All viable chains replaced! ({degenerate_count} degenerate chains skipped as expected)')
         else:
-            log("\n✓ All chains were successfully replaced!")
-        log("=" * 70)
+            log('\n✓ All chains were successfully replaced!')
+        log('=' * 70)
 
-    def _iter_modules_with_results(self):
+    def _iter_modules_with_results(self) -> Generator[Tuple[str, ModuleReport, ReplacementResult], None, None]:
         """Yield (module_name, report, mod_result) for modules that have results."""
         for module_name, report in self.module_reports.items():
             mod_result = self.module_results.get(module_name)
@@ -250,33 +247,33 @@ class CircuitOptimizationResult:
 
     def _log_problematic_skips(self, log: Callable[[str], None], chain_infos: List[ChainInfo]) -> None:
         """Log problematic skips section for a module."""
-        log(f"\n  PROBLEMATIC SKIPS ({len(chain_infos)}):")
+        log(f'\n  PROBLEMATIC SKIPS ({len(chain_infos)}):')
         for chain_info in chain_infos:
-            log(f"    • Chain with {chain_info.num_gates} gates:")
-            log(f"      Status: {chain_info.status.name}")
-            log(f"      Inputs: {chain_info.num_inputs}, Constants: {chain_info.num_constant_inputs}")
-            log(f"      Error: {chain_info.error_message}")
+            log(f'    • Chain with {chain_info.num_gates} gates:')
+            log(f'      Status: {chain_info.status.name}')
+            log(f'      Inputs: {chain_info.num_inputs}, Constants: {chain_info.num_constant_inputs}')
+            log(f'      Error: {chain_info.error_message}')
             keys_str = self._keys_preview(chain_info.chain_keys or [])
             if keys_str:
-                log(f"      Keys: {keys_str}")
+                log(f'      Keys: {keys_str}')
 
-    def _log_failed_chains(self, log: Callable[[str], None], failed_details: List[Dict]) -> None:
+    def _log_failed_chains(self, log: Callable[[str], None], failed_details: List[Dict[str, object]]) -> None:
         """Log failed chains section for a module."""
-        log(f"\n  FAILED CHAINS ({len(failed_details)}):")
+        log(f'\n  FAILED CHAINS ({len(failed_details)}):')
         for detail in failed_details:
-            log(f"    • Chain with {detail['num_gates']} gates:")
-            log(f"      Error: {detail['error']}")
-            keys = detail.get("keys") or []
+            log(f'    • Chain with {detail["num_gates"]} gates:')
+            log(f'      Error: {detail["error"]}')
+            keys: List[str] = detail.get('keys') or []  # type: ignore[assignment]
             keys_str = self._keys_preview(keys)
             if keys_str:
-                log(f"      Keys: {keys_str}")
+                log(f'      Keys: {keys_str}')
 
     def _log_modules_with_problems(self, log: Callable[[str], None]) -> None:
         """Log module sections that contain problematic skips or failures."""
-        log("")
-        log("-" * 70)
-        log("### MODULES WITH PROBLEMS ###")
-        log("-" * 70)
+        log('')
+        log('-' * 70)
+        log('### MODULES WITH PROBLEMS ###')
+        log('-' * 70)
 
         for module_name, report, mod_result in self._iter_modules_with_results():
             problematic_in_module = [c for c in mod_result.chain_details if c.is_problematic_skip]
@@ -285,15 +282,15 @@ class CircuitOptimizationResult:
             if len(problematic_in_module) == 0 and report.chains_failed == 0:
                 continue
 
-            log(f"\n[MODULE: {module_name}]")
-            log(f"  Gate analysis: {report.gate_analysis.summary()}")
+            log(f'\n[MODULE: {module_name}]')
+            log(f'  Gate analysis: {report.gate_analysis.summary()}')
             if report.gate_analysis.constant_input_gates > 0:
-                log(f"  Gates with constant inputs: {report.gate_analysis.constant_input_gates}")
+                log(f'  Gates with constant inputs: {report.gate_analysis.constant_input_gates}')
 
             log(
-                f"  Chains: {report.chains_detected} detected, {report.chains_replaced} replaced, "
-                f"{len(degenerate_in_module)} degenerate, {len(problematic_in_module)} problematic, "
-                f"{report.chains_failed} failed"
+                f'  Chains: {report.chains_detected} detected, {report.chains_replaced} replaced, '
+                f'{len(degenerate_in_module)} degenerate, {len(problematic_in_module)} problematic, '
+                f'{report.chains_failed} failed'
             )
 
             if problematic_in_module:
@@ -304,10 +301,10 @@ class CircuitOptimizationResult:
 
     def _log_skip_reason_summary(self, log: Callable[[str], None]) -> None:
         """Log skip reason summary section."""
-        log("")
-        log("-" * 70)
-        log("### SKIP REASON SUMMARY ###")
-        log("-" * 70)
+        log('')
+        log('-' * 70)
+        log('### SKIP REASON SUMMARY ###')
+        log('-' * 70)
 
         reason_counts: Dict[str, int] = {}
         input_count_distribution: Dict[int, int] = {}
@@ -319,18 +316,18 @@ class CircuitOptimizationResult:
             inputs = chain_info.num_inputs
             input_count_distribution[inputs] = input_count_distribution.get(inputs, 0) + 1
 
-        log("\nBy reason:")
-        for reason, count in sorted(reason_counts.items(), key=lambda x: -x[1]):
-            marker = " (expected)" if reason == "SKIPPED_DEGENERATE" else ""
-            log(f"  {reason}: {count}{marker}")
+        log('\nBy reason:')
+        for reason, count in sorted(reason_counts.items(), key=lambda x: -x[1]):  # type: ignore[misc]
+            marker = ' (expected)' if reason == 'SKIPPED_DEGENERATE' else ''
+            log(f'  {reason}: {count}{marker}')
 
-        log("\nSkipped chains by external input count:")
+        log('\nSkipped chains by external input count:')
         for input_count in sorted(input_count_distribution):
             count = input_count_distribution[input_count]
-            log(f"  {input_count} inputs: {count} chains")
+            log(f'  {input_count} inputs: {count} chains')
 
-        log("")
-        log("=" * 70)
+        log('')
+        log('=' * 70)
 
     def _log_report(self, log: Callable[[str], None]) -> None:
         """Log the final optimization report. Internal use only."""

@@ -471,8 +471,8 @@ def remove_instances(module: Module, instances: Sequence[Instance]) -> None:
         _remove_instance_safely(module, inst)
 
 
-def build_instance_lookup(module: Module) -> Dict[str, Any]:
-    lookup: Dict[str, Any] = {}
+def build_instance_lookup(module: Module) -> Dict[str, str]:
+    lookup: Dict[str, str] = {}
     for key in module.instances.keys():
         key_str = str(key)
         lookup[key_str] = key
@@ -486,13 +486,13 @@ def fuzzy_find_instance(module: Module, search: str) -> Optional[Any]:
     if len(matches) == 1:
         return matches[0]
     if matches:
-        return min(matches, key=lambda x: len(str(x)))
+        return min(matches, key=lambda x: len(str(x)))  # type: ignore[misc]
 
     matches = [k for k in keys if search in str(k)]
     if len(matches) == 1:
         return matches[0]
     if matches:
-        return min(matches, key=lambda x: len(str(x)))
+        return min(matches, key=lambda x: len(str(x)))  # type: ignore[misc]
     return None
 
 
@@ -551,8 +551,7 @@ def _analyze_gate_inputs(instance: Instance) -> Tuple[int, bool, bool]:
         for _, segment in port:
             wire_path = safe_get_wire_path(segment)
             if is_constant_wire(wire_path):
-                raw = getattr(wire_path, 'raw', '') if wire_path else ''
-                if raw in ('1', "1'b1"):
+                if wire_path.raw in ('1', "1'b1"):
                     has_one = True
                 else:
                     has_zero = True
@@ -732,7 +731,7 @@ class GateChainScanner:
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(f"Scan failed for '{module}': {result.stderr}")
-        return json.loads(result.stdout)
+        return json.loads(result.stdout)  # type: ignore[misc, no-any-return]
 
     def collect_chains(self, input_path: str, top: str, modules: List[str], gate: str) -> Dict[str, List[List[str]]]:
         chains: Dict[str, List[List[str]]] = {}
