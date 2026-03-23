@@ -1,6 +1,7 @@
 import os
 import sys
 
+from netlist_carpentry import Circuit
 from netlist_carpentry.core.exceptions import VerilogSyntaxError
 from netlist_carpentry.core.netlist_elements.port import Port
 from netlist_carpentry.core.netlist_elements.wire_segment import (
@@ -94,6 +95,18 @@ def test_wire2v(writer: P2VTransformer) -> None:
     target_wcode = 'reg \t\tout_ff;'
     found_wcode = writer.wire2v(m, wreg)
     assert target_wcode == found_wcode
+
+
+def test_net_type_edge_cases(writer: P2VTransformer) -> None:
+    c = Circuit(name='c')
+    m = c.create_module('m')
+    reg_m = c.create_module('m_dff_abc')
+    reg_m.create_port('Y', Direction.OUT)
+    inst = m.create_instance(reg_m, 'dff_reg_inst')
+    w = m.create_wire('w')
+    m.connect(w, inst.ports['Y'])
+    ntype = writer._net_type(m, w)
+    assert ntype == 'wire'
 
 
 def test_wire_is_const(writer: P2VTransformer) -> None:

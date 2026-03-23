@@ -380,7 +380,8 @@ class P2VTransformer:
                     inst_name = dr.path.nth_parent(2).name
                     if inst_name in module.instances:  # Otherwise, driving node is a module port
                         inst = module.instances[inst_name]
-                        if 'dff' in inst.instance_type or 'dlatch' in inst.instance_type:
+                        matching_type = 'dff' in inst.instance_type or 'dlatch' in inst.instance_type
+                        if inst.is_primitive and matching_type:
                             return 'reg '
         return 'wire'
 
