@@ -1,6 +1,7 @@
 import math
 import os
 import types
+from dataclasses import dataclass
 from typing import ClassVar
 
 import pytest
@@ -378,13 +379,12 @@ def test_extract_instance_key_priority_and_fallback():
     ],
 )
 def test_is_valid_wire_path(raw, expected):
+    @dataclass
     class MW:
-        pass
+        raw: str
 
-    mw = MW()
-    mw.raw = raw
+    mw = MW(raw)
     assert co.is_valid_wire_path(mw) is expected
-    assert co.is_valid_wire_path(None) is False
 
 
 @pytest.mark.parametrize(
@@ -405,13 +405,12 @@ def test_is_valid_wire_path(raw, expected):
     ],
 )
 def test_is_constant_wire(raw, expected):
+    @dataclass
     class MW:
-        pass
+        raw: str
 
-    mw = MW()
-    mw.raw = raw
+    mw = MW(raw)
     assert co.is_constant_wire(mw) is expected
-    assert co.is_constant_wire(None) is True
 
 
 def test_is_target_gate_exclude_chains_block(empty_module, or_config):

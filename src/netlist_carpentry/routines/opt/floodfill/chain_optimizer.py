@@ -13,7 +13,7 @@ import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type
+from typing import Dict, List, Optional, Sequence, Set, Tuple, Type
 
 from netlist_carpentry import Circuit, Direction, Instance, Module, ModuleGraph, PortSegment
 from netlist_carpentry import read as nc_read
@@ -121,24 +121,14 @@ def extract_instance_key(graph: ModuleGraph, node: str) -> str:
     return str(node)
 
 
-def is_valid_wire_path(wire_path: Optional[WireSegmentPath]) -> bool:
+def is_valid_wire_path(wire_path: WireSegmentPath) -> bool:
     """Check if wire path is valid."""
-    if wire_path is None:
-        return False
-    return bool(wire_path.raw) and wire_path.raw != '0'
+    return bool(wire_path.raw) and not is_constant_wire(wire_path)
 
 
-def is_constant_wire(wire_path: Optional[WireSegmentPath]) -> bool:
+def is_constant_wire(wire_path: WireSegmentPath) -> bool:
     """Check if wire path is a constant (0, 1, x, z, 1'b0, etc.)."""
-    if wire_path is None:
-        return True
-    if not wire_path.raw:
-        return True
-    if wire_path.raw in ('0', '1', 'x', 'z', 'X', 'Z'):
-        return True
-    if wire_path.raw.startswith("1'b") or wire_path.raw.startswith("1'B"):
-        return True
-    return False
+    return wire_path.raw.lower() in ('', '0', '1', 'x', 'z') or wire_path.raw.lower().startswith("1'b")
 
 
 def _driver_in_chain(segment: PortSegment, chain_ids: Set[str]) -> bool:
@@ -152,7 +142,7 @@ def _driver_in_chain(segment: PortSegment, chain_ids: Set[str]) -> bool:
 
 
 def _should_include_external_wire(
-    wire_path: Optional[WireSegmentPath],
+    wire_path: WireSegmentPath,
     segment: PortSegment,
     chain_ids: Set[str],
     internal_wire_paths: Set[str],
@@ -168,11 +158,10 @@ def _should_include_external_wire(
     if not is_valid_wire_path(wire_path):
         return False, False
 
-    raw = getattr(wire_path, 'raw', '')
-    if not raw:
+    if not wire_path.raw:
         return False, False
 
-    if raw in internal_wire_paths:
+    if wire_path.raw in internal_wire_paths:
         return False, False
 
     if _driver_in_chain(segment, chain_ids):
@@ -438,7 +427,13 @@ def build_instance_lookup(module: Module) -> Dict[str, str]:
     return lookup
 
 
-def fuzzy_find_instance(module: Module, search: str) -> Optional[Any]:
+def fuzzy_find_instance(module: Module, search: str) -> Optional[str]:
+    """
+    Performs a prioritized search to find the most relevant instance in the given module that matches a given name (search).
+
+    The function is designed to find the "closest" match by prioritizing position (end of string is better than middle)
+    and length (shorter strings are considered more specific or exact than longer ones).
+    """
     keys = list(module.instances.keys())
     matches = [k for k in keys if str(k).endswith(search)]
     if len(matches) == 1:
