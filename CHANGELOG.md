@@ -1,19 +1,28 @@
-# Changelog 0.3.6 (2026-03-23)
+# Changelog 0.3.7
 
-## ADDED
+## CHANGED
+- Refactorings in `netlist_carpentry.routines.opt.floodfill.chain_optimizer`
+  - Python module is no longer executable with arguments via command line - use chain_optimizer module via `chain_optimizer.opt_chains()`
+  - Removed a bunch of catches in edge cases that led the process to fail silently - now Netlist Carpentry crashes explicitly whenever unfixable issues are encountered, instead of hiding it behind `None` returns
+  - Removed `remove_degenerates` step and `fix_invalid_verilog` (plus related methods) as they are no longer required
+
+# Older Versions
+
+## Changelog 0.3.6 (2026-03-23)
+
+### ADDED
 - `netlist_carpentry.gate_lib.PrimitiveGate.a_width` to retrieve the width of the input port A directly for all gates with such port in the gate library
 - `netlist_carpentry.gate_lib.BinaryGate.b_width` to retrieve the width of the port B (second input port) for binary gates of the gate library
 - `netlist_carpentry.gate_lib.PosGate` implementing the Verilog pos operator (`+net`, as opposed to `-net`, e.g. used for sign-extension)
 
-## CHANGED
+### CHANGED
 - `netlist_carpentry.gate_lib.PrimitiveGate.width` → `netlist_carpentry.gate_lib.PrimitiveGate.y_width`
 - Gates from the gate library can no longer get their port width assigned via `Gate.width = new_width`, instead the width is always directly coupled to the width of the corresponding port
 
-## FIXED
+### FIXED
 - Minor fixes with equivalence checking structure, if "overwrite" parameter is False
 - Fixed issue with reg-wire detection if the driving instance has a "dff" or "dlatch" in its instance type
 
-# Older Versions
 
 ## 0.3.5 (2026-03-11)
 
@@ -37,7 +46,6 @@
   - Connections indices between the port and the wire are in matching order (i.e. port[0]<=>wire[0], port[1]<=>wire[1], ...), offset is preserved
   - If this property is true, the Verilog assignment matches `assign port = wire;` or `assign wire = port;`, i.e. without slicing or concatenation
 - `netlist_carpentry.utils.gate_lib.ShiftX` implementing the Yosys `$shiftx` cell, i.e. the Verilog index part-select expression, e.g. `assign Y = A[B +: 4]`, which assigns Y to `[A[B+3], A[B+2], A[B+1], A[B]]`
-
 
 ### CHANGED
 - Completely rewrote ElementPath behavior and handling
