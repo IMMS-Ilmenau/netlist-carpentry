@@ -504,104 +504,6 @@ def resolve_chain_instances(module: Module, keys: Sequence[str]) -> List[Instanc
     return resolved
 
 
-def _remove_instance_and_log(module: Module, inst_key: str, instance: Instance, const_output: str) -> bool:
-    """Remove instance and log outcome."""
-    try:
-        module.remove_instance(instance)
-    except Exception as e:
-        LOG.debug(f'Could not remove {inst_key}: {e}')
-        return False
-
-    LOG.debug(f'Removed degenerate gate {inst_key} (output={const_output})')
-    return True
-
-
-def _gate_constant_output(cfg: GateConfig, has_one: bool, has_zero: bool) -> Optional[str]:
-    gate_name = cfg.name.lower()
-    if gate_name == 'or':
-        return "1'b1" if has_one else "1'b0"
-    if gate_name == 'and':
-        return "1'b0" if has_zero else "1'b1"
-    return None
-
-
-def _analyze_gate_inputs(instance: Instance) -> Tuple[int, bool, bool]:
-    """Return (real_inputs, has_one, has_zero)."""
-    real_inputs = 0
-    has_one = False
-    has_zero = False
-
-    for port_name in ('A', 'B'):
-        port = instance.ports.get(port_name)
-        if port is None:
-            continue
-        for _, segment in port:
-            wire_path = safe_get_wire_path(segment)
-            if is_constant_wire(wire_path):
-                if wire_path.raw in ('1', "1'b1"):
-                    has_one = True
-                else:
-                    has_zero = True
-            elif is_valid_wire_path(wire_path):
-                real_inputs += 1
-
-    return real_inputs, has_one, has_zero
-
-
-def _has_valid_single_output(instance: Instance) -> bool:
-    """True if instance has Y with exactly one segment and valid wire."""
-    output_port = instance.ports.get('Y')
-    if output_port is None:
-        return False
-
-    output_segments = list(output_port)
-    if len(output_segments) != 1:
-        return False
-
-    _, output_segment = output_segments[0]
-    output_wire = safe_get_wire_path(output_segment)
-    return is_valid_wire_path(output_wire)
-
-
-def _collect_degenerate_gate_removal(
-    inst_key: str,
-    instance: Instance,
-    cfg: GateConfig,
-) -> Optional[Tuple[str, Instance, str]]:
-    if instance.instance_type != cfg.nsubtype:
-        return None
-
-    real_inputs, has_one, has_zero = _analyze_gate_inputs(instance)
-    if real_inputs > 0:
-        return None
-
-    const_output = _gate_constant_output(cfg, has_one=has_one, has_zero=has_zero)
-    if const_output is None:
-        return None
-
-    if not _has_valid_single_output(instance):
-        return None
-
-    return inst_key, instance, const_output
-
-
-def remove_degenerate_gates(module: Module, cfg: GateConfig) -> int:
-    """Remove degenerate gates (only constant inputs) from a module."""
-    removed_count = 0
-    gates_to_remove: List[Tuple[str, Instance, str]] = []
-
-    for inst_key, instance in list(module.instances.items()):
-        item = _collect_degenerate_gate_removal(inst_key, instance, cfg)
-        if item is not None:
-            gates_to_remove.append(item)
-
-    for inst_key, instance, const_output in gates_to_remove:
-        if _remove_instance_and_log(module, inst_key, instance, const_output):
-            removed_count += 1
-
-    return removed_count
-
-
 class ChainReplacer:
     """Resolves, validates, disconnects and replaces a chain with a balanced tree."""
 
@@ -722,14 +624,10 @@ class CircuitOptimizer:
         *,
         output_path: Optional[str],
         skip_modules: Set[str],
-        remove_degenerate: bool,
     ) -> CircuitOptimizationResult:
         result = CircuitOptimizationResult()
         gate_names = ', '.join(cfg.name.upper() for cfg in configs)
         LOG.info_highlighted(f'{gate_names}-Chain Optimization: {circuit.name}')
-
-        if remove_degenerate:
-            self._phase0_remove_degenerate(circuit, configs)
 
         self._prepare_modules(circuit, configs)
 
@@ -743,15 +641,6 @@ class CircuitOptimizer:
 
         result._log_report(LOG.info)
         return result
-
-    @staticmethod
-    def _phase0_remove_degenerate(circuit: Circuit, configs: List[GateConfig]) -> None:
-        LOG.info('Phase 0: Removing degenerate gates (only constant inputs)...')
-        total_removed = 0
-        for mod in circuit:
-            for cfg in configs:
-                total_removed += remove_degenerate_gates(mod, cfg)
-        LOG.info(f'Removed {total_removed} degenerate gates')
 
     @staticmethod
     def _prepare_modules(circuit: Circuit, configs: List[GateConfig]) -> None:
@@ -920,7 +809,6 @@ def opt_chains(
     gates: Optional[List[str]] = None,
     output_path: Optional[str] = None,
     skip_modules: Optional[Set[str]] = None,
-    remove_degenerate: bool = False,
 ) -> CircuitOptimizationResult:
     """Optimize circuit by replacing gate chains with balanced trees."""
     if all(o is None for o in [circuit, input_path, top_module]) or all(o is not None for o in [circuit, input_path, top_module]):
@@ -938,7 +826,6 @@ def opt_chains(
         configs=configs,
         output_path=output_path,
         skip_modules=skip_modules or set(),
-        remove_degenerate=remove_degenerate,
     )
 
 
