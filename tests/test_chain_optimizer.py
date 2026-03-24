@@ -8,6 +8,7 @@ import pytest
 import netlist_carpentry.routines.opt.floodfill.chain_optimizer as co
 from netlist_carpentry import Circuit, Module, ModuleGraph
 from netlist_carpentry.core.enums.direction import Direction as Dir
+from netlist_carpentry.core.exceptions import ObjectNotFoundError
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.utils.gate_lib import AndGate, OrGate, XorGate
 
@@ -868,7 +869,8 @@ def test_remove_instances_handles_exception():
     class FakeInstance:
         raw_path = 'fake'
 
-    co.remove_instances(m, [FakeInstance()])
+    with pytest.raises(ObjectNotFoundError):
+        co.remove_instances(m, [FakeInstance()])
 
 
 def test_remove_instances_actually_removes(module_with_or_chain):
@@ -886,9 +888,10 @@ def test_replace_chain_empty_keys(empty_module, or_config, chain_replacer):
 
 
 def test_replace_chain_resolution_failed(empty_module, or_config, chain_replacer):
-    info = chain_replacer.replace_chain(empty_module, ['nope1', 'nope2'], 'pfx', or_config)
-    assert info.status == co.ChainStatus.SKIPPED_RESOLUTION_FAILED
-    assert 'Could not resolve' in (info.error_message or '')
+    with pytest.raises(KeyError) as e:
+        chain_replacer.replace_chain(empty_module, ['nope1', 'nope2'], 'pfx', or_config)
+    repr = e.getrepr()
+    assert repr.reprcrash.message == "KeyError: 'Could not resolve: nope1'"
 
 
 def test_replace_chain_degenerate(monkeypatch, or_config):
@@ -920,26 +923,10 @@ def test_replace_chain_boundary_failed(monkeypatch, or_config):
 
     monkeypatch.setattr(replacer.boundary_extractor, 'extract_boundary', boom)
 
-    info = replacer.replace_chain(module=object(), chain_keys=['a', 'b'], prefix='pfx', cfg=or_config)
-    assert info.status == co.ChainStatus.SKIPPED_BOUNDARY_FAILED
-    assert 'nope' in (info.error_message or '')
-
-
-def test_replace_chain_disconnect_failed(monkeypatch, or_config):
-    boundary = co.ChainBoundary(
-        inputs=[WireSegmentPath(raw='m.in1.0'), WireSegmentPath(raw='m.in2.0')],
-        output=WireSegmentPath(raw='m.out.0'),
-        internal_wires=[],
-    )
-
-    replacer = co.ChainReplacer(boundary_extractor=co.ChainBoundaryExtractor())
-    monkeypatch.setattr(co, 'resolve_chain_instances', lambda module, keys: ['dummy_inst'])
-    monkeypatch.setattr(replacer.boundary_extractor, 'extract_boundary', lambda insts: (boundary, 0, False))
-    monkeypatch.setattr(co, 'remove_instances', lambda module, insts: (_ for _ in ()).throw(RuntimeError('rmfail')))
-
-    info = replacer.replace_chain(module=object(), chain_keys=['a', 'b'], prefix='pfx', cfg=or_config)
-    assert info.status == co.ChainStatus.SKIPPED_DISCONNECT_FAILED
-    assert 'rmfail' in (info.error_message or '')
+    with pytest.raises(RuntimeError) as e:
+        replacer.replace_chain(module=object(), chain_keys=['a', 'b'], prefix='pfx', cfg=or_config)
+    repr = e.getrepr()
+    assert repr.reprcrash.message == 'RuntimeError: nope'
 
 
 def test_replace_chain_tree_build_raises(monkeypatch, or_config):

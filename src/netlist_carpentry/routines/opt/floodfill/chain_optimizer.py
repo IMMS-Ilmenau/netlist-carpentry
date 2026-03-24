@@ -309,10 +309,7 @@ def analyze_module_gates(module: Module, cfg: GateConfig) -> GateAnalysis:
     """Analyze gates by input count."""
     analysis = GateAnalysis()
 
-    for instance in module.instances.values():
-        if instance.instance_type != cfg.nsubtype:
-            continue
-
+    for instance in module.instances_by_types[cfg.nsubtype]:
         real_inputs = 0
         has_constant = False
 
@@ -456,16 +453,9 @@ class ChainBoundaryExtractor:
         return boundary, constant_count, is_degenerate
 
 
-def _remove_instance_safely(module: Module, inst: Instance) -> None:
-    try:
-        module.remove_instance(inst)
-    except Exception:
-        pass
-
-
 def remove_instances(module: Module, instances: Sequence[Instance]) -> None:
     for inst in instances:
-        _remove_instance_safely(module, inst)
+        module.remove_instance(inst)
 
 
 def build_instance_lookup(module: Module) -> Dict[str, str]:
@@ -621,74 +611,40 @@ class ChainReplacer:
     def replace_chain(self, module: Module, chain_keys: Sequence[str], prefix: str, cfg: GateConfig) -> ChainInfo:
         info = ChainInfo(chain_keys=list(chain_keys), status=ChainStatus.REPLACED, num_gates=len(chain_keys))
 
-        instances = self._resolve_instances(module, chain_keys, info, prefix)
+        instances = self._resolve_instances(module, chain_keys, info)
         if instances is None:
             return info
 
-        boundary = self._extract_boundary(instances, info, prefix)
-        if boundary is None:
-            return info
-
+        boundary = self._extract_boundary(instances, info)
         if info.status == ChainStatus.SKIPPED_DEGENERATE:
             return info
 
-        if not self._disconnect_instances(module, instances, info, prefix):
-            return info
-
+        remove_instances(module, instances)
         self._build_tree(module, boundary, prefix, cfg, info)
         self._log_success(prefix, instances, boundary, info.num_constant_inputs)
         return info
 
     @staticmethod
-    def _resolve_instances(
-        module: Module,
-        chain_keys: Sequence[str],
-        info: ChainInfo,
-        prefix: str,
-    ) -> Optional[List[Instance]]:
+    def _resolve_instances(module: Module, chain_keys: Sequence[str], info: ChainInfo) -> Optional[List[Instance]]:
         if not chain_keys:
             info.status = ChainStatus.SKIPPED_RESOLUTION_FAILED
             info.error_message = 'Empty chain'
             return None
+        return resolve_chain_instances(module, chain_keys)
 
-        try:
-            return resolve_chain_instances(module, chain_keys)
-        except KeyError as e:
-            info.status = ChainStatus.SKIPPED_RESOLUTION_FAILED
-            info.error_message = str(e)
-            LOG.info(f'Skipping {prefix}: {e}')
-            return None
+    def _extract_boundary(self, instances: List[Instance], info: ChainInfo) -> ChainBoundary:
+        boundary, const_count, is_degenerate = self.boundary_extractor.extract_boundary(instances)
+        info.num_inputs = len(boundary.inputs)
+        info.num_internal_wires = len(boundary.internal_wires)
+        info.num_constant_inputs = const_count
+        info.output_wire = boundary.output.raw
+        info.input_wires = [w.raw for w in boundary.inputs]
 
-    def _extract_boundary(self, instances: List[Instance], info: ChainInfo, prefix: str) -> Optional[ChainBoundary]:
-        try:
-            boundary, const_count, is_degenerate = self.boundary_extractor.extract_boundary(instances)
-            info.num_inputs = len(boundary.inputs)
-            info.num_internal_wires = len(boundary.internal_wires)
-            info.num_constant_inputs = const_count
-            info.output_wire = boundary.output.raw
-            info.input_wires = [w.raw for w in boundary.inputs]
-
-            if is_degenerate:
-                info.status = ChainStatus.SKIPPED_DEGENERATE
-                info.error_message = f'Degenerate chain: {info.num_inputs} real inputs, {const_count} constants'
-                LOG.debug(f'Skipping degenerate {prefix}: {info.num_inputs} inputs, {const_count} constants')
-            return boundary
-        except Exception as e:
-            info.status = ChainStatus.SKIPPED_BOUNDARY_FAILED
-            info.error_message = str(e)
-            LOG.info(f'Skipping {prefix}: {e}')
-            return None
-
-    @staticmethod
-    def _disconnect_instances(module: Module, instances: List[Instance], info: ChainInfo, prefix: str) -> bool:
-        try:
-            remove_instances(module, instances)
-            return True
-        except Exception as e:
-            info.status = ChainStatus.SKIPPED_DISCONNECT_FAILED
-            info.error_message = str(e)
-            LOG.info(f'Skipping {prefix}: {e}')
-            return False
+        if is_degenerate:
+            info.status = ChainStatus.SKIPPED_DEGENERATE
+            info.error_message = f'Degenerate chain: {info.num_inputs} real inputs, {const_count} constants'
+            LOG.debug(f'Skipping degenerate chain: {info.num_inputs} inputs, {const_count} constants')
+        return boundary
 
     @staticmethod
     def _build_tree(module: Module, boundary: ChainBoundary, prefix: str, cfg: GateConfig, info: ChainInfo) -> None:
