@@ -414,40 +414,6 @@ def test_is_constant_wire(raw, expected):
     assert co.is_constant_wire(None) is True
 
 
-def test_safe_get_driver_and_wire_path_exception_paths():
-    class BadSeg1:
-        def driver(self):
-            raise AttributeError('no driver')
-
-    assert co.safe_get_driver(BadSeg1()) is None
-
-    class BadSeg2:
-        @property
-        def ws_path(self):
-            raise AttributeError('no ws_path')
-
-    assert co.safe_get_wire_path(BadSeg2()) is None
-
-
-def test_safe_get_driver_returns_value():
-    class GoodSeg:
-        def driver(self):
-            return 'driver_obj'
-
-    assert co.safe_get_driver(GoodSeg()) == 'driver_obj'
-
-
-def test_safe_get_wire_path_returns_value():
-    ws = WireSegmentPath(raw='m.w.0')
-
-    class GoodSeg:
-        @property
-        def ws_path(self):
-            return ws
-
-    assert co.safe_get_wire_path(GoodSeg()) == ws
-
-
 def test_is_target_gate_exclude_chains_block(empty_module, or_config):
     chain_gate = empty_module.create_instance(OrGate, 'or_chain99_L0_N0')
     assert co.is_target_gate(chain_gate, or_config, exclude_chains=True) is False
@@ -473,11 +439,11 @@ def test_is_target_gate_wrong_type(or_config):
 def test_build_gate_connectivity_handles_missing_ports(or_config):
     class Seg:
         def __init__(self, raw=None):
-            self._raw = raw
+            self.raw_ws_path = raw
 
         @property
         def ws_path(self):
-            return None if self._raw is None else WireSegmentPath(raw=self._raw)
+            return None if self.raw_ws_path is None else WireSegmentPath(raw=self.raw_ws_path)
 
     class Inst:
         def __init__(self, raw_path, ports):
@@ -601,16 +567,19 @@ def test_collect_output_wires_invalid_output_raises(boundary_extractor):
 
 def test_collect_external_inputs_branches(boundary_extractor):
     class DriverOK:
-        def __init__(self, parent_raw_path):
+        def __init__(self, parent_raw_path, parent):
             self.port = types.SimpleNamespace(parent=types.SimpleNamespace(raw_path=parent_raw_path))
+            self.parent = parent
 
     class DriverBad:
-        pass
+        def __init__(self, parent):
+            self.parent = parent
 
     class Seg:
-        def __init__(self, raw, driver=None):
+        def __init__(self, raw, parent=None, driver=None):
             self.ws_path = WireSegmentPath(raw=raw)
             self._driver = driver
+            self.parent = parent
 
         def driver(self):
             return self._driver
@@ -622,17 +591,27 @@ def test_collect_external_inputs_branches(boundary_extractor):
 
     chain_ids = {'m.g1'}
 
+    inst_int = Inst('m.g1', {})
+    seg2 = Seg('m.int.0')
+    seg3 = Seg('m.ext2.0')
+    driverOk = DriverOK('m.g1', seg2)
+    driverBad = DriverBad(seg3)
+    seg2._driver = driverOk
+    seg3._driver = driverBad
+
     inst = Inst(
         'm.g2',
         ports={
             'B': [
                 (0, Seg('0')),
                 (1, Seg('m.ext.0', driver=None)),
-                (2, Seg('m.int.0', driver=DriverOK('m.g1'))),
-                (3, Seg('m.ext2.0', driver=DriverBad())),
+                (2, seg2),
+                (3, seg3),
             ]
         },
     )
+    seg2.parent = inst_int
+    seg3.parent = inst
 
     inputs, consts = boundary_extractor.collect_external_inputs([inst], chain_ids, internal_wire_paths=set())
     raws = sorted([w.raw for w in inputs])

@@ -121,22 +121,6 @@ def extract_instance_key(graph: ModuleGraph, node: str) -> str:
     return str(node)
 
 
-def safe_get_driver(segment: PortSegment) -> Any:
-    """Safely get wire segment driver."""
-    try:
-        return segment.driver()
-    except Exception:
-        return None
-
-
-def safe_get_wire_path(segment: PortSegment) -> Optional[WireSegmentPath]:
-    """Safely get wire segment path."""
-    try:
-        return segment.ws_path
-    except Exception:
-        return None
-
-
 def is_valid_wire_path(wire_path: Optional[WireSegmentPath]) -> bool:
     """Check if wire path is valid."""
     if wire_path is None:
@@ -159,14 +143,12 @@ def is_constant_wire(wire_path: Optional[WireSegmentPath]) -> bool:
 
 def _driver_in_chain(segment: PortSegment, chain_ids: Set[str]) -> bool:
     """Return True if the driver of `segment` belongs to a gate instance in `chain_ids`."""
-    driver = safe_get_driver(segment)
-    if not driver:
+    driver = segment.driver()
+    if driver is None:
         return False
 
-    port = getattr(driver, 'port', None)
-    parent = getattr(port, 'parent', None) if port else None
-    raw_path = getattr(parent, 'raw_path', None) if parent else None
-    return bool(raw_path and raw_path in chain_ids)
+    module_or_instance = driver.parent.parent
+    return bool(module_or_instance.raw_path and module_or_instance.raw_path in chain_ids)
 
 
 def _should_include_external_wire(
@@ -221,10 +203,7 @@ def _build_wire_to_driver(gates: Dict[str, Instance]) -> Dict[str, str]:
         if port_y is None:
             continue
         for _, segment in port_y:
-            wire_path = safe_get_wire_path(segment)
-            raw = getattr(wire_path, 'raw', '') if wire_path else ''
-            if raw:
-                wire_to_driver[raw] = path
+            wire_to_driver[segment.raw_ws_path] = path
     return wire_to_driver
 
 
@@ -241,8 +220,7 @@ def _build_predecessors_successors(
             if port is None:
                 continue
             for _, segment in port:
-                wire_path = safe_get_wire_path(segment)
-                driver_gate = wire_to_driver.get(wire_path.raw)
+                driver_gate = wire_to_driver.get(segment.ws_path.raw)
                 if driver_gate and driver_gate != path:
                     predecessors[path].add(driver_gate)
                     successors[driver_gate].add(path)
@@ -314,10 +292,9 @@ def analyze_module_gates(module: Module, cfg: GateConfig) -> GateAnalysis:
             if port is None:
                 continue
             for _, segment in port:
-                wire_path = safe_get_wire_path(segment)
-                if is_constant_wire(wire_path):
+                if is_constant_wire(segment.ws_path):
                     has_constant = True
-                elif is_valid_wire_path(wire_path):
+                elif is_valid_wire_path(segment.ws_path):
                     real_inputs += 1
 
         analysis.add_gate(real_inputs, has_constant)
@@ -393,13 +370,12 @@ class ChainBoundaryExtractor:
                     continue
 
                 for _, segment in port:
-                    wire_path = safe_get_wire_path(segment)
-                    include, is_const = _should_include_external_wire(wire_path, segment, chain_ids, internal_wire_paths)
+                    include, is_const = _should_include_external_wire(segment.ws_path, segment, chain_ids, internal_wire_paths)
                     if is_const:
                         constant_count += 1
                         continue
                     if include:
-                        seen[wire_path.raw] = wire_path
+                        seen[segment.ws_path.raw] = segment.ws_path
 
         return list(seen.values()), constant_count
 
@@ -417,14 +393,13 @@ class ChainBoundaryExtractor:
             if len(segments) != 1:
                 raise RuntimeError(f'{instance.raw_path}: expected 1 output segment')
             _, segment = segments[0]
-            wire_path = safe_get_wire_path(segment)
-            if not is_valid_wire_path(wire_path):
+            if not is_valid_wire_path(segment.ws_path):
                 raise RuntimeError(f'{instance.raw_path}: invalid output wire')
 
             if instance is tail:
-                output_wire = wire_path
+                output_wire = segment.ws_path
             else:
-                internal_wires.append(wire_path)
+                internal_wires.append(segment.ws_path)
 
         if output_wire is None:
             raise RuntimeError('Could not determine chain output')
