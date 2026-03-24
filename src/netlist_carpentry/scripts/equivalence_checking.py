@@ -1,12 +1,19 @@
 """Module for handling equivalence checks with Yosys EQY."""
 
+from __future__ import annotations
+
 import os
 import shutil
 import subprocess
 import tempfile
 from contextlib import nullcontext
 from pathlib import Path
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional, Union, overload
+
+if TYPE_CHECKING:
+    from netlist_carpentry import Circuit
+
+Process = subprocess.CompletedProcess[bytes]
 
 
 class EquivalenceChecking:
@@ -87,7 +94,7 @@ class EquivalenceChecking:
         output_path: Optional[str] = None,
         overwrite: bool = False,
         quiet: bool = False,
-    ) -> subprocess.CompletedProcess[bytes]:
+    ) -> Process:
         """
         Runs the Yosys EQY tool to prove the logical equivalence of the Verilog designs for the given Verilog designs.
 
@@ -139,7 +146,7 @@ def run_eqy(
     output_path: Optional[str] = None,
     overwrite: bool = False,
     quiet: bool = False,
-) -> subprocess.CompletedProcess[bytes]:
+) -> Process:
     """
     Runs the Yosys EQY tool to prove the logical equivalence of the Verilog designs for the given Verilog designs.
 
@@ -176,13 +183,22 @@ def run_eqy(
         return eqy.run_eqy(output_path, overwrite, quiet)
 
 
+@overload
+def run_equiv(gold_design: Circuit, gate_design: Circuit, *, quiet: bool = False) -> Process: ...
+
+
+@overload
+def run_equiv(gold_design: str, gate_design: str, gold_top: str, gate_top: str, *, quiet: bool = False) -> Process: ...
+
+
 def run_equiv(
-    gold_vfile_path: str,
-    gate_vfile_path: str,
-    gold_top_module: str,
-    gate_top_module: str,
+    gold_design: Union[Circuit, str],
+    gate_design: Union[Circuit, str],
+    gold_top: str = '',
+    gate_top: str = '',
+    *,
     quiet: bool = False,
-) -> subprocess.CompletedProcess[bytes]:
+) -> Process:
     """
     Runs a predefined script using the equiv_* passes from Yosys to prove the logical equivalence of the Verilog designs for the given Verilog designs.
 
@@ -190,18 +206,31 @@ def run_equiv(
     In the scope of this framework, the gate design refers to the modified or optimized version of the original design.
 
     Args:
-        gold_vfile_path (str): The file path to the gold Verilog file.
-        gate_vfile_path (str): The file path to the gate Verilog file.
-        gold_top_module (str): The top module name for the gold design.
-        gate_top_module (str): The top module name for the gate design.
+        gold_design (Union[Circuit, str]): The circuit object, or the file path to the gold Verilog file.
+        gate_design (Union[Circuit, str]): The circuit object, or the file path to the gate Verilog file.
+        gold_top (str): The top module name for the gold design.
+        gate_top (str): The top module name for the gate design.
         quiet (bool, optional): If True, pipes all Yosys output into the subprocess.CompletedProcess object.
             If False, prints all Yosys output to the console. Defaults to False.
 
     Returns:
         subprocess.CompletedProcess: The result of the execution plus some metadata.
     """
-    dir_path = os.path.dirname(os.path.abspath(__file__))
-    script_path = f'{dir_path}/equiv.sh'
-    stdout = subprocess.PIPE if quiet else None
-    stderr = subprocess.PIPE if quiet else None
-    return subprocess.run([script_path, gold_vfile_path, gold_top_module, gate_vfile_path, gate_top_module], stdout=stdout, stderr=stderr)
+    from netlist_carpentry import Circuit
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        if isinstance(gold_design, Circuit):
+            gold_path = os.path.join(tmp_dir, 'gold.v')
+            gold_design.write(gold_path)
+            gold_top = gold_design.top_name
+            gold_design = gold_path
+        if isinstance(gate_design, Circuit):
+            gate_path = os.path.join(tmp_dir, 'gate.v')
+            gate_design.write(gate_path)
+            gate_top = gate_design.top_name
+            gate_design = gate_path
+        dir_path = os.path.dirname(os.path.abspath(__file__))
+        script_path = f'{dir_path}/equiv.sh'
+        stdout = subprocess.PIPE if quiet else None
+        stderr = subprocess.PIPE if quiet else None
+        return subprocess.run([script_path, gold_design, gold_top, gate_design, gate_top], stdout=stdout, stderr=stderr)

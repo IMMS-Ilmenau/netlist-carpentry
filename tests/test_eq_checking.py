@@ -129,6 +129,20 @@ def test_run_equiv_simple() -> None:
     assert b'ERROR' in equiv_proc.stderr  # Errors piped to stderr variable
 
 
+def test_run_equiv_circuit() -> None:
+    gold = read('tests/files/or_pattern_find.v', 'or_pattern_find')
+    gate = read('tests/files/or_pattern_replace.v', 'or_pattern_replace')
+    equiv_proc = run_equiv(gold, gate, quiet=False)
+    assert equiv_proc.returncode == 0
+    assert equiv_proc.stdout is None  # No piping, instead shown in the console
+    assert equiv_proc.stderr is None  # No piping, instead shown in the console
+
+    equiv_proc = run_equiv(gold, gate, quiet=True)
+    assert equiv_proc.returncode == 0
+    assert equiv_proc.stdout is not None
+    assert equiv_proc.stderr == b''
+
+
 if __name__ == '__main__':
     file_name = os.path.basename(__file__)
     pytest.main(args=['-k', file_name])
