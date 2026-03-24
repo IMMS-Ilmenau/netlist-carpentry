@@ -242,11 +242,7 @@ def _build_predecessors_successors(
                 continue
             for _, segment in port:
                 wire_path = safe_get_wire_path(segment)
-                raw = wire_path.raw if wire_path else ''
-                if not raw:
-                    continue
-
-                driver_gate = wire_to_driver.get(raw)
+                driver_gate = wire_to_driver.get(wire_path.raw)
                 if driver_gate and driver_gate != path:
                     predecessors[path].add(driver_gate)
                     successors[driver_gate].add(path)
@@ -596,20 +592,6 @@ class GateChainScanner:
         return chains
 
 
-def fix_invalid_verilog(filepath: str) -> int:
-    with open(filepath, 'r') as f:
-        lines = f.readlines()
-
-    valid_lines = [line for line in lines if not line.strip().startswith("assign 1'b")]
-    removed = len(lines) - len(valid_lines)
-
-    if removed > 0:
-        with open(filepath, 'w') as f:
-            f.writelines(valid_lines)
-
-    return removed
-
-
 class CircuitOptimizer:
     """Coordinates scan/replace across a circuit."""
 
@@ -637,7 +619,8 @@ class CircuitOptimizer:
         self._update_detection_stats(result, circuit, all_chains_by_module)
         self._replace_all(result, circuit, all_chains_by_module)
 
-        self._write_output_if_requested(circuit, output_path)
+        if output_path:
+            circuit.write(output_path, overwrite=True)
 
         result._log_report(LOG.info)
         return result
@@ -645,7 +628,6 @@ class CircuitOptimizer:
     @staticmethod
     def _prepare_modules(circuit: Circuit, configs: List[GateConfig]) -> None:
         for mod in circuit:
-            mod.optimize()
             for cfg in configs:
                 mod.split_all(cfg.nsubtype)
 
@@ -784,15 +766,6 @@ class CircuitOptimizer:
         report.chains_failed += 1
         result.total_chains_failed += 1
 
-    @staticmethod
-    def _write_output_if_requested(circuit: Circuit, output_path: Optional[str]) -> None:
-        if not output_path:
-            return
-        circuit.write(output_path, overwrite=True)
-        removed = fix_invalid_verilog(output_path)
-        if removed > 0:
-            LOG.warn(f'Removed {removed} invalid lines')
-
 
 def _generic_optimizer() -> CircuitOptimizer:
     scanner = GateChainScanner(script_path=__file__)
@@ -827,18 +800,3 @@ def opt_chains(
         output_path=output_path,
         skip_modules=skip_modules or set(),
     )
-
-
-def main(module_name: str, input_path: str, top_module: str, gate: str, chain_data_path: Optional[str] = None) -> str:
-    circuit = nc_read(input_path, top_module)
-    cfg = get_gate_config(gate)
-
-    module = circuit.modules[module_name]
-    module.optimize()
-    module.split_all(cfg.nsubtype)
-    chains = find_gate_chains_netlist(module, cfg)
-    out = json.dumps(chains)
-    if chain_data_path is not None:
-        with open(chain_data_path, 'w') as f:
-            f.write(out)
-    return out

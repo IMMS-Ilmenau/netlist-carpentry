@@ -967,24 +967,6 @@ def test_replace_chain_success_integration(module_with_or_chain, or_config):
     assert info.num_inputs == 4
 
 
-def test_fix_invalid_verilog(tmp_path):
-    f = tmp_path / 't.v'
-    f.write_text("module t;\n  assign 1'bx = c;\n  assign a = b;\n  assign 1'b0 = d;\nendmodule\n")
-    removed = co.fix_invalid_verilog(str(f))
-    assert removed == 2
-    txt = f.read_text()
-    assert "assign 1'bx" not in txt
-    assert "assign 1'b0" not in txt
-    assert 'assign a = b' in txt
-
-
-def test_fix_invalid_verilog_no_changes(tmp_path):
-    f = tmp_path / 'clean.v'
-    f.write_text('module t;\n  assign a = b;\nendmodule\n')
-    removed = co.fix_invalid_verilog(str(f))
-    assert removed == 0
-
-
 class DummySeg:
     def __init__(self, raw, raise_ws_path=False):
         self._raw = raw
