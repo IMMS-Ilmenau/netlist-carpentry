@@ -9,13 +9,10 @@ from __future__ import annotations
 
 import gc
 import json
-import os
-import subprocess
 import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from tempfile import TemporaryDirectory
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type
 
 from netlist_carpentry import Circuit, Direction, Instance, Module, ModuleGraph, PortSegment
@@ -715,31 +712,23 @@ class GateChainScanner:
         self.script_path = script_path
         self.python = python or sys.executable
 
-    def scan_module(self, input_path: str, top: str, module: str, gate: str) -> List[List[str]]:
-        cmd = [
-            self.python,
-            self.script_path,
-            '--scan-module',
-            module,
-            '--input',
-            input_path,
-            '--top',
-            top,
-            '--gate',
-            gate,
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            raise RuntimeError(f"Scan failed for '{module}': {result.stderr}")
-        return json.loads(result.stdout)  # type: ignore[misc, no-any-return]
+    def scan_module(self, circuit: Circuit, module_name: str, gate: str) -> List[List[str]]:
+        cfg = get_gate_config(gate)
 
-    def collect_chains(self, input_path: str, top: str, modules: List[str], gate: str) -> Dict[str, List[List[str]]]:
+        module = circuit.modules[module_name]
+        module.optimize()
+        module.split_all(cfg.nsubtype)
+        chains = find_gate_chains_netlist(module, cfg)
+        out = json.dumps(chains)
+        return json.loads(out)  # type: ignore[misc, no-any-return]
+
+    def collect_chains(self, circuit: Circuit, modules: List[str], gate: str) -> Dict[str, List[List[str]]]:
         chains: Dict[str, List[List[str]]] = {}
 
         LOG.info(f'Scanning {len(modules)} modules for {gate}-chains...')
         for i, name in enumerate(modules, 1):
             LOG.debug(f'[{i}/{len(modules)}] {name}')
-            found = self.scan_module(input_path, top, name, gate)
+            found = self.scan_module(circuit, name, gate)
             if found:
                 chains[name] = found
                 LOG.debug(f'  Found {len(found)} chain(s)')
@@ -789,10 +778,7 @@ class CircuitOptimizer:
         self._prepare_modules(circuit, configs)
 
         module_names = [name for name in circuit.modules.keys() if name not in skip_modules]
-        with TemporaryDirectory() as tmpdir:
-            file_path = os.path.join(tmpdir, 'circuit.v')
-            circuit.write(file_path)
-            all_chains_by_module = self._scan_all_chains(file_path, circuit.top.name, module_names, configs)
+        all_chains_by_module = self._scan_all_chains(circuit, module_names, configs)
 
         self._update_detection_stats(result, circuit, all_chains_by_module)
         self._replace_all(result, circuit, all_chains_by_module)
@@ -820,8 +806,7 @@ class CircuitOptimizer:
 
     def _scan_all_chains(
         self,
-        input_path: str,
-        top_module: str,
+        circuit: Circuit,
         module_names: List[str],
         configs: List[GateConfig],
     ) -> Dict[str, List[Tuple[GateConfig, List[List[str]]]]]:
@@ -831,7 +816,7 @@ class CircuitOptimizer:
 
         for cfg in configs:
             LOG.info(f'  Scanning for {cfg.name.upper()} chains...')
-            chains_by_module = self.scanner.collect_chains(input_path, top_module, module_names, cfg.name)
+            chains_by_module = self.scanner.collect_chains(circuit, module_names, cfg.name)
 
             for mod_name, chains in chains_by_module.items():
                 all_chains_by_module[mod_name].append((cfg, chains))
@@ -1001,25 +986,16 @@ def opt_chains(
     )
 
 
-if __name__ == '__main__':
-    import argparse
+def main(module_name: str, input_path: str, top_module: str, gate: str, chain_data_path: Optional[str] = None) -> str:
+    circuit = nc_read(input_path, top_module)
+    cfg = get_gate_config(gate)
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--scan-module', dest='module_name')
-    parser.add_argument('--input', dest='input_path')
-    parser.add_argument('--top', dest='top_module')
-    parser.add_argument('--gate', dest='gate')
-    args = parser.parse_args()
-
-    if args.module_name:
-        circuit = nc_read(args.input_path, top=args.top_module)
-        cfg = get_gate_config(args.gate)
-
-        module = circuit.modules.get(args.module_name)
-        if module is None:
-            print('[]')
-        else:
-            module.optimize()
-            module.split_all(cfg.nsubtype)
-            chains = find_gate_chains_netlist(module, cfg)
-            print(json.dumps(chains))
+    module = circuit.modules[module_name]
+    module.optimize()
+    module.split_all(cfg.nsubtype)
+    chains = find_gate_chains_netlist(module, cfg)
+    out = json.dumps(chains)
+    if chain_data_path is not None:
+        with open(chain_data_path, 'w') as f:
+            f.write(out)
+    return out

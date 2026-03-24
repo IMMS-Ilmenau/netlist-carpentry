@@ -1,4 +1,3 @@
-import json
 import math
 import os
 import types
@@ -1161,41 +1160,8 @@ def test_remove_degenerate_gates_remove_instance_exception_is_caught():
     assert 'or1' in m.instances
 
 
-def test_scan_module_subprocess_ok(monkeypatch, scanner):
-    class R:
-        returncode = 0
-        stdout = json.dumps([['a', 'b']])
-        stderr = ''
-
-    monkeypatch.setattr(co.subprocess, 'run', lambda *a, **k: R())
-    assert scanner.scan_module('in.v', 'TOP', 'm1', 'or') == [['a', 'b']]
-
-
-def test_scan_module_subprocess_default_python(monkeypatch):
-    class R:
-        returncode = 0
-        stdout = json.dumps([['a']])
-        stderr = ''
-
-    monkeypatch.setattr(co.subprocess, 'run', lambda *a, **k: R())
-    s = co.GateChainScanner(script_path=co.__file__, python=None)
-    result = s.scan_module('in.v', 'TOP', 'm1', 'or')
-    assert result == [['a']]
-
-
-def test_scan_module_subprocess_fail(monkeypatch, scanner):
-    class R:
-        returncode = 1
-        stdout = ''
-        stderr = 'err'
-
-    monkeypatch.setattr(co.subprocess, 'run', lambda *a, **k: R())
-    with pytest.raises(RuntimeError):
-        scanner.scan_module('in.v', 'TOP', 'm1', 'or')
-
-
 def test_collect_chains_subprocess_aggregates(monkeypatch, scanner):
-    def fake_scan(_input_path, _top, module, _gate):
+    def fake_scan(circuit, module, _gate):
         if module == 'm1':
             return [['x', 'y']]
         if module == 'm2':
@@ -1203,10 +1169,13 @@ def test_collect_chains_subprocess_aggregates(monkeypatch, scanner):
         return [['a', 'b'], ['c', 'd']]
 
     monkeypatch.setattr(scanner, 'scan_module', fake_scan)
+    c = Circuit(name='c')
+    c.create_module('m1')
+    c.create_module('m2')
+    c.create_module('m3')
 
     out = scanner.collect_chains(
-        input_path='dummy.v',
-        top='TOP',
+        circuit=c,
         modules=['m1', 'm2', 'm3'],
         gate='or',
     )
