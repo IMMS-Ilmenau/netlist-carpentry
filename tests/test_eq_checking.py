@@ -170,7 +170,9 @@ def test_chain_optimizer_eqy() -> None:
     gold = read('tests/files/chains_orig.v', 'chains_orig')
     opt_chains(gold, gates=['§or'])
     gold.write('tests/files/gen/chains_out.v', overwrite=True)
-    equiv_proc = run_equiv('tests/files/chains_orig.v', 'tests/files/gen/chains_out.v', 'chains_orig', 'chains_orig', quiet=True)
+    equiv_proc = run_equiv(
+        'tests/files/chains_orig.v', 'tests/files/gen/chains_out.v', 'chains_orig', 'chains_orig', quiet=True, no_name_matching=True
+    )
     assert equiv_proc.returncode == 0
     assert equiv_proc.stdout is not None
     assert equiv_proc.stderr == b''
