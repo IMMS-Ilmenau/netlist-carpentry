@@ -6,6 +6,10 @@
   - Removed a bunch of catches in edge cases that led the process to fail silently - now Netlist Carpentry crashes explicitly whenever unfixable issues are encountered, instead of hiding it behind `None` returns
   - Removed `remove_degenerates` step and `fix_invalid_verilog` (plus related methods) as they are no longer required
 
+## FIXED
+- `netlist_carpentry.run_equiv()` now also supports comparing two Circuit objects, or a Circuit and a Verilog file
+- `netlist_carpentry.run_eqy()` now also supports comparing two Circuit objects, or a Circuit and a Verilog file
+
 # Older Versions
 
 ## Changelog 0.3.6 (2026-03-23)
