@@ -75,7 +75,13 @@ def test_decentral_mux_eqy_run() -> None:
 
     # Now use "standalone" function, and check overwrite param
     process = run_eqy(
-        [f'tests/files/{name}.v'], [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name, name, eqy_path, eqy_out, overwrite=True
+        [f'tests/files/{name}.v'],
+        [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'],
+        name,
+        name,
+        script_path=eqy_path,
+        output_path=eqy_out,
+        overwrite=True,
     )
     assert process.returncode == 0  # Successful execution
     assert os.path.exists(eqy_out)
@@ -141,6 +147,22 @@ def test_run_equiv_circuit() -> None:
     assert equiv_proc.returncode == 0
     assert equiv_proc.stdout is not None
     assert equiv_proc.stderr == b''
+
+
+def test_run_eqy_circuit() -> None:
+    gold = read('tests/files/or_pattern_find.v', 'or_pattern_find')
+    gate = read('tests/files/or_pattern_find.v', 'or_pattern_find')
+    equiv_proc = run_eqy(gold, gate, quiet=False)
+    assert equiv_proc.returncode == 0
+    assert equiv_proc.stdout is None  # No piping, instead shown in the console
+    assert equiv_proc.stderr is None  # No piping, instead shown in the console
+
+    gate = read('tests/files/or_pattern_replace.v', 'or_pattern_replace')
+    equiv_proc = run_eqy(gold, gate, quiet=True)  # Different top module names let EQY fail
+    assert equiv_proc.returncode == 1
+    assert equiv_proc.stdout is not None
+    assert b'ERROR: Failed to combine designs. For details see ' in equiv_proc.stderr
+    assert b"/combine.log'.\n" in equiv_proc.stderr
 
 
 if __name__ == '__main__':

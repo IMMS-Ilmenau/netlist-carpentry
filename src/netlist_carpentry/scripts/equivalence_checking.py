@@ -137,11 +137,38 @@ class EquivalenceChecking:
         return process
 
 
+@overload
 def run_eqy(
-    gold_vfile_paths: List[str],
-    gate_vfile_paths: List[str],
-    gold_top_module: Optional[str] = None,
-    gate_top_module: Optional[str] = None,
+    gold_design: Circuit,
+    gate_design: Circuit,
+    *,
+    script_path: Optional[str] = None,
+    output_path: Optional[str] = None,
+    overwrite: bool = False,
+    quiet: bool = False,
+) -> Process: ...
+
+
+@overload
+def run_eqy(
+    gold_design: List[str],
+    gate_design: List[str],
+    gold_top: Optional[str] = None,
+    gate_top: Optional[str] = None,
+    *,
+    script_path: Optional[str] = None,
+    output_path: Optional[str] = None,
+    overwrite: bool = False,
+    quiet: bool = False,
+) -> Process: ...
+
+
+def run_eqy(
+    gold_design: Union[Circuit, List[str]],
+    gate_design: Union[Circuit, List[str]],
+    gold_top: Optional[str] = None,
+    gate_top: Optional[str] = None,
+    *,
     script_path: Optional[str] = None,
     output_path: Optional[str] = None,
     overwrite: bool = False,
@@ -159,10 +186,10 @@ def run_eqy(
     If the directory exists, and the parameter is False or omitted, the equivalence checking script will fail with a corresponding error message.
 
     Args:
-        gold_vfile_paths (List[str]): A list of paths to the gold Verilog files.
-        gate_vfile_paths (List[str]): A list of paths to the gate Verilog files.
-        gold_top_module (Optional[str]): The top module name for the gold design. If None, module is auto-selected.
-        gate_top_module (Optional[str]): The top module name for the gate design. If None, module is auto-selected.
+        gold_design (Union[Circuit, List[str]]): A Circuit object or a list of paths to the gold Verilog files.
+        gate_design (Union[Circuit, List[str]]): A Circuit object or a list of paths to the gate Verilog files.
+        gold_top (Optional[str]): The top module name for the gold design. If None, module is auto-selected.
+        gate_top (Optional[str]): The top module name for the gate design. If None, module is auto-selected.
         script_path (Optional[str]): The path (including the desired file name) to the directory where the .eqy script will be saved.
         output_path (Optional[str], optional): The path to the directory where the EQY tool will be executed.
             If None, executes the equivalence check in a temporary directory. Defaults to None.
@@ -174,13 +201,26 @@ def run_eqy(
     Returns:
         subprocess.CompletedProcess: The result of the execution plus some metadata.
     """
-    context = tempfile.TemporaryDirectory() if script_path is None else nullcontext(str(Path(script_path).parent))
-    if script_path is not None:
-        Path(script_path).parent.mkdir(parents=True, exist_ok=True)
-    with context as script_dir:
-        script_path = script_dir + '/eqy.eqy' if script_path is None else script_path
-        eqy = EquivalenceChecking(gold_vfile_paths, gold_top_module, gate_vfile_paths, gate_top_module, script_path)
-        return eqy.run_eqy(output_path, overwrite, quiet)
+    from netlist_carpentry import Circuit
+
+    with tempfile.TemporaryDirectory() as vtmp_dir:
+        if isinstance(gold_design, Circuit):
+            gold_path = os.path.join(vtmp_dir, 'gold.v')
+            gold_design.write(gold_path)
+            gold_top = gold_design.top_name
+            gold_design = [gold_path]
+        if isinstance(gate_design, Circuit):
+            gate_path = os.path.join(vtmp_dir, 'gate.v')
+            gate_design.write(gate_path)
+            gate_top = gate_design.top_name
+            gate_design = [gate_path]
+        context = tempfile.TemporaryDirectory() if script_path is None else nullcontext(str(Path(script_path).parent))
+        if script_path is not None:
+            Path(script_path).parent.mkdir(parents=True, exist_ok=True)
+        with context as script_dir:
+            script_path = script_dir + '/eqy.eqy' if script_path is None else script_path
+            eqy = EquivalenceChecking(gold_design, gold_top, gate_design, gate_top, script_path)
+            return eqy.run_eqy(output_path, overwrite, quiet)
 
 
 @overload
