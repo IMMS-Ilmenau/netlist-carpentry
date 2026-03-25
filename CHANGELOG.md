@@ -5,10 +5,15 @@
   - Python module is no longer executable with arguments via command line - use chain_optimizer module via `chain_optimizer.opt_chains()`
   - Removed a bunch of catches in edge cases that led the process to fail silently - now Netlist Carpentry crashes explicitly whenever unfixable issues are encountered, instead of hiding it behind `None` returns
   - Removed `remove_degenerates` step and `fix_invalid_verilog` (plus related methods) as they are no longer required
+- `netlist_carpentry.run_equiv()` now has an additional parameter `out_dir` for a directory to be used as output for the script (and possibly additional temporary files) - if unset, a temporary directory is used
 
 ## FIXED
 - `netlist_carpentry.run_equiv()` now also supports comparing two Circuit objects, or a Circuit and a Verilog file
 - `netlist_carpentry.run_eqy()` now also supports comparing two Circuit objects, or a Circuit and a Verilog file
+
+## REMOVED
+- `equiv.sh` from the `netlist_carpentry.scripts` package - the script is now generated dynamically at runtime
+
 
 # Older Versions
 
