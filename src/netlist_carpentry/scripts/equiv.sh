@@ -3,10 +3,12 @@
 yosys -p "
 read_verilog $1 # Load the "Gold" (Reference) design
 prep -top $2 -flatten
+rename -hide w:* i:* %d     # Rename and hide all wires that are NOT ports to prevent false matching (gold.w1 may be structurally different from gate.w1, but logically equivalent)
 design -stash gold
 
 read_verilog $3 # Load the "Gate" (Implementation) design
 prep -top $4 -flatten
+rename -hide w:* i:* %d     # Rename and hide all wires that are NOT ports to prevent false matching (gold.w1 may be structurally different from gate.w1, but logically equivalent)
 design -stash gate
 
 # Create the Equivalence Miter (new module 'equiv') by matching ports of 'gold' and 'gate'

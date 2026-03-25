@@ -9,6 +9,7 @@ from netlist_carpentry.core.graph.constraint import CASCADING_OR_CONSTRAINT
 from netlist_carpentry.core.graph.pattern_generator import PatternGenerator
 from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
 from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
+from netlist_carpentry.routines.opt.floodfill.chain_optimizer import opt_chains
 from netlist_carpentry.scripts.equivalence_checking import EquivalenceChecking
 
 
@@ -163,6 +164,16 @@ def test_run_eqy_circuit() -> None:
     assert equiv_proc.stdout is not None
     assert b'ERROR: Failed to combine designs. For details see ' in equiv_proc.stderr
     assert b"/combine.log'.\n" in equiv_proc.stderr
+
+
+def test_chain_optimizer_eqy() -> None:
+    gold = read('tests/files/chains_orig.v', 'chains_orig')
+    opt_chains(gold, gates=['§or'])
+    gold.write('tests/files/gen/chains_out.v', overwrite=True)
+    equiv_proc = run_equiv('tests/files/chains_orig.v', 'tests/files/gen/chains_out.v', 'chains_orig', 'chains_orig', quiet=True)
+    assert equiv_proc.returncode == 0
+    assert equiv_proc.stdout is not None
+    assert equiv_proc.stderr == b''
 
 
 if __name__ == '__main__':
