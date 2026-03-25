@@ -166,7 +166,7 @@ def test_run_eqy_circuit() -> None:
     assert b"/combine.log'.\n" in equiv_proc.stderr
 
 
-def test_chain_optimizer_eqy() -> None:
+def test_chain_optimizer_equiv() -> None:
     gold = read('tests/files/chains_orig.v', 'chains_orig')
     opt_chains(gold, gates=['§or'])
     gold.write('tests/files/gen/chains_out.v', overwrite=True)
@@ -176,6 +176,30 @@ def test_chain_optimizer_eqy() -> None:
     assert equiv_proc.returncode == 0
     assert equiv_proc.stdout is not None
     assert equiv_proc.stderr == b''
+
+
+def test_chain_optimizer_equiv_out_dir() -> None:
+    gold = read('tests/files/chains_orig.v', 'chains_orig')
+    opt_chains(gold, gates=['§or'])
+    gold.write('tests/files/gen/chains_out.v', overwrite=True)
+    assert not os.path.exists('tests/files/gen/chain_opt_equiv')
+    os.mkdir('tests/files/gen/chain_opt_equiv')
+    equiv_proc = run_equiv(
+        'tests/files/chains_orig.v',
+        'tests/files/gen/chains_out.v',
+        'chains_orig',
+        'chains_orig',
+        quiet=True,
+        out_dir='tests/files/gen/chain_opt_equiv',
+        no_name_matching=True,
+    )
+    assert equiv_proc.returncode == 0
+    assert equiv_proc.stdout is not None
+    assert equiv_proc.stderr == b''
+
+    assert os.path.exists('tests/files/gen/chain_opt_equiv')
+    assert os.path.exists('tests/files/gen/chain_opt_equiv/equiv.sh')
+    shutil.rmtree('tests/files/gen/chain_opt_equiv')
 
 
 if __name__ == '__main__':

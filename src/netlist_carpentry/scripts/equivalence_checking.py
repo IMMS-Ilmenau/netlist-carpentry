@@ -261,12 +261,21 @@ def _equiv_template(gold: str, gate: str, gold_top: Optional[str], gate_top: Opt
 
 
 @overload
-def run_equiv(gold_design: Circuit, gate_design: Circuit, *, quiet: bool = False, no_name_matching: bool = False) -> Process: ...
+def run_equiv(
+    gold_design: Circuit, gate_design: Circuit, *, quiet: bool = False, out_dir: Optional[str] = None, no_name_matching: bool = False
+) -> Process: ...
 
 
 @overload
 def run_equiv(
-    gold_design: str, gate_design: str, gold_top: str, gate_top: str, *, quiet: bool = False, no_name_matching: bool = False
+    gold_design: str,
+    gate_design: str,
+    gold_top: str,
+    gate_top: str,
+    *,
+    quiet: bool = False,
+    out_dir: Optional[str] = None,
+    no_name_matching: bool = False,
 ) -> Process: ...
 
 
@@ -277,6 +286,7 @@ def run_equiv(
     gate_top: str = '',
     *,
     quiet: bool = False,
+    out_dir: Optional[str] = None,
     no_name_matching: bool = False,
 ) -> Process:
     """
@@ -292,6 +302,8 @@ def run_equiv(
         gate_top (str): The top module name for the gate design.
         quiet (bool, optional): If True, pipes all Yosys output into the subprocess.CompletedProcess object.
             If False, prints all Yosys output to the console. Defaults to False.
+        out_dir (Optional[str], optional): The directory path, where the script (and other temporary files) will be stored.
+            Defaults to None, in which case a temporary directory is created.
         no_name_matching (bool, optional): Whether to suppress the assumption that wires with the same name are identical.
             For example, gold.w1 may be structurally different from gate.w1, but logically equivalent. If `no_name_matching` is
             set to `True`, the equivalence check will still see the equivalence, but if it is `False` it will fail, since gold.w1
@@ -302,7 +314,8 @@ def run_equiv(
     """
     from netlist_carpentry import Circuit
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
+    context = tempfile.TemporaryDirectory() if out_dir is None else nullcontext(str(Path(out_dir).resolve()))
+    with context as tmp_dir:
         if isinstance(gold_design, Circuit):
             gold_path = os.path.join(tmp_dir, 'gold.v')
             gold_design.write(gold_path)
