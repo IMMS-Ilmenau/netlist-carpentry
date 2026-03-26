@@ -17,6 +17,20 @@ if TYPE_CHECKING:
 
 Process = subprocess.CompletedProcess[bytes]
 
+EQY_TEMPLATE = """[gold]
+{gold_vsources}
+{gold_top_module}
+memory_map
+
+[gate]
+{gate_vsources}
+{gate_top_module}
+memory_map
+
+[strategy sat]
+use sat
+depth 10"""
+
 
 class EquivalenceChecking:
     """
@@ -70,12 +84,11 @@ class EquivalenceChecking:
         Returns:
             str: The formatted EQY template string.
         """
-        template = """[gold]\n{gold_vsources}\n{gold_top_module}\nmemory_map\n\n[gate]\n{gate_vsources}\n{gate_top_module}\nmemory_map\n\n[strategy sat]\nuse sat\ndepth 10"""
-        gold_vfiles = '\n'.join(f'read_verilog {p}' for p in self.gold_vfile_paths)
+        gold = '\n'.join(f'read_verilog {p}' for p in self.gold_vfile_paths)
         gold_top_module = 'prep -top ' + self.gold_top_module + ' -flatten' if self.gold_top_module is not None else 'prep -auto-top -flatten'
-        gate_vfiles = '\n'.join(f'read_verilog {p}' for p in self.gate_vfile_paths)
+        gate = '\n'.join(f'read_verilog {p}' for p in self.gate_vfile_paths)
         gate_top_module = 'prep -top ' + self.gate_top_module + ' -flatten' if self.gate_top_module is not None else 'prep -auto-top -flatten'
-        return template.format(gold_vsources=gold_vfiles, gold_top_module=gold_top_module, gate_vsources=gate_vfiles, gate_top_module=gate_top_module)
+        return EQY_TEMPLATE.format(gold_vsources=gold, gold_top_module=gold_top_module, gate_vsources=gate, gate_top_module=gate_top_module)
 
     def _create_eqy_file(self, overwrite: bool = False) -> None:
         """
