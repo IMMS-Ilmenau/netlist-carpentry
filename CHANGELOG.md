@@ -1,11 +1,16 @@
 # Changelog 0.3.7
 
+## ADDED
+- `netlist_carpentry.run_equiv_miter()` to compare two Circuit objects or Verilog files (or mixed) by building a miter module in Yosys and showing equivalence within the miter module
+- `netlist_carpentry.Module.flatten_instance()` to flatten a single module instance ("shallow flattening", ignoring any submodules inside the module instance), such that the content of the module is pasted into the parent module (transferring previous instance connections directly into the module) and the instance itself is removed
+
 ## CHANGED
 - Refactorings in `netlist_carpentry.routines.opt.floodfill.chain_optimizer`
   - Python module is no longer executable with arguments via command line - use chain_optimizer module via `chain_optimizer.opt_chains()`
   - Removed a bunch of catches in edge cases that led the process to fail silently - now Netlist Carpentry crashes explicitly whenever unfixable issues are encountered, instead of hiding it behind `None` returns
   - Removed `remove_degenerates` step and `fix_invalid_verilog` (plus related methods) as they are no longer required
 - `netlist_carpentry.run_equiv()` now has an additional parameter `out_dir` for a directory to be used as output for the script (and possibly additional temporary files) - if unset, a temporary directory is used
+- Updated several docstrings
 
 ## FIXED
 - `netlist_carpentry.run_equiv()` now also supports comparing two Circuit objects, or a Circuit and a Verilog file
@@ -47,7 +52,6 @@
   - Due to the sourcing mechanism, reading VHDL files is currently only supported on Linux systems
 - `netlist_carpentry.Module.equal_connections()` to compare two modules whether they have the same connections, ignoring metadata and only focusing on the structural aspects, i.e. whether ports, wires and instances have the same connections (WIP)
 - `netlist_carpentry.Circuit.flatten()` to flatten the whole circuit (supports deselecting/skipping modules) as a convenience extension to `netlist_carpentry.Module.flatten()`
-- `netlist_carpentry.Module.flatten_instance()` to flatten a single module instance ("shallow flattening", ignoring any submodules inside the module instance), such that the content of the module is pasted into the parent module (transferring previous instance connections directly into the module) and the instance itself is removed
 - `netlist_carpentry.Port.is_connected_1to1` property that is True if the port is connected completely `1:1` to a given wire
   - The port and the wire must have the same width
   - No index of the port is connected to another wire
