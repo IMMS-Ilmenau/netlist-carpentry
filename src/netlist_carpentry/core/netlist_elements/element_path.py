@@ -197,16 +197,15 @@ class ElementPath(BaseModel):
         Whether the nth parent of this element path exists.
 
         The 0th parent is the element itself.
-        For example, if this path represents "module.instance.port",
-        then:
-        - has_parent(0) will always return True
-        - has_parent(1) returns True as well ("module.instance")
-        - has_parent(2) returns True as well ("module")
+        For example, if this path represents "module.instance.port", then:
+        - has_parent(0) will always return True (reference to itself)
+        - has_parent(1) returns True as well ("module.instance", parent of the path)
+        - has_parent(2) returns True as well ("module", grandparent of the path)
         - has_parent(3) returns False (no hierarchy left)
 
         Args:
             index (NonNegativeInt): The level of the parent to check.
-                0 means self, 1 means immediate parent, etc.
+                0 means self, 1 references immediate parent, 2 references the grandparent, etc.
 
         Returns:
             bool: True if the parent exists, False otherwise
