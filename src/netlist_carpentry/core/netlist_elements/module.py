@@ -1152,6 +1152,27 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             if inst.name not in skip_name and inst.instance_type not in skip_type:
                 self._flatten_inst(inst, skip_name, skip_type, recursive)
 
+    def flatten_instance(self, instance: Union[str, Instance]) -> None:
+        """Flatten a single instance by replacing the instance with its content.
+
+        This method takes an instance (instance name or object) of this module.
+        In this process, the original instance gets replaced with its content.
+        This function does not operate recursively, meaning that if the given instance
+        has further submodules, they will not be flattened as well.
+
+        Args:
+            instance (Union[str, Instance]): The instance (or name of the instance) to flatten.
+                Must be part of this module.
+
+        Raises:
+            ObjectNotFoundError: If the given instance (or instance name) is not part of this module.
+        """
+        if isinstance(instance, str):
+            if instance not in self.instances:
+                raise ObjectNotFoundError(f'No instancce {instance} exists in module {self.name}!')
+            instance = self.instances[instance]
+        self._flatten_inst(instance, [], [], False)
+
     def _flatten_inst(self, inst: Instance, skip_name: List[str], skip_type: List[str], recursive: bool) -> None:
         if inst.module_definition is None:
             raise ObjectNotFoundError(f'No module definition found for instance {inst.raw_path}!')
