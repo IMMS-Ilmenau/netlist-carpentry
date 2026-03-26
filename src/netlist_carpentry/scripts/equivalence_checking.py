@@ -10,6 +10,8 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Union, overload
 
+from pydantic import PositiveInt
+
 if TYPE_CHECKING:
     from netlist_carpentry import Circuit
 
@@ -292,12 +294,12 @@ def run_equiv(
     """
     Runs a predefined script using the equiv_* passes from Yosys to prove the logical equivalence of the Verilog designs for the given Verilog designs.
 
-    The gold Verilog file is the golden reference design, while the gate Verilog file is the synthesized (gate-level) design.
+    The gold design is the golden reference design, while the gate design is the synthesized (gate-level) design.
     In the scope of this framework, the gate design refers to the modified or optimized version of the original design.
 
     Args:
-        gold_design (Union[Circuit, str]): The circuit object, or the file path to the gold Verilog file.
-        gate_design (Union[Circuit, str]): The circuit object, or the file path to the gate Verilog file.
+        gold_design (Union[Circuit, str]): The circuit object, or the file path to the gold design.
+        gate_design (Union[Circuit, str]): The circuit object, or the file path to the gate design.
         gold_top (str): The top module name for the gold design.
         gate_top (str): The top module name for the gate design.
         quiet (bool, optional): If True, pipes all Yosys output into the subprocess.CompletedProcess object.
@@ -329,6 +331,102 @@ def run_equiv(
         script_path = Path(f'{tmp_dir}/equiv.sh')
         with open(script_path, 'w') as f:
             f.write(_equiv_template(gold_design, gate_design, gold_top, gate_top, no_name_matching=no_name_matching))
+        stdout = subprocess.PIPE if quiet else None
+        stderr = subprocess.PIPE if quiet else None
+        script_path.chmod(script_path.stat().st_mode | 0o111)
+        return subprocess.run([script_path], stdout=stdout, stderr=stderr)
+
+
+EQUIV_MITER_TEMPLATE = """#!/bin/bash
+
+yosys -p "
+read_verilog {gold} # Load the "Gold" (Reference) design
+prep -top {gold_top}
+techmap; flatten; abc -fast; clk2fflogic; opt_clean
+rename {gold_top} gold
+design -stash gold
+
+read_verilog {gate} # Load the "Gate" (Implementation) design
+prep -top {gate_top}
+techmap; flatten; abc -fast; clk2fflogic; opt_clean
+rename {gate_top} gate
+design -stash gate
+
+# Create the equivalence checking miter
+design -copy-from gold -as gold gold
+design -copy-from gate -as gate gate
+miter -equiv -flatten gold gate miter
+hierarchy -top miter
+flatten
+techmap
+opt -full
+
+# Prove equivalence using SAT
+sat -verify {sat_strat} -set-init-zero -prove trigger 0 -show-inputs -show-outputs -show-public -show-regs"
+"""
+
+
+def _equiv_miter_template(gold: str, gate: str, gold_top: Optional[str], gate_top: Optional[str], *, cycles: Optional[PositiveInt] = None) -> str:
+    sat_strat = f'-seq {cycles}' if cycles is not None else '-tempinduct'
+    return EQUIV_MITER_TEMPLATE.format(gold=gold, gate=gate, gold_top=gold_top, gate_top=gate_top, sat_strat=sat_strat)
+
+
+def run_equiv_miter(
+    gold_design: Union[Circuit, str],
+    gate_design: Union[Circuit, str],
+    gold_top: str = '',
+    gate_top: str = '',
+    *,
+    quiet: bool = False,
+    out_dir: Optional[str] = None,
+    cycles: Optional[PositiveInt] = None,
+) -> Process:
+    """
+    Runs a predefined script to prove the logical equivalence for the given Verilog designs using a miter/SAT approach in Yosys.
+
+    The equivalence check is either executed for a given number of cycles for which the design must be equivalent (Bounded Model Check)
+    or via temporal induction to prove that if the designs are equal after `K` cycles, they will be equal in cycle `K+1`.
+
+    The gold design is the golden reference design, while the gate design is the synthesized (gate-level) design.
+    In the scope of this framework, the gate design refers to the modified or optimized version of the original design.
+
+    Args:
+        gold_design (Union[Circuit, str]): The circuit object, or the file path to the gold design.
+        gate_design (Union[Circuit, str]): The circuit object, or the file path to the gate design.
+        gold_top (str): The top module name for the gold design.
+        gate_top (str): The top module name for the gate design.
+        quiet (bool, optional): If True, pipes all Yosys output into the subprocess.CompletedProcess object.
+            If False, prints all Yosys output to the console. Defaults to False.
+        out_dir (Optional[str], optional): The directory path, where the script (and other temporary files) will be stored.
+            Defaults to None, in which case a temporary directory is created.
+        cycles (Optional[PositiveInt], optional): The number of clock cycles for which the Bounded Model Checking should be executed.
+            This approach checks if the designs behave equally for the given number of clock cycles. This however means, that if Yosys
+            proves the equivalence for 5 cycles, it may diverge on the 6th cycle.
+            However, larger numbers (e.g. more than 10 cycles) may lead to the algorithm running infinitely.
+            If `cycles` is None (default case), an induction prove is executed that checks if they match at an arbitrary cycle `K`,
+            they must match at cycle `K+1` as well. This however may be hard for large circuits and run seemingly infinitely.
+            Defaults to None, in which case a temporal induction is executed.
+
+    Returns:
+        subprocess.CompletedProcess: The result of the execution plus some metadata.
+    """
+    from netlist_carpentry import Circuit
+
+    context = tempfile.TemporaryDirectory() if out_dir is None else nullcontext(str(Path(out_dir).resolve()))
+    with context as tmp_dir:
+        if isinstance(gold_design, Circuit):
+            gold_path = os.path.join(tmp_dir, 'gold.v')
+            gold_design.write(gold_path)
+            gold_top = gold_design.top_name
+            gold_design = gold_path
+        if isinstance(gate_design, Circuit):
+            gate_path = os.path.join(tmp_dir, 'gate.v')
+            gate_design.write(gate_path)
+            gate_top = gate_design.top_name
+            gate_design = gate_path
+        script_path = Path(f'{tmp_dir}/equiv_miter.sh')
+        with open(script_path, 'w') as f:
+            f.write(_equiv_miter_template(gold_design, gate_design, gold_top, gate_top, cycles=cycles))
         stdout = subprocess.PIPE if quiet else None
         stderr = subprocess.PIPE if quiet else None
         script_path.chmod(script_path.stat().st_mode | 0o111)

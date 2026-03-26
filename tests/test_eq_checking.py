@@ -4,7 +4,7 @@ import shutil
 import pytest
 from utils import save_results
 
-from netlist_carpentry import read, run_equiv, run_eqy
+from netlist_carpentry import read, run_equiv, run_equiv_miter, run_eqy
 from netlist_carpentry.core.graph.constraint import CASCADING_OR_CONSTRAINT
 from netlist_carpentry.core.graph.pattern_generator import PatternGenerator
 from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
@@ -199,6 +199,45 @@ def test_chain_optimizer_equiv_out_dir() -> None:
 
     assert os.path.exists('tests/files/gen/chain_opt_equiv')
     assert os.path.exists('tests/files/gen/chain_opt_equiv/equiv.sh')
+    shutil.rmtree('tests/files/gen/chain_opt_equiv')
+
+
+def test_chain_optimizer_equiv_miter() -> None:
+    gold = read('tests/files/or_pattern_find.v', 'or_pattern_find')
+    gate = read('tests/files/or_pattern_find.v', 'or_pattern_find')
+    equiv_proc = run_equiv_miter(gold, gate, quiet=False)
+    assert equiv_proc.returncode == 0
+    assert equiv_proc.stdout is None  # No piping, instead shown in the console
+    assert equiv_proc.stderr is None  # No piping, instead shown in the console
+
+    gate = read('tests/files/or_pattern_replace.v', 'or_pattern_replace')
+    equiv_proc = run_equiv_miter(gold, gate, quiet=True)  # Different top module names let EQY fail
+    assert equiv_proc.returncode == 0
+    assert equiv_proc.stdout is not None
+    assert equiv_proc.stderr == b''
+
+
+def test_chain_optimizer_equiv_miter_out_dir() -> None:
+    gold = read('tests/files/chains_orig.v', 'chains_orig')
+    opt_chains(gold, gates=['§or'])
+    gold.write('tests/files/gen/chains_out.v', overwrite=True)
+    assert not os.path.exists('tests/files/gen/chain_opt_equiv')
+    os.mkdir('tests/files/gen/chain_opt_equiv')
+    equiv_proc = run_equiv_miter(
+        'tests/files/chains_orig.v',
+        'tests/files/gen/chains_out.v',
+        'chains_orig',
+        'chains_orig',
+        quiet=True,
+        out_dir='tests/files/gen/chain_opt_equiv',
+        cycles=None,
+    )
+    assert equiv_proc.returncode == 0
+    assert equiv_proc.stdout is not None
+    assert equiv_proc.stderr == b''
+
+    assert os.path.exists('tests/files/gen/chain_opt_equiv')
+    assert os.path.exists('tests/files/gen/chain_opt_equiv/equiv_miter.sh')
     shutil.rmtree('tests/files/gen/chain_opt_equiv')
 
 
