@@ -234,23 +234,13 @@ class Wire(NetlistElement, BaseModel):
         return not self.signed
 
     @property
-    def ports(self) -> Dict[int, List[PortSegment]]:
+    def connected_port_segments(self) -> Dict[NonNegativeInt, List[PortSegment]]:
         """
-        Dictionary mapping port names to dictionaries of wire segment indices and corresponding element paths.
+        Dictionary mapping wire indices to port segments connected to the respective wire index.
 
-        Returns:
-            A dictionary where each key is a port name (str), and the value is another dictionary.
-            The inner dictionary has wire segment indices (int) as keys, and the values are ElementPaths
-            representing the instance path of the port connected at this wire index.
+        Each key is a wire index (NonNegativeInt), and the value is a list of port segments connected to this wire segment index.
+        Accordingly, each port segment from the list is connected to the same wire segment.
         """
-        port_dict: Dict[int, List[PortSegment]] = {}
-        for s_idx in self.segments:
-            port_dict[s_idx] = self[s_idx].port_segments
-        return port_dict
-
-    @property
-    def connected_port_segments(self) -> Dict[PositiveInt, List[PortSegment]]:
-        """Retrieves a dictionary of all wire segments and their corresponding port segments."""
         return {idx: s.port_segments for idx, s in self}
 
     def set_name(self, new_name: str) -> None:

@@ -904,12 +904,12 @@ def test_connect(standard_module: Module) -> None:
     p = standard_module.ports['test_port2']
     p.segments.clear()
     p.create_port_segment(0)
-    assert w.ports == {0: []}
+    assert w.connected_port_segments == {0: []}
     assert p[0].ws_path == WIRE_SEGMENT_X.path
     assert not p.is_connected_partly
 
     standard_module.connect(w[0], p[0])
-    assert w.ports == {0: [p[0]]}
+    assert w.connected_port_segments == {0: [p[0]]}
     assert p[0].ws_path == w[0].path
 
     standard_module.disconnect(p[0])
@@ -942,12 +942,12 @@ def test_connect_full_port_wire(standard_module: Module) -> None:
     p = standard_module.ports['test_port2']
     p.segments.clear()
     p.create_port_segments(8)
-    assert w.ports == {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: []}
+    assert w.connected_port_segments == {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: []}
     assert p[0].ws_path == WIRE_SEGMENT_X.path
     assert not p.is_connected_partly
 
     standard_module.connect(w, p)
-    assert w.ports == {0: [p[0]], 1: [p[1]], 2: [p[2]], 3: [p[3]], 4: [p[4]], 5: [p[5]], 6: [p[6]], 7: [p[7]]}
+    assert w.connected_port_segments == {0: [p[0]], 1: [p[1]], 2: [p[2]], 3: [p[3]], 4: [p[4]], 5: [p[5]], 6: [p[6]], 7: [p[7]]}
     assert p[0].ws_path == w[0].path
     assert p.is_connected
 
@@ -968,7 +968,7 @@ def test_connect_inst_port(standard_module: Module) -> None:
     p = inst.ports['test_inst_port']
 
     standard_module.connect(w[0], p[0])
-    assert w.ports == {0: [p[0]]}
+    assert w.connected_port_segments == {0: [p[0]]}
     assert p[0].ws_path == w[0].path
     assert inst.connections[p.name][0] == w[0].path
 
@@ -1091,11 +1091,11 @@ def test_disconnect_inst_port(connected_module: Module) -> None:
     p = inst.ports['A']
     pseg = p[0]
 
-    assert len(w.ports[0]) == 2
-    assert pseg in w.ports[0]
+    assert len(w.connected_port_segments[0]) == 2
+    assert pseg in w.connected_port_segments[0]
     connected_module.disconnect(pseg)
-    assert len(w.ports[0]) == 1
-    assert pseg not in w.ports[0]
+    assert len(w.connected_port_segments[0]) == 1
+    assert pseg not in w.connected_port_segments[0]
     assert pseg.ws_path == WIRE_SEGMENT_X.path
     assert inst.connections[p.name][0] == WIRE_SEGMENT_X.path
 
@@ -1106,11 +1106,11 @@ def test_disconnect_inst_port_path(connected_module: Module) -> None:
     p = inst.ports['A']
     pseg = p[0]
 
-    assert len(w.ports[0]) == 2
-    assert pseg in w.ports[0]
+    assert len(w.connected_port_segments[0]) == 2
+    assert pseg in w.connected_port_segments[0]
     connected_module.disconnect(p.path)
-    assert len(w.ports[0]) == 1
-    assert pseg not in w.ports[0]
+    assert len(w.connected_port_segments[0]) == 1
+    assert pseg not in w.connected_port_segments[0]
     assert pseg.ws_path == WIRE_SEGMENT_X.path
     assert inst.connections[p.name][0] == WIRE_SEGMENT_X.path
 

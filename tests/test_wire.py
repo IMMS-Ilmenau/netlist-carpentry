@@ -364,7 +364,7 @@ def test_set_signed(standard_wire: Wire) -> None:
 
 def test_wire_driver(standard_wire: Wire) -> None:
     assert standard_wire.driver() == {1: standard_wire[1].driver()[0]}
-    w_port = standard_wire.ports[1][0]
+    w_port = standard_wire.connected_port_segments[1][0]
     assert standard_wire.driver()[1] == w_port
 
     standard_wire[1].port_segments.pop(0)
@@ -384,7 +384,7 @@ def test_wire_load(standard_wire: Wire) -> None:
 def test_has_no_driver(standard_wire: Wire) -> None:
     assert not standard_wire.has_no_driver()
     assert standard_wire.has_no_driver(get_mapping=True) == {1: False}
-    standard_wire.ports[1].pop(0)
+    standard_wire.connected_port_segments[1].pop(0)
     assert standard_wire.has_no_driver()
     assert standard_wire.has_no_driver(get_mapping=True) == {1: True}
     assert len(standard_wire.connected_port_segments[1]) == 2
@@ -402,8 +402,8 @@ def test_has_multiple_drivers(standard_wire: Wire) -> None:
 def test_has_no_loads(standard_wire: Wire) -> None:
     assert not standard_wire.has_no_loads()
     assert standard_wire.has_no_loads(get_mapping=True) == {1: False}
-    standard_wire.ports[1].pop(-1)
-    standard_wire.ports[1].pop(-1)
+    standard_wire.connected_port_segments[1].pop(-1)
+    standard_wire.connected_port_segments[1].pop(-1)
     assert standard_wire.has_no_loads()
     assert standard_wire.has_no_loads(get_mapping=True) == {1: True}
     assert len(standard_wire.connected_port_segments[1]) == 1
@@ -412,14 +412,14 @@ def test_has_no_loads(standard_wire: Wire) -> None:
 def test_is_dangling(standard_wire: Wire) -> None:
     assert not standard_wire.is_dangling()
     assert standard_wire.is_dangling(get_mapping=True) == {1: False}
-    p1 = standard_wire.ports[1].pop(0)
+    p1 = standard_wire.connected_port_segments[1].pop(0)
     assert standard_wire.is_dangling()
     assert standard_wire.is_dangling(get_mapping=True) == {1: True}
-    standard_wire.ports[1].append(p1)
-    standard_wire.ports[1].pop(0)
+    standard_wire.connected_port_segments[1].append(p1)
+    standard_wire.connected_port_segments[1].pop(0)
     assert not standard_wire.is_dangling()
     assert standard_wire.is_dangling(get_mapping=True) == {1: False}
-    standard_wire.ports[1].pop(0)
+    standard_wire.connected_port_segments[1].pop(0)
     assert standard_wire.is_dangling()
     assert standard_wire.is_dangling(get_mapping=True) == {1: True}
 
@@ -430,15 +430,15 @@ def test_has_problems(standard_wire: Wire) -> None:
     _add_multidriver(standard_wire)
     assert standard_wire.has_problems()
     assert standard_wire.has_problems(get_mapping=True) == {1: True}
-    p1 = standard_wire.ports[1].pop(0)
-    p1 = standard_wire.ports[1].pop(-1)
+    p1 = standard_wire.connected_port_segments[1].pop(0)
+    p1 = standard_wire.connected_port_segments[1].pop(-1)
     assert standard_wire.has_problems()
     assert standard_wire.has_problems(get_mapping=True) == {1: True}
-    standard_wire.ports[1].append(p1)
-    standard_wire.ports[1].pop(0)
+    standard_wire.connected_port_segments[1].append(p1)
+    standard_wire.connected_port_segments[1].pop(0)
     assert not standard_wire.has_problems()
     assert standard_wire.has_problems(get_mapping=True) == {1: False}
-    standard_wire.ports[1].pop(0)
+    standard_wire.connected_port_segments[1].pop(0)
     assert standard_wire.has_problems()
     assert standard_wire.has_problems(get_mapping=True) == {1: True}
 
@@ -522,22 +522,22 @@ def test_copy_object(standard_wire: Wire) -> None:
 
 
 def test_evaluate(standard_wire: Wire) -> None:
-    for p in standard_wire.ports[1]:
+    for p in standard_wire.connected_port_segments[1]:
         assert p.signal == Signal.UNDEFINED
     standard_wire.evaluate()
-    for p in standard_wire.ports[1]:
+    for p in standard_wire.connected_port_segments[1]:
         assert p.signal == Signal.UNDEFINED
 
     standard_wire.driver()[1].set_signal(0)
     assert standard_wire.signal_array[1] == Signal.UNDEFINED
-    assert standard_wire.ports[1][0].signal == Signal.LOW
-    assert standard_wire.ports[1][1].signal == Signal.UNDEFINED
-    assert standard_wire.ports[1][2].signal == Signal.UNDEFINED
+    assert standard_wire.connected_port_segments[1][0].signal == Signal.LOW
+    assert standard_wire.connected_port_segments[1][1].signal == Signal.UNDEFINED
+    assert standard_wire.connected_port_segments[1][2].signal == Signal.UNDEFINED
     standard_wire.evaluate()
     assert standard_wire.signal_array[1] == Signal.LOW
-    assert standard_wire.ports[1][0].signal == Signal.LOW
-    assert standard_wire.ports[1][1].signal == Signal.LOW
-    assert standard_wire.ports[1][2].signal == Signal.LOW
+    assert standard_wire.connected_port_segments[1][0].signal == Signal.LOW
+    assert standard_wire.connected_port_segments[1][1].signal == Signal.LOW
+    assert standard_wire.connected_port_segments[1][2].signal == Signal.LOW
 
     _add_multidriver(standard_wire)
     with pytest.raises(MultipleDriverError):
