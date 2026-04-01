@@ -1,4 +1,4 @@
-# Changelog 0.3.7
+# Changelog 0.3.7 (2026-04-01)
 
 ## ADDED
 - `netlist_carpentry.run_equiv_miter()` to compare two Circuit objects or Verilog files (or mixed) by building a miter module in Yosys and showing equivalence within the miter module
@@ -15,9 +15,11 @@
 ## FIXED
 - `netlist_carpentry.run_equiv()` now also supports comparing two Circuit objects, or a Circuit and a Verilog file
 - `netlist_carpentry.run_eqy()` now also supports comparing two Circuit objects, or a Circuit and a Verilog file
+- Fixed minor issues with environment variables
 
 ## REMOVED
 - `equiv.sh` from the `netlist_carpentry.scripts` package - the script is now generated dynamically at runtime
+- `netlist_carpentry.Wire.ports` due to redundancy: Use `netlist_carpentry.Wire.connected_port_segments`, which does exactly the same
 
 
 # Older Versions
