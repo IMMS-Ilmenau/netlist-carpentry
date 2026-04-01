@@ -679,6 +679,7 @@ def test_write(connected_circuit: Circuit) -> None:
     assert os.path.exists(vpath)
 
 
+@pytest.mark.skipif(os.environ.get('EQY_MISSING') == 'true', reason='EQY missing in CI')
 def test_prove_equivalence(connected_circuit: Circuit) -> None:
     vpath = 'tests/files/gen/connected_circuit.v'
     connected_circuit.write(vpath, True)
@@ -691,6 +692,7 @@ def test_prove_equivalence(connected_circuit: Circuit) -> None:
     assert b'ERROR: Reading sources failed' in process.stderr
 
 
+@pytest.mark.skipif(os.environ.get('EQY_MISSING') == 'true', reason='EQY missing in CI')
 def test_prove_equivalence_other_circuit(connected_circuit: Circuit) -> None:
     vpath = 'tests/files/gen/connected_circuit.v'
     other_circuit = read(vpath)

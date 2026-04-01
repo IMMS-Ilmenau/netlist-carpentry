@@ -63,6 +63,7 @@ def test_decentral_mux_eqy_creation() -> None:
     os.remove(eqy_path)
 
 
+@pytest.mark.skipif(os.environ.get('EQY_MISSING') == 'true', reason='EQY missing in CI')
 def test_decentral_mux_eqy_run() -> None:
     name = 'decentral_mux'
     eqy_path = f'tests/files/gen/{name}.eqy'
@@ -93,7 +94,7 @@ def test_decentral_mux_eqy_run() -> None:
     assert not os.path.exists(eqy_out)
 
 
-@pytest.mark.skip  # @pytest.mark.skipif(os.environ.get('CI_SKIP_EQY') == 'true', reason='EQY missing in CI')
+@pytest.mark.skip  # @pytest.mark.skipif(os.environ.get('EQY_MISSING') == 'true', reason='EQY missing in CI')
 def test_decentral_mux_pattern_replace_eqy() -> None:
     # Create file before checking equality
     find_pattern_file = 'tests/files/or_pattern_find.v'
