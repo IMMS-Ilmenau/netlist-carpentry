@@ -232,7 +232,7 @@ class ModuleBaseMixin(NetlistElement):
             obj: T_MODULE_PARTS = method(args)
             if obj is not None:
                 return obj
-        raise PathResolutionError(f'Unable to find an object of type {path.type} with path {path.raw} in module {self.name}!')
+        raise PathResolutionError(f'Unable to find an object of type {path.type.name} with path {path.raw} in module {self.name}!')
 
     def _get_port_segment(self, ps_path: PortSegmentPath) -> PortSegment:
         """
