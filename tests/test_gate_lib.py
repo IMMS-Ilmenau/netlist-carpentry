@@ -94,7 +94,7 @@ def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
     assert primitive_gate.is_primitive
     assert primitive_gate.is_combinational
     assert not primitive_gate.is_sequential
-    assert primitive_gate.verilog_template == 'assign {out} = {in1};'
+    assert primitive_gate.verilog_template == 'assign\t{out} = {in1};'
     with pytest.raises(NotImplementedError):
         primitive_gate.verilog_net_map
 
@@ -126,7 +126,7 @@ def test_unary_gate(unary_gate: UnaryGate) -> None:
     assert unary_gate.ports['A'].path == PortPath(raw=f'{unary_gate.path.raw}.A')
     assert unary_gate.ports['Y'].path == PortPath(raw=f'{unary_gate.path.raw}.Y')
     assert unary_gate.is_primitive
-    assert unary_gate.verilog_template == 'assign {out} = {in1};'
+    assert unary_gate.verilog_template == 'assign\t{out} = {in1};'
     assert unary_gate.verilog == ''
     assert unary_gate.signal_in(0) is Signal.FLOATING
     assert unary_gate.signal_out(0) is Signal.UNDEFINED
@@ -237,7 +237,7 @@ def test_buffer(simple_module: Module) -> None:
     g = Buffer(name='buf_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'buf_inst'
     assert g.instance_type == '§buf'
-    assert g.verilog_template == 'assign {out} = {in1};'
+    assert g.verilog_template == 'assign\t{out} = {in1};'
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
@@ -248,7 +248,7 @@ def test_buffer(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]};"
     assert g.verilog_net_map == {'Y': '{wire[3], wire[1:0]}', 'A': "{wireA2, 1'b1, wireA1[0]}"}
 
     _test_signal_conf1_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -261,7 +261,7 @@ def test_not_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import NotGate
 
     g = NotGate(name='not_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
-    assert g.verilog_template == 'assign {out} = ~{in1};'
+    assert g.verilog_template == 'assign\t{out} = ~{in1};'
     assert g.name == 'not_inst'
     assert g.instance_type == '§not'
 
@@ -274,7 +274,7 @@ def test_not_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    assert g.verilog == "assign {wire[3], wire[1:0]} = ~{wireA2, 1'b1, wireA1[0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = ~{wireA2, 1'b1, wireA1[0]};"
 
     _test_signal_conf1_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
     _test_signal_conf1_n(g, Signal.LOW, Signal.UNDEFINED, Signal.HIGH)
@@ -286,7 +286,7 @@ def test_pos_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import PosGate
 
     g = PosGate(name='pos_inst', parameters={'Y_WIDTH': 8, 'A_WIDTH': 4}, module=simple_module)
-    assert g.verilog_template == 'assign {out} = +{in1};'
+    assert g.verilog_template == 'assign\t{out} = +{in1};'
     assert g.name == 'pos_inst'
     assert g.instance_type == '§pos'
 
@@ -305,7 +305,7 @@ def test_pos_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire2_4.1'), index=5)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire2_4.2'), index=6)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire2_4.3'), index=7)
-    assert g.verilog == "assign {wire2_4, wire[3], wire[1:0]} = +{wireA2, 1'b1, wireA1[0]};"
+    assert g.verilog == "assign\t{wire2_4, wire[3], wire[1:0]} = +{wireA2, 1'b1, wireA1[0]};"
 
     g.ports['A'][0].set_signal(Signal.HIGH)
     g.ports['A'][2].tie_signal(Signal.HIGH)
@@ -342,7 +342,7 @@ def test_neg_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import NegGate
 
     g = NegGate(name='neg_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
-    assert g.verilog_template == 'assign {out} = -{in1};'
+    assert g.verilog_template == 'assign\t{out} = -{in1};'
     assert g.name == 'neg_inst'
     assert g.instance_type == '§neg'
 
@@ -355,7 +355,7 @@ def test_neg_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    assert g.verilog == "assign {wire[3], wire[1:0]} = -{wireA2, 1'b1, wireA1[0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = -{wireA2, 1'b1, wireA1[0]};"
 
     g.ports['A'][0].set_signal(Signal.HIGH)
     g.ports['A'][2].tie_signal(Signal.HIGH)
@@ -409,7 +409,7 @@ def test_reducer(reduce_gate: ReduceGate) -> None:
     assert reduce_gate.ports['A'].path == PortPath(raw=f'{reduce_gate.path.raw}.A')
     assert reduce_gate.ports['Y'].path == PortPath(raw=f'{reduce_gate.path.raw}.Y')
     assert reduce_gate.is_primitive
-    assert reduce_gate.verilog_template == 'assign {out} = {operator}{in1};'
+    assert reduce_gate.verilog_template == 'assign\t{out} = {operator}{in1};'
     assert all(reduce_gate.signal_in(i) is Signal.FLOATING for i in reduce_gate.ports['A'].segments)
     assert reduce_gate.signal_out() is Signal.UNDEFINED
     reduce_gate.ports['A'].parameters['signed'] = 1
@@ -421,14 +421,14 @@ def test_reduce_and(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceAnd
 
     r = ReduceAnd(name='reduce_and_inst', parameters={'A_WIDTH': 4}, module=simple_module)
-    assert r.verilog_template == 'assign {out} = &{in1};'
+    assert r.verilog_template == 'assign\t{out} = &{in1};'
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: r.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
     r.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
 
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    assert r.verilog == "assign wire[0] = &{wireA2, 1'b1, wireA1[0]};"
+    assert r.verilog == "assign\twire[0] = &{wireA2, 1'b1, wireA1[0]};"
     assert r.verilog_net_map == {'Y': 'wire[0]', 'A': "{wireA2, 1'b1, wireA1[0]}"}
 
     _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -464,14 +464,14 @@ def test_reduce_or(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceOr
 
     r = ReduceOr(name='reduce_or_inst', parameters={'A_WIDTH': 4}, module=simple_module)
-    assert r.verilog_template == 'assign {out} = |{in1};'
+    assert r.verilog_template == 'assign\t{out} = |{in1};'
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: r.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
     r.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
 
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    assert r.verilog == "assign wire[0] = |{wireA2, 1'b1, wireA1[0]};"
+    assert r.verilog == "assign\twire[0] = |{wireA2, 1'b1, wireA1[0]};"
 
     _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
     _test_signal_confr_n(r, Signal.FLOATING, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -499,7 +499,7 @@ def test_reduce_bool(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceBool
 
     r = ReduceBool(name='reduce_bool_inst', parameters={'A_WIDTH': 4}, module=simple_module)
-    assert r.verilog_template == 'assign {out} = |{in1};'  # TODO EQY unable to prove equality for !(!wire), but can prove equality for |wire
+    assert r.verilog_template == 'assign\t{out} = |{in1};'  # TODO EQY unable to prove equality for !(!wire), but can prove equality for |wire
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: r.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -507,7 +507,7 @@ def test_reduce_bool(simple_module: Module) -> None:
 
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
     assert (
-        r.verilog == "assign wire[0] = |{wireA2, 1'b1, wireA1[0]};"
+        r.verilog == "assign\twire[0] = |{wireA2, 1'b1, wireA1[0]};"
     )  # TODO EQY unable to prove equality for !(!wire), but can prove equality for |wire
 
     _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -536,14 +536,14 @@ def test_reduce_xor(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceXor
 
     r = ReduceXor(name='reduce_xor_inst', parameters={'A_WIDTH': 4}, module=simple_module)
-    assert r.verilog_template == 'assign {out} = ^{in1};'
+    assert r.verilog_template == 'assign\t{out} = ^{in1};'
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: r.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
     r.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
 
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    assert r.verilog == "assign wire[0] = ^{wireA2, 1'b1, wireA1[0]};"
+    assert r.verilog == "assign\twire[0] = ^{wireA2, 1'b1, wireA1[0]};"
 
     _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
     _test_signal_confr_n(r, Signal.FLOATING, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -568,14 +568,14 @@ def test_reduce_xnor(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceXnor
 
     r = ReduceXnor(name='reduce_xnor_inst', parameters={'A_WIDTH': 4}, module=simple_module)
-    assert r.verilog_template == 'assign {out} = ~^{in1};'
+    assert r.verilog_template == 'assign\t{out} = ~^{in1};'
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     r.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: r.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
     r.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
 
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    assert r.verilog == "assign wire[0] = ~^{wireA2, 1'b1, wireA1[0]};"
+    assert r.verilog == "assign\twire[0] = ~^{wireA2, 1'b1, wireA1[0]};"
 
     _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
     _test_signal_confr_n(r, Signal.FLOATING, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -600,14 +600,14 @@ def test_logic_not(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import LogicNot
 
     ln = LogicNot(name='logic_not_inst', parameters={'A_WIDTH': 4}, module=simple_module)
-    assert ln.verilog_template == 'assign {out} = !{in1};'
+    assert ln.verilog_template == 'assign\t{out} = !{in1};'
     ln.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     ln.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: r.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
     ln.modify_connection('A', WireSegmentPath(raw='a.wireA2.0'), index=3)
 
     ln.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    assert ln.verilog == "assign wire[0] = !{wireA2, 1'b1, wireA1[0]};"
+    assert ln.verilog == "assign\twire[0] = !{wireA2, 1'b1, wireA1[0]};"
 
     _test_signal_confr_n(ln, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
     _test_signal_confr_n(ln, Signal.FLOATING, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -645,7 +645,7 @@ def test_binary_gate(binary_gate: BinaryGate) -> None:
     assert binary_gate.ports['B'].path == PortPath(raw=f'{binary_gate.path.raw}.B')
     assert binary_gate.ports['Y'].path == PortPath(raw=f'{binary_gate.path.raw}.Y')
     assert binary_gate.is_primitive
-    assert binary_gate.verilog_template == 'assign {out} = {in1} {operator} {in2};'
+    assert binary_gate.verilog_template == 'assign\t{out} = {in1} {operator} {in2};'
     assert binary_gate.verilog == ''
     assert binary_gate.signals_in(0) == (Signal.FLOATING, Signal.FLOATING)
     assert binary_gate.signal_out(0) is Signal.UNDEFINED
@@ -758,7 +758,7 @@ def test_and_gate(simple_module: Module) -> None:
     g = AndGate(name='and_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'and_inst'
     assert g.instance_type == '§and'
-    assert g.verilog_template == 'assign {out} = {in1} & {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} & {in2};'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -773,7 +773,7 @@ def test_and_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} & {wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} & {wireB[3], wireB[1:0]};"
     assert g.verilog_net_map == {'Y': '{wire[3], wire[1:0]}', 'A': "{wireA2, 1'b1, wireA1[0]}", 'B': '{wireB[3], wireB[1:0]}'}
 
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -808,7 +808,7 @@ def test_and_gate_signed(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
     g.parameters['A_SIGNED'] = True
     g.parameters['B_SIGNED'] = True
-    assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) & $signed({wireB[3], wireB[1:0]});"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) & $signed({wireB[3], wireB[1:0]});"
     assert g.verilog_net_map == {'Y': '{wire[3], wire[1:0]}', 'A': "{wireA2, 1'b1, wireA1[0]}", 'B': '{wireB[3], wireB[1:0]}'}
 
 
@@ -818,7 +818,7 @@ def test_or_gate(simple_module: Module) -> None:
     g = OrGate(name='or_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'or_inst'
     assert g.instance_type == '§or'
-    assert g.verilog_template == 'assign {out} = {in1} | {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} | {in2};'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -833,7 +833,7 @@ def test_or_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} | {wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} | {wireB[3], wireB[1:0]};"
 
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.LOW, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -853,7 +853,7 @@ def test_xor_gate(simple_module: Module) -> None:
     g = XorGate(name='xor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'xor_inst'
     assert g.instance_type == '§xor'
-    assert g.verilog_template == 'assign {out} = {in1} ^ {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} ^ {in2};'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -868,7 +868,7 @@ def test_xor_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} ^ {wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} ^ {wireB[3], wireB[1:0]};"
 
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.LOW, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -888,7 +888,7 @@ def test_xnor_gate(simple_module: Module) -> None:
     g = XnorGate(name='xnor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'xnor_inst'
     assert g.instance_type == '§xnor'
-    assert g.verilog_template == 'assign {out} = {in1} ^~ {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} ^~ {in2};'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -903,7 +903,7 @@ def test_xnor_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} ^~ {wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} ^~ {wireB[3], wireB[1:0]};"
 
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.LOW, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -923,7 +923,7 @@ def test_nor_gate(simple_module: Module) -> None:
     g = NorGate(name='nor_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'nor_inst'
     assert g.instance_type == '§nor'
-    assert g.verilog_template == 'assign {out} = ~({in1} | {in2});'
+    assert g.verilog_template == 'assign\t{out} = ~({in1} | {in2});'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -938,7 +938,7 @@ def test_nor_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    assert g.verilog == "assign {wire[3], wire[1:0]} = ~({wireA2, 1'b1, wireA1[0]} | {wireB[3], wireB[1:0]});"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = ~({wireA2, 1'b1, wireA1[0]} | {wireB[3], wireB[1:0]});"
 
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.LOW, Signal.UNDEFINED, Signal.UNDEFINED)
@@ -958,7 +958,7 @@ def test_nand_gate(simple_module: Module) -> None:
     g = NandGate(name='nand_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'nand_inst'
     assert g.instance_type == '§nand'
-    assert g.verilog_template == 'assign {out} = ~({in1} & {in2});'
+    assert g.verilog_template == 'assign\t{out} = ~({in1} & {in2});'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -973,7 +973,7 @@ def test_nand_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    assert g.verilog == "assign {wire[3], wire[1:0]} = ~({wireA2, 1'b1, wireA1[0]} & {wireB[3], wireB[1:0]});"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = ~({wireA2, 1'b1, wireA1[0]} & {wireB[3], wireB[1:0]});"
 
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
     _test_signal_conf2_n(g, Signal.UNDEFINED, Signal.LOW, Signal.UNDEFINED, Signal.HIGH)
@@ -994,10 +994,10 @@ def test_shift_signed_gate(simple_module: Module) -> None:
     assert g.name == 'shift_inst'
     assert g.instance_type == '§shift'
     assert not g.splittable
-    assert g.verilog_template == 'assign {out} = {in1} >> {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} >> {in2};'
     g.parameters['B_SIGNED'] = True
     assert g.b_signed is True
-    assert g.verilog_template == 'assign {out} = {in1} << -{in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} << -{in2};'
     assert g.verilog == ''
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
@@ -1013,13 +1013,13 @@ def test_shift_signed_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} << -{wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} << -{wireB[3], wireB[1:0]};"
     g.parameters['B_SIGNED'] = False
-    assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} >> {wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} >> {wireB[3], wireB[1:0]};"
     g.parameters['A_SIGNED'] = True
-    assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
     g.parameters['B_SIGNED'] = True
-    assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << -{wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << -{wireB[3], wireB[1:0]};"
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -1078,7 +1078,7 @@ def test_shl_gate(simple_module: Module) -> None:
     g = ShiftLeft(name='shl_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'shl_inst'
     assert g.instance_type == '§shl'
-    assert g.verilog_template == 'assign {out} = {in1} << {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} << {in2};'
     assert g.verilog == ''
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
@@ -1094,11 +1094,11 @@ def test_shl_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} << {wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} << {wireB[3], wireB[1:0]};"
     g.parameters['A_SIGNED'] = True
-    assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << {wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << {wireB[3], wireB[1:0]};"
     g.parameters['B_SIGNED'] = True  # B_SIGNED == 1 should not change Verilog output
-    assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << {wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << {wireB[3], wireB[1:0]};"
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -1126,7 +1126,7 @@ def test_shr_gate(simple_module: Module) -> None:
     g = ShiftRight(name='shr_inst', parameters={'Y_WIDTH': 4}, module=simple_module)
     assert g.name == 'shr_inst'
     assert g.instance_type == '§shr'
-    assert g.verilog_template == 'assign {out} = {in1} >> {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} >> {in2};'
     assert g.verilog == ''
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
@@ -1142,11 +1142,11 @@ def test_shr_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    assert g.verilog == "assign {wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} >> {wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} >> {wireB[3], wireB[1:0]};"
     g.parameters['A_SIGNED'] = True
-    assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
     g.parameters['B_SIGNED'] = True  # B_SIGNED == 1 should not change Verilog output
-    assert g.verilog == "assign {wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
+    assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -1175,7 +1175,7 @@ def test_shiftx_gate(simple_module: Module) -> None:
     simple_module.add_instance(g)
     assert g.name == 'shiftx_inst'
     assert g.instance_type == '§shiftx'
-    assert g.verilog_template == 'assign {out} = {in1}[{in2} +: {width}];'
+    assert g.verilog_template == 'assign\t{out} = {in1}[{in2} +: {width}];'
     assert g.verilog == ''
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
@@ -1192,14 +1192,14 @@ def test_shiftx_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    assert g.verilog == "wire [4:0] shiftx_inst_A0 = {wireA2, 2'bx1, wireA1[0]};\nassign wire = shiftx_inst_A0[{wireB[3], 1'bx, wireB[1:0]} +: 4];"
+    assert g.verilog == "wire [4:0] shiftx_inst_A0 = {wireA2, 2'bx1, wireA1[0]};\nassign\twire = shiftx_inst_A0[{wireB[3], 1'bx, wireB[1:0]} +: 4];"
     simple_module.disconnect(g.ports['A'])
     simple_module.connect(simple_module.create_wire('w4', 4), g.ports['A'])
-    assert g.verilog == "assign wire = w4[{wireB[3], 1'bx, wireB[1:0]} +: 4];"
+    assert g.verilog == "assign\twire = w4[{wireB[3], 1'bx, wireB[1:0]} +: 4];"
     g.parameters['A_SIGNED'] = True
-    assert g.verilog == "assign wire = $signed(w4)[{wireB[3], 1'bx, wireB[1:0]} +: 4];"
+    assert g.verilog == "assign\twire = $signed(w4)[{wireB[3], 1'bx, wireB[1:0]} +: 4];"
     g.parameters['B_SIGNED'] = True  # B_SIGNED == 1 should not change Verilog output
-    assert g.verilog == "assign wire = $signed(w4)[$signed({wireB[3], 1'bx, wireB[1:0]}) +: 4];"
+    assert g.verilog == "assign\twire = $signed(w4)[$signed({wireB[3], 1'bx, wireB[1:0]}) +: 4];"
 
 
 def test_comparison_gate(simple_module: Module) -> None:
@@ -1232,7 +1232,7 @@ def test_logic_and_gate(simple_module: Module) -> None:
     g = LogicAnd(name='logic_and_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'logic_and_inst'
     assert g.instance_type == '§logic_and'
-    assert g.verilog_template == 'assign {out} = {in1} && {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} && {in2};'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
 
@@ -1240,7 +1240,7 @@ def test_logic_and_gate(simple_module: Module) -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} && wireB[1:0];"
+    assert g.verilog == "assign\twire[0] = {1'b1, wireA1[0]} && wireB[1:0];"
     assert g.verilog_net_map == {'Y': 'wire[0]', 'A': "{1'b1, wireA1[0]}", 'B': 'wireB[1:0]'}
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
@@ -1257,7 +1257,7 @@ def test_logic_or_gate(simple_module: Module) -> None:
     g = LogicOr(name='logic_or_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'logic_or_inst'
     assert g.instance_type == '§logic_or'
-    assert g.verilog_template == 'assign {out} = {in1} || {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} || {in2};'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
 
@@ -1265,7 +1265,7 @@ def test_logic_or_gate(simple_module: Module) -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} || wireB[1:0];"
+    assert g.verilog == "assign\twire[0] = {1'b1, wireA1[0]} || wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
     _test_signal_conf2_arith(g, {1: Signal.FLOATING, 0: Signal.FLOATING}, {1: Signal.FLOATING, 0: Signal.FLOATING}, Signal.UNDEFINED)
@@ -1281,7 +1281,7 @@ def test_lt_gate(simple_module: Module) -> None:
     g = LessThan(name='lt_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'lt_inst'
     assert g.instance_type == '§lt'
-    assert g.verilog_template == 'assign {out} = {in1} < {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} < {in2};'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
 
@@ -1289,7 +1289,7 @@ def test_lt_gate(simple_module: Module) -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} < wireB[1:0];"
+    assert g.verilog == "assign\twire[0] = {1'b1, wireA1[0]} < wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
     _test_signal_conf2_arith(g, {1: Signal.FLOATING, 0: Signal.FLOATING}, {1: Signal.FLOATING, 0: Signal.FLOATING}, Signal.UNDEFINED)
@@ -1305,7 +1305,7 @@ def test_le_gate(simple_module: Module) -> None:
     g = LessEqual(name='le_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'le_inst'
     assert g.instance_type == '§le'
-    assert g.verilog_template == 'assign {out} = {in1} <= {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} <= {in2};'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
 
@@ -1313,7 +1313,7 @@ def test_le_gate(simple_module: Module) -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} <= wireB[1:0];"
+    assert g.verilog == "assign\twire[0] = {1'b1, wireA1[0]} <= wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
     _test_signal_conf2_arith(g, {1: Signal.FLOATING, 0: Signal.FLOATING}, {1: Signal.FLOATING, 0: Signal.FLOATING}, Signal.UNDEFINED)
@@ -1329,7 +1329,7 @@ def test_eq_gate(simple_module: Module) -> None:
     g = Equal(name='eq_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'eq_inst'
     assert g.instance_type == '§eq'
-    assert g.verilog_template == 'assign {out} = {in1} == {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} == {in2};'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
 
@@ -1337,7 +1337,7 @@ def test_eq_gate(simple_module: Module) -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} == wireB[1:0];"
+    assert g.verilog == "assign\twire[0] = {1'b1, wireA1[0]} == wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
     _test_signal_conf2_arith(g, {1: Signal.FLOATING, 0: Signal.FLOATING}, {1: Signal.FLOATING, 0: Signal.FLOATING}, Signal.UNDEFINED)
@@ -1353,7 +1353,7 @@ def test_ne_gate(simple_module: Module) -> None:
     g = NotEqual(name='ne_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'ne_inst'
     assert g.instance_type == '§ne'
-    assert g.verilog_template == 'assign {out} = {in1} != {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} != {in2};'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
 
@@ -1361,7 +1361,7 @@ def test_ne_gate(simple_module: Module) -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} != wireB[1:0];"
+    assert g.verilog == "assign\twire[0] = {1'b1, wireA1[0]} != wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
     _test_signal_conf2_arith(g, {1: Signal.FLOATING, 0: Signal.FLOATING}, {1: Signal.FLOATING, 0: Signal.FLOATING}, Signal.UNDEFINED)
@@ -1377,7 +1377,7 @@ def test_gt_gate(simple_module: Module) -> None:
     g = GreaterThan(name='gt_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'gt_inst'
     assert g.instance_type == '§gt'
-    assert g.verilog_template == 'assign {out} = {in1} > {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} > {in2};'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
 
@@ -1385,7 +1385,7 @@ def test_gt_gate(simple_module: Module) -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} > wireB[1:0];"
+    assert g.verilog == "assign\twire[0] = {1'b1, wireA1[0]} > wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
     _test_signal_conf2_arith(g, {1: Signal.FLOATING, 0: Signal.FLOATING}, {1: Signal.FLOATING, 0: Signal.FLOATING}, Signal.UNDEFINED)
@@ -1401,7 +1401,7 @@ def test_ge_gate(simple_module: Module) -> None:
     g = GreaterEqual(name='ge_inst', parameters={'A_WIDTH': 2}, module=simple_module)
     assert g.name == 'ge_inst'
     assert g.instance_type == '§ge'
-    assert g.verilog_template == 'assign {out} = {in1} >= {in2};'
+    assert g.verilog_template == 'assign\t{out} = {in1} >= {in2};'
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     g.tie_port('A', index=1, sig_value='1')
 
@@ -1409,7 +1409,7 @@ def test_ge_gate(simple_module: Module) -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.1'), index=1)
 
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
-    assert g.verilog == "assign wire[0] = {1'b1, wireA1[0]} >= wireB[1:0];"
+    assert g.verilog == "assign\twire[0] = {1'b1, wireA1[0]} >= wireB[1:0];"
 
     _test_signal_conf2_arith(g, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, {1: Signal.UNDEFINED, 0: Signal.UNDEFINED}, Signal.UNDEFINED)
     _test_signal_conf2_arith(g, {1: Signal.FLOATING, 0: Signal.FLOATING}, {1: Signal.FLOATING, 0: Signal.FLOATING}, Signal.UNDEFINED)
@@ -1729,7 +1729,7 @@ def test_adder_structure(simple_module: Module) -> None:
     assert a.ports['Y'].width == 4
     assert a.input_ports == (a.ports['A'], a.ports['B'])
     assert a.output_port == a.ports['Y']
-    assert a.verilog_template == 'assign {out} = {in1} + {in2};'
+    assert a.verilog_template == 'assign\t{out} = {in1} + {in2};'
     a.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     a.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: a.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -1749,7 +1749,7 @@ def test_adder_structure(simple_module: Module) -> None:
     with pytest.raises(ValueError):
         a.verilog
     a.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
-    target_str = "assign {carry, wire} = {wireA2, 2'bx1, wireA1[0]} + {wireB[3], 1'bx, wireB[1:0]};"
+    target_str = "assign\t{carry, wire} = {wireA2, 2'bx1, wireA1[0]} + {wireB[3], 1'bx, wireB[1:0]};"
     assert a.verilog == target_str
 
     with pytest.raises(EvaluationError):
@@ -1762,7 +1762,7 @@ def test_adder_structure(simple_module: Module) -> None:
 
     a.disconnect('Y', 4)
     a.disconnect('Y', 3)
-    assert a.verilog == "assign wire[2:0] = {2'bx1, wireA1[0]} + $signed({1'bx, wireB[1:0]});"
+    assert a.verilog == "assign\twire[2:0] = {2'bx1, wireA1[0]} + $signed({1'bx, wireB[1:0]});"
     assert a.verilog_net_map == {'Y': 'wire[2:0]', 'A': "{2'bx1, wireA1[0]}", 'B': "{1'bx, wireB[1:0]}"}
 
 
@@ -1818,7 +1818,7 @@ def test_subtractor_structure(simple_module: Module) -> None:
     assert s.ports['Y'].width == 4
     assert s.input_ports == (s.ports['A'], s.ports['B'])
     assert s.output_port == s.ports['Y']
-    assert s.verilog_template == 'assign {out} = {in1} - {in2};'
+    assert s.verilog_template == 'assign\t{out} = {in1} - {in2};'
     s.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     s.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: a.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -1836,7 +1836,7 @@ def test_subtractor_structure(simple_module: Module) -> None:
     with pytest.raises(ValueError):
         s.verilog
     s.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
-    target_str = "assign wire = {wireA2, 2'bx1, wireA1[0]} - {wireB[3], 1'bx, wireB[1:0]};"
+    target_str = "assign\twire = {wireA2, 2'bx1, wireA1[0]} - {wireB[3], 1'bx, wireB[1:0]};"
     assert s.verilog == target_str
 
 
@@ -1890,7 +1890,7 @@ def test_multiplier_structure(simple_module: Module) -> None:
     assert m.ports['Y'].width == 4
     assert m.input_ports == (m.ports['A'], m.ports['B'])
     assert m.output_port == m.ports['Y']
-    assert m.verilog_template == 'assign {out} = {in1} * {in2};'
+    assert m.verilog_template == 'assign\t{out} = {in1} * {in2};'
     m.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     m.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: a.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -1910,7 +1910,7 @@ def test_multiplier_structure(simple_module: Module) -> None:
     with pytest.raises(ValueError):
         m.verilog
     m.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
-    target_str = "assign {carry, wire} = {wireA2, 2'bx1, wireA1[0]} * {wireB[3], 1'bx, wireB[1:0]};"
+    target_str = "assign\t{carry, wire} = {wireA2, 2'bx1, wireA1[0]} * {wireB[3], 1'bx, wireB[1:0]};"
     assert m.verilog == target_str
 
 
@@ -1964,7 +1964,7 @@ def test_divider_structure(simple_module: Module) -> None:
     assert d.ports['Y'].width == 4
     assert d.input_ports == (d.ports['A'], d.ports['B'])
     assert d.output_port == d.ports['Y']
-    assert d.verilog_template == 'assign {out} = {in1} / {in2};'
+    assert d.verilog_template == 'assign\t{out} = {in1} / {in2};'
     d.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     d.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: a.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -1984,7 +1984,7 @@ def test_divider_structure(simple_module: Module) -> None:
     with pytest.raises(ValueError):
         d.verilog
     d.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
-    target_str = "assign {carry, wire} = {wireA2, 2'bx1, wireA1[0]} / {wireB[3], 1'bx, wireB[1:0]};"
+    target_str = "assign\t{carry, wire} = {wireA2, 2'bx1, wireA1[0]} / {wireB[3], 1'bx, wireB[1:0]};"
     assert d.verilog == target_str
 
 
@@ -2040,7 +2040,7 @@ def test_modulo_structure(simple_module: Module) -> None:
     assert m.ports['Y'].width == 4
     assert m.input_ports == (m.ports['A'], m.ports['B'])
     assert m.output_port == m.ports['Y']
-    assert m.verilog_template == 'assign {out} = {in1} % {in2};'
+    assert m.verilog_template == 'assign\t{out} = {in1} % {in2};'
     m.modify_connection('A', WireSegmentPath(raw='a.wireA1.0'), index=0)
     m.tie_port('A', index=1, sig_value='1')
     # 2nd is missing on purpose: a.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -2060,7 +2060,7 @@ def test_modulo_structure(simple_module: Module) -> None:
     with pytest.raises(ValueError):
         m.verilog
     m.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
-    target_str = "assign {carry, wire} = {wireA2, 2'bx1, wireA1[0]} % {wireB[3], 1'bx, wireB[1:0]};"
+    target_str = "assign\t{carry, wire} = {wireA2, 2'bx1, wireA1[0]} % {wireB[3], 1'bx, wireB[1:0]};"
     assert m.verilog == target_str
 
 

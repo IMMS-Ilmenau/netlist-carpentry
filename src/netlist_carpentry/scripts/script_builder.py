@@ -13,6 +13,7 @@ yosys {modules}-p "
     proc
     {memory}
     {techmaps}
+    {share}
     opt; clean; check
     {insbuf_str}
     {write_str}
@@ -59,6 +60,7 @@ def build_script(
     techmap_paths: List[Path] = [],
     source_paths: Optional[List[str]] = None,
     no_hierarchy: bool = False,
+    share: bool = False,
 ) -> None:
     """
     Build a Yosys script for synthesis.
@@ -82,6 +84,8 @@ def build_script(
             Defaults to None, in which case no additional files are sourced.
         no_hierarchy (bool, optional): Whether to resolve the hierarchy of the given circuit or not.
             If True, the yosys "hierarchy" path is skipped. Defaults to False.
+        share (bool, optional): Whether to execute the Yosys `share` pass to share the same
+            instances for mutually exclusive operations. May decrease area demands, but worsen timing. Defaults to False.
     """
     source_files = _source_files_cmd(source_paths or [])
     vhdl_given = any(fpath.suffix == '.vhdl' or fpath.suffix == '.vhd' for fpath in input_file_paths)
@@ -91,6 +95,7 @@ def build_script(
     hierarchy = f'hierarchy {top} -libdir .'
     memory = 'memory' if process_memory else ''
     techmaps = '\n'.join(f'techmap -map {Path(techmap).expanduser().resolve()}\n' for techmap in _get_techmap_paths(techmap_paths))
+    share_str = 'opt; share -aggressive' if share else ''
     insbuf_str = 'insbuf; proc' if insbuf else ''
     write_str = f'write_json {output_file_path.expanduser().resolve()}'
     yosys = verilog_template.format(
@@ -100,6 +105,7 @@ def build_script(
         hierarchy=hierarchy,
         memory=memory,
         techmaps=techmaps,
+        share=share_str,
         insbuf_str=insbuf_str,
         write_str=write_str,
     )

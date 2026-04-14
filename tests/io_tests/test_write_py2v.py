@@ -315,7 +315,7 @@ def test_instance2v(writer: P2VTransformer, standard_module: Module) -> None:
     standard_module.instances['test_instance'].connect('B', WSPath(raw='test_module1.wireB.0'))
     standard_module.instances['test_instance'].connect('Y', WSPath(raw='test_module1.wireC.0'))
 
-    target_mod_inst_str = '\t\tassign wireC = wireA & wireB;\n'
+    target_mod_inst_str = '\t\tassign\twireC = wireA & wireB;\n'
     found_mod_inst_str = writer.instance2v(standard_module, standard_module.instances['test_instance'])
     assert target_mod_inst_str == found_mod_inst_str
 

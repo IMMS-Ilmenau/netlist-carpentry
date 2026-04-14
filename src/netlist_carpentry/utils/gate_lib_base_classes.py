@@ -108,7 +108,7 @@ class PrimitiveGate(Instance, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1};'
+        return 'assign\t{out} = {in1};'
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
@@ -298,7 +298,7 @@ class UnaryGate(PrimitiveGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1};'
+        return 'assign\t{out} = {in1};'
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
@@ -372,7 +372,7 @@ class ReduceGate(UnaryGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {operator}{in1};'
+        return 'assign\t{out} = {operator}{in1};'
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
@@ -440,7 +440,7 @@ class BinaryGate(PrimitiveGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} {operator} {in2};'
+        return 'assign\t{out} = {in1} {operator} {in2};'
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:

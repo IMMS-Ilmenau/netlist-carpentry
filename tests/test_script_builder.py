@@ -32,6 +32,7 @@ def test_build_script_params() -> None:
         top='thermo_enc',
         insbuf=False,
         process_memory=False,
+        share=True,
         techmap_paths=[Path('tests/files/pmux2mux.v')],
     )
     with open('tests/files/test_script') as f:
@@ -41,6 +42,7 @@ def test_build_script_params() -> None:
     assert 'hierarchy -top thermo_enc -libdir .' in content
     assert 'memory' not in content
     assert 'techmap -map' in content and 'tests/files/pmux2mux.v' in content
+    assert 'opt; share -aggressive' in content
     assert 'opt; clean; check' in content
     assert 'insbuf; proc' not in content
     assert 'write_json' in content and 'thermo_enc.json' in content

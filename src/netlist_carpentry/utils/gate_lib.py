@@ -60,7 +60,7 @@ class Buffer(UnaryGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1};'
+        return 'assign\t{out} = {in1};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -87,7 +87,7 @@ class NotGate(UnaryGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = ~{in1};'
+        return 'assign\t{out} = ~{in1};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -115,7 +115,7 @@ class PosGate(UnaryGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = +{in1};'
+        return 'assign\t{out} = +{in1};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -144,7 +144,7 @@ class NegGate(UnaryGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = -{in1};'
+        return 'assign\t{out} = -{in1};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -175,7 +175,7 @@ class ReduceAnd(ReduceGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = &{in1};'
+        return 'assign\t{out} = &{in1};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -205,7 +205,7 @@ class ReduceOr(ReduceGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = |{in1};'
+        return 'assign\t{out} = |{in1};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -237,7 +237,7 @@ class ReduceBool(ReduceGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = |{in1};'  # TODO EQY unable to prove equivalence for reduce bools sometimes...
+        return 'assign\t{out} = |{in1};'  # TODO EQY unable to prove equivalence for reduce bools sometimes...
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -268,7 +268,7 @@ class ReduceXor(ReduceGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = ^{in1};'
+        return 'assign\t{out} = ^{in1};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -298,7 +298,7 @@ class ReduceXnor(ReduceGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = ~^{in1};'
+        return 'assign\t{out} = ~^{in1};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -329,7 +329,7 @@ class LogicNot(ReduceGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = !{in1};'
+        return 'assign\t{out} = !{in1};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -359,7 +359,7 @@ class AndGate(BinaryGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} & {in2};'
+        return 'assign\t{out} = {in1} & {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -390,7 +390,7 @@ class OrGate(BinaryGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} | {in2};'
+        return 'assign\t{out} = {in1} | {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -421,7 +421,7 @@ class XorGate(BinaryGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} ^ {in2};'
+        return 'assign\t{out} = {in1} ^ {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -450,7 +450,7 @@ class XnorGate(BinaryGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} ^~ {in2};'
+        return 'assign\t{out} = {in1} ^~ {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -479,7 +479,7 @@ class NorGate(BinaryGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = ~({in1} | {in2});'
+        return 'assign\t{out} = ~({in1} | {in2});'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -510,7 +510,7 @@ class NandGate(BinaryGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = ~({in1} & {in2});'
+        return 'assign\t{out} = ~({in1} & {in2});'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -542,7 +542,7 @@ class ShiftSigned(ShiftGate, BaseModel):
     @property
     def verilog_template(self) -> str:
         shift_op = ' << -' if self.b_signed else ' >> '
-        return 'assign {out} = {in1}' + shift_op + '{in2};'
+        return 'assign\t{out} = {in1}' + shift_op + '{in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -573,7 +573,7 @@ class ShiftLeft(ShiftGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} << {in2};'
+        return 'assign\t{out} = {in1} << {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -602,7 +602,7 @@ class ShiftRight(ShiftGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} >> {in2};'
+        return 'assign\t{out} = {in1} >> {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -645,7 +645,7 @@ class ShiftX(ShiftGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1}[{in2} +: {width}];'
+        return 'assign\t{out} = {in1}[{in2} +: {width}];'
 
     @property
     def verilog_net_map(self) -> Dict[str, str]:
@@ -700,7 +700,7 @@ class LogicAnd(BinaryNto1Gate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} && {in2};'
+        return 'assign\t{out} = {in1} && {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -732,7 +732,7 @@ class LogicOr(BinaryNto1Gate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} || {in2};'
+        return 'assign\t{out} = {in1} || {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -764,7 +764,7 @@ class LessThan(BinaryNto1Gate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} < {in2};'
+        return 'assign\t{out} = {in1} < {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -795,7 +795,7 @@ class LessEqual(BinaryNto1Gate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} <= {in2};'
+        return 'assign\t{out} = {in1} <= {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -826,7 +826,7 @@ class Equal(BinaryNto1Gate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} == {in2};'
+        return 'assign\t{out} = {in1} == {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -857,7 +857,7 @@ class NotEqual(BinaryNto1Gate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} != {in2};'
+        return 'assign\t{out} = {in1} != {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -888,7 +888,7 @@ class GreaterThan(BinaryNto1Gate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} > {in2};'
+        return 'assign\t{out} = {in1} > {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -919,7 +919,7 @@ class GreaterEqual(BinaryNto1Gate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} >= {in2};'
+        return 'assign\t{out} = {in1} >= {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -1406,7 +1406,7 @@ class Adder(ArithmeticGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} + {in2};'
+        return 'assign\t{out} = {in1} + {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -1424,7 +1424,7 @@ class Subtractor(ArithmeticGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} - {in2};'
+        return 'assign\t{out} = {in1} - {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -1442,7 +1442,7 @@ class Multiplier(ArithmeticGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} * {in2};'
+        return 'assign\t{out} = {in1} * {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -1460,7 +1460,7 @@ class Divider(ArithmeticGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} / {in2};'
+        return 'assign\t{out} = {in1} / {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """
@@ -1478,7 +1478,7 @@ class Modulo(ArithmeticGate, BaseModel):
 
     @property
     def verilog_template(self) -> str:
-        return 'assign {out} = {in1} % {in2};'
+        return 'assign\t{out} = {in1} % {in2};'
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         """

@@ -34,6 +34,7 @@ def read(
     out: Union[str, Path] = '',
     source_paths: Optional[List[str]] = None,
     no_hierarchy: bool = False,
+    **kwargs: object,
 ) -> Circuit:
     """
     Reads a Verilog file and converts it to a Circuit object using the YosysNetlistReader.
@@ -55,6 +56,8 @@ def read(
             Defaults to None, in which case no additional files are sourced.
         no_hierarchy (bool, optional): Whether to resolve the hierarchy of the given circuit or not.
             If True, the yosys "hierarchy" path is skipped. Defaults to False.
+        kwargs: Additional keyword arguments that are passed to the script building function.
+            Accepts all keyword arguments that `netlist_carpentry.scripts.script_builder.build_script()` accepts.
 
     Returns:
         Circuit: A Circuit object representing the circuit defined in the Verilog file.
@@ -72,7 +75,9 @@ def read(
         json_path = out_path / f'{paths[0].stem}.json'
         LOG.debug(f'Generating Yosys netlist from {len(paths)} files...')
         start = time()
-        gen_process = build_and_execute(script_path, paths, json_path, verbose=verbose, top=top, source_paths=source_paths, no_hierarchy=no_hierarchy)
+        gen_process = build_and_execute(
+            script_path, paths, json_path, verbose=verbose, top=top, source_paths=source_paths, no_hierarchy=no_hierarchy, **kwargs
+        )
         LOG.debug(f'Generated Yosys netlist from {len(paths)} files in {round(time() - start, 2)}s!')
         if gen_process.stderr:
             for err in gen_process.stderr.decode().splitlines():
