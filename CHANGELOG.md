@@ -1,7 +1,7 @@
 # Changelog 0.3.8
 
 ### FIXED
-- Fixed formatting on some log messages
+- Fixed typos and formatting in some log messages, also changed some messages from "INFO" to "DEBUG" and introduced some debug messages for better traceability during Verilog write-out
 - Primitive cell instances are now correctly aligned in Verilog output, i.e. lines starting with `assign ...` are now aligned vertically, with proper indentation
 
 # Older Versions

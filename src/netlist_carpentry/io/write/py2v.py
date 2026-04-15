@@ -83,14 +83,20 @@ class P2VTransformer:
             w.set_name(shortname)
 
     def module2v(self, module: Module, max_wname_length: NonNegativeInt = 0) -> str:
+        LOG.debug(f'Writing module {module.name}...')
         if max_wname_length:
             self._shorten_wire_names(module, max_wname_length)
 
         module.pre_py2v_hook()
+        LOG.debug(f'\tCollecting {len(module.parameters)} parameter(s)...')
         params = self._module_params2v(module)
+        LOG.debug(f'\tCollecting {len(module.ports)} port(s)...')
         ports = self._module_ports2v(module)
+        LOG.debug(f'\tCollecting {len(module.wires)} wire(s)...')
         wires = self._module_wires2v(module)
+        LOG.debug(f'\tCollecting {len(module.instances)} instance(s)...')
         instances = self._module_instances2v(module)
+        LOG.debug(f'\tCollecting miscellaneous content of module {module.name}...')
         constant_wires = self._constant_wires2v(module)
         port_wires = self._port2wire_wires2v(module)
         module.post_py2v_hook()
