@@ -151,6 +151,7 @@ def test_run_equiv_circuit() -> None:
     assert equiv_proc.stderr == b''
 
 
+@pytest.mark.skipif(os.environ.get('EQY_MISSING') == 'true', reason='EQY missing in CI')
 def test_run_eqy_circuit() -> None:
     gold = read('tests/files/or_pattern_find.v', 'or_pattern_find')
     gate = read('tests/files/or_pattern_find.v', 'or_pattern_find')

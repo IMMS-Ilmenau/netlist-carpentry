@@ -1642,6 +1642,7 @@ def test_make_chain(dff_module: Module) -> None:
         assert dffs[idx].ports['Q'].connected_wires == dffs[idx + 1].ports['D'].connected_wires
 
 
+@pytest.mark.skipif(os.environ.get('EQY_MISSING') == 'true', reason='EQY missing in CI')
 def test_flatten(dff_circuit: Circuit) -> None:
     from utils import save_results
 
