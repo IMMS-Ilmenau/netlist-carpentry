@@ -404,7 +404,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         self.add_port(p)
         p.create_port_segments(width, offset)
         p.change_mutability(is_now_locked=is_locked)
-        LOG.info(f'Created port {p.raw_path}, {width} bit wide.')
+        LOG.debug(f'Created port {p.raw_path}, {width} bit wide.')
         return p
 
     def remove_port(self, port: Union[str, Port[Module]]) -> None:

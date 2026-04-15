@@ -49,7 +49,7 @@ class P2VTransformer:
         self._constant_wire_segments: Dict[str, Dict[str, WireSegment]] = {}
 
     def save_circuit2v(self, path: os.PathLike[str], circuit: Circuit, overwrite: bool = False, max_wname_length: NonNegativeInt = 0) -> None:
-        LOG.info(f'Saving Verilog representation of circuit {circuit.name} to {path}...')
+        LOG.debug(f'Saving Verilog representation of circuit {circuit.name} to {path}...')
         start = time.time()
         path = Path(path)
         path.parent.mkdir(exist_ok=True)
@@ -62,7 +62,7 @@ class P2VTransformer:
                 f'// Generated with Netlist Carpentry {version("netlist-carpentry")}, {datetime.datetime.now().strftime("%d. %B %Y, %H:%M:%S")}\n\n'
             )
             f.write(self.circuit2v(circuit, max_wname_length))
-        LOG.info(f' Saved Verilog representation of circuit {circuit.name} to {path} in {time.time() - start:.3f} seconds')
+        LOG.debug(f'Saved Verilog representation of circuit {circuit.name} to {path} in {time.time() - start:.3f} seconds!')
 
     def circuit2v(self, circuit: Circuit, max_wname_length: NonNegativeInt = 0) -> str:
         return '\n\n\n'.join(self.module2v(module, max_wname_length) for module in circuit)

@@ -699,7 +699,7 @@ class Circuit(BaseModel):
         output_vfile = f'{out_dir}/{self.name}_out.v'
         self.write(output_vfile, overwrite=True)
         if not gold_top_module:
-            LOG.warn(f'No gold top nme specified! Assuming same top module as in gate circuit ({self.top_name})...')
+            LOG.warn(f'No gold top name specified! Assuming same top module as in gate circuit ({self.top_name})...')
             gold_top_module = self.top_name
         return run_eqy(
             gold_design, [output_vfile], gold_top_module, self.top_name, script_path=eqy_script_path, output_path=eqy_out, overwrite=True, quiet=quiet
