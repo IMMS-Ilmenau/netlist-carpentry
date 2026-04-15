@@ -1,4 +1,4 @@
-# Changelog 0.3.8
+# Changelog 0.3.8 (2026-04-15)
 
 ### FIXED
 - Fixed typos and formatting in some log messages, also changed some messages from "INFO" to "DEBUG" and introduced some debug messages for better traceability during Verilog write-out
