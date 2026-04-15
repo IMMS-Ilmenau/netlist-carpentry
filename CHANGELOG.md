@@ -1,10 +1,18 @@
-# Changelog 0.3.7 (2026-04-01)
+# Changelog 0.3.8
 
-## ADDED
+### FIXED
+- Fixed formatting on some log messages
+- Primitive cell instances are now correctly aligned in Verilog output, i.e. lines starting with `assign ...` are now aligned vertically, with proper indentation
+
+# Older Versions
+
+## Changelog 0.3.7 (2026-04-01)
+
+### ADDED
 - `netlist_carpentry.run_equiv_miter()` to compare two Circuit objects or Verilog files (or mixed) by building a miter module in Yosys and showing equivalence within the miter module
 - `netlist_carpentry.Module.flatten_instance()` to flatten a single module instance ("shallow flattening", ignoring any submodules inside the module instance), such that the content of the module is pasted into the parent module (transferring previous instance connections directly into the module) and the instance itself is removed
 
-## CHANGED
+### CHANGED
 - Refactorings in `netlist_carpentry.routines.opt.floodfill.chain_optimizer`
   - Python module is no longer executable with arguments via command line - use chain_optimizer module via `chain_optimizer.opt_chains()`
   - Removed a bunch of catches in edge cases that led the process to fail silently - now Netlist Carpentry crashes explicitly whenever unfixable issues are encountered, instead of hiding it behind `None` returns
@@ -12,17 +20,15 @@
 - `netlist_carpentry.run_equiv()` now has an additional parameter `out_dir` for a directory to be used as output for the script (and possibly additional temporary files) - if unset, a temporary directory is used
 - Updated several docstrings
 
-## FIXED
+### FIXED
 - `netlist_carpentry.run_equiv()` now also supports comparing two Circuit objects, or a Circuit and a Verilog file
 - `netlist_carpentry.run_eqy()` now also supports comparing two Circuit objects, or a Circuit and a Verilog file
 - Fixed minor issues with environment variables
 
-## REMOVED
+### REMOVED
 - `equiv.sh` from the `netlist_carpentry.scripts` package - the script is now generated dynamically at runtime
 - `netlist_carpentry.Wire.ports` due to redundancy: Use `netlist_carpentry.Wire.connected_port_segments`, which does exactly the same
 
-
-# Older Versions
 
 ## Changelog 0.3.6 (2026-03-23)
 
