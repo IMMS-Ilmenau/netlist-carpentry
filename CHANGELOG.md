@@ -1,10 +1,29 @@
-# Changelog 0.3.8 (2026-04-15)
+# Changelog 0.4.0
+
+## ADDED
+- `netlist_carpentry.utils.gate_lib.DFF` and derived classes now have properties `has_en` (has enable port, bool) and `has_rst` (has reset port, bool)
+- Added `netlist_carpentry.utils.gate_lib_dataclasses.Parameters` class, which unifies all previous base parameter classes (`TypedParams`, `InstanceParams`, `_CombinationalParams`,  `_SequentialParams`, and `AllParams`) - they still exist, but are marked with a deprecation warning, referencing the new `Parameters` class
+
+## CHANGED
+- `netlist_carpentry.utils.gate_lib_base_classes.StorageGate` (i.e. sequential gates, like `DFF` and `DLatch` instances) now have a property `width`, instead of `y_width` (added deprecation warning)
+- Changed functionality of gate parameters
+  - Instead of `netlist_carpentry.PrimitiveGate.parameters["PARAM"]`, `netlist_carpentry.PrimitiveGate.parameters.PARAM` is now possible
+  - `PrimitiveGate.parameters` now is of type `Parameters`, which is a `pydantic.BaseModel`
+  - Indexing still works, but will be removed in 1.0.0 (added DeprecationWarning)
+- Added several DeprecationWarnings and FutureWarnings for properties and methods that will be heavily changed or deleted in 1.0.0
+
+## FIXED
+- Fixed width parameter setting/copying issues for many gates
+- Some gates that previously forced equal widths for some ports, now also support ports with different widths
+
+# Older Versions
+
+## Changelog 0.3.8 (2026-04-15)
 
 ### FIXED
 - Fixed typos and formatting in some log messages, also changed some messages from "INFO" to "DEBUG" and introduced some debug messages for better traceability during Verilog write-out
 - Primitive cell instances are now correctly aligned in Verilog output, i.e. lines starting with `assign ...` are now aligned vertically, with proper indentation
 
-# Older Versions
 
 ## Changelog 0.3.7 (2026-04-01)
 

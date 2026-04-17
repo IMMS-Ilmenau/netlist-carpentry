@@ -105,7 +105,7 @@ class P2VTransformer:
 
     def _module_params2v(self, module: Module) -> str:
         param_str = '\n\t#('
-        for name in module.parameters:
+        for name in module.parameters.as_dict():
             param_val = f'"{module.parameters[name]}"' if isinstance(module.parameters[name], str) else str(module.parameters[name])
             param_str += f'\n\t\tparameter {name} = {param_val},'
         return param_str[:-1] + '\n\t)' if module.parameters else ''

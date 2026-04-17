@@ -9,7 +9,7 @@ from netlist_carpentry import WIRE_SEGMENT_X
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.enums.signal import Signal
-from netlist_carpentry.core.exceptions import EvaluationError, UnsupportedOperationError
+from netlist_carpentry.core.exceptions import EvaluationError
 from netlist_carpentry.core.netlist_elements.element_path import PortPath, WireSegmentPath
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
@@ -98,18 +98,19 @@ def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
     with pytest.raises(NotImplementedError):
         primitive_gate.verilog_net_map
 
-    assert primitive_gate.y_width == 1
-    assert primitive_gate.a_width == 1
+    with pytest.warns(DeprecationWarning, match='is deprecated and will be removed in v1.0.0'):
+        assert primitive_gate.y_width == 1
+        assert primitive_gate.a_width == 1
 
-    primitive_gate.parameters['Y_WIDTH'] = 8
-    assert primitive_gate.y_width == 8
-    assert primitive_gate.a_width == 8
+        primitive_gate.parameters['Y_WIDTH'] = 8
+        assert primitive_gate.y_width == 8
+        assert primitive_gate.a_width == 8
 
-    primitive_gate.parameters['A_WIDTH'] = 4
-    assert primitive_gate.y_width == 8
-    assert primitive_gate.a_width == 4
-    assert primitive_gate.parameters['Y_WIDTH'] == 8
-    assert primitive_gate.parameters['A_WIDTH'] == 4
+        primitive_gate.parameters['A_WIDTH'] = 4
+        assert primitive_gate.y_width == 8
+        assert primitive_gate.a_width == 4
+        assert primitive_gate.parameters['Y_WIDTH'] == 8
+        assert primitive_gate.parameters['A_WIDTH'] == 4
 
 
 def test_unary_gate(unary_gate: UnaryGate) -> None:
@@ -130,8 +131,8 @@ def test_unary_gate(unary_gate: UnaryGate) -> None:
     assert unary_gate.verilog == ''
     assert unary_gate.signal_in(0) is Signal.FLOATING
     assert unary_gate.signal_out(0) is Signal.UNDEFINED
-    unary_gate.sync_parameters()
     assert unary_gate.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 1, 'Y_WIDTH': 1}
+    assert unary_gate.parameters == {'A_SIGNED': False, 'A_WIDTH': 1, 'Y_WIDTH': 1}
 
     unary_gate.ports['Y'].create_port_segments(3, 1)
     assert unary_gate.y_width == 4
@@ -140,8 +141,6 @@ def test_unary_gate(unary_gate: UnaryGate) -> None:
     unary_gate.ports['A'].create_port_segments(7, 1)
     assert unary_gate.y_width == 4
     assert unary_gate.a_width == 8
-    with pytest.raises(UnsupportedOperationError):
-        unary_gate.b_width
 
     unary_gate.ports['A'].parameters['signed'] = True
     warns = LOG.warns_quantity
@@ -163,6 +162,7 @@ def test_unary_gate_8bit(simple_module: Module) -> None:
     assert list(range(8)) == list(g.output_port.segments.keys())
     assert list(range(8)) == list(g.input_port.segments.keys())
     assert g.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 8, 'Y_WIDTH': 8}
+    assert g.parameters == {'A_SIGNED': False, 'A_WIDTH': 8, 'Y_WIDTH': 8}
 
     g = UnaryGate(name='unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8, 'A_WIDTH': 4}, module=simple_module)
     assert len(g.connections['A']) == 4
@@ -172,6 +172,7 @@ def test_unary_gate_8bit(simple_module: Module) -> None:
     assert list(range(8)) == list(g.output_port.segments.keys())
     assert list(range(4)) == list(g.input_port.segments.keys())
     assert g.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 4, 'Y_WIDTH': 8}
+    assert g.parameters == {'A_SIGNED': False, 'A_WIDTH': 4, 'Y_WIDTH': 8}
 
 
 def test_unary_gate_split(simple_module: Module) -> None:
@@ -375,7 +376,7 @@ def test_neg_gate(simple_module: Module) -> None:
 
 def _test_signal_confr_n(gate: UnaryGate, sin: Signal, sout_prev: Signal, sout_new: Signal) -> None:
     assert gate.signal_out() == sout_prev
-    for i in range(gate.y_width):
+    for i in range(gate.a_width):
         gate.input_port.set_signal(sin, index=i)
         if i == 1:
             assert gate.signal_in(i) == Signal.HIGH
@@ -414,6 +415,7 @@ def test_reducer(reduce_gate: ReduceGate) -> None:
     assert reduce_gate.signal_out() is Signal.UNDEFINED
     reduce_gate.ports['A'].parameters['signed'] = 1
     assert reduce_gate.sync_parameters() == {'A_WIDTH': 4, 'A_SIGNED': True, 'Y_WIDTH': 1}
+    assert reduce_gate.parameters == {'A_WIDTH': 4, 'A_SIGNED': True, 'Y_WIDTH': 1}
     assert not reduce_gate.splittable
 
 
@@ -651,6 +653,7 @@ def test_binary_gate(binary_gate: BinaryGate) -> None:
     assert binary_gate.signal_out(0) is Signal.UNDEFINED
     binary_gate.ports['B'].parameters['signed'] = '1'
     assert binary_gate.sync_parameters() == {'A_WIDTH': 1, 'A_SIGNED': False, 'B_SIGNED': True, 'B_WIDTH': 1, 'Y_WIDTH': 1}
+    assert binary_gate.parameters == {'A_WIDTH': 1, 'A_SIGNED': False, 'B_SIGNED': True, 'B_WIDTH': 1, 'Y_WIDTH': 1}
     assert binary_gate.splittable
 
     binary_gate.ports['A'].parameters['signed'] = True
@@ -1070,6 +1073,7 @@ def test_shift_signed_gate(simple_module: Module) -> None:
     g.ports['A'].parameters['signed'] = '0'
     g.ports['B'].parameters['signed'] = '1'
     assert g.sync_parameters() == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 4}
+    assert g.parameters == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 4}
 
 
 def test_shl_gate(simple_module: Module) -> None:
@@ -1758,6 +1762,7 @@ def test_adder_structure(simple_module: Module) -> None:
     a.ports['A'].parameters['signed'] = '0'
     a.ports['B'].parameters['signed'] = '1'
     assert a.sync_parameters() == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 5}
+    assert a.parameters == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 5}
     assert not a.splittable
 
     a.disconnect('Y', 4)
@@ -2153,7 +2158,7 @@ def test_clocked_gate_split(simple_module: Module) -> None:
     assert len(splitted) == 8
     for idx, inst in splitted.items():
         assert inst.name in simple_module.instances
-        assert inst.y_width == 1
+        assert inst.width == 1
         assert inst.ports['D'].width == 1
         assert inst.ports['CLK'].width == 1
         assert inst.ports['RST'].width == 1
@@ -2219,6 +2224,8 @@ def test_dff_structure(simple_module: Module) -> None:
     assert ff.output_port.width == 4
     assert list(range(4)) == list(ff.input_port.segments.keys())
     assert list(range(4)) == list(ff.output_port.segments.keys())
+    assert not ff.has_en
+    assert not ff.has_rst
     assert ff.scan_ff_equivalent == ScanDFF
     assert ff.verilog_template == 'always @({header}) begin\n\t{set_out}\nend'
 
@@ -2275,6 +2282,8 @@ def test_adff_structure(simple_module: Module) -> None:
     assert ff.output_port.width == 4
     assert list(range(4)) == list(ff.input_port.segments.keys())
     assert list(range(4)) == list(ff.output_port.segments.keys())
+    assert not ff.has_en
+    assert ff.has_rst
     assert ff.scan_ff_equivalent == ScanADFF
     assert ff.verilog_template == 'always @({header}) begin\n\tif ({is_rst}) begin\n\t\t{rst_out}\n\tend else begin\n\t\t{set_out}\n\tend\nend'
 
@@ -2334,6 +2343,8 @@ def test_dffe_structure(simple_module: Module) -> None:
     assert ff.output_port.width == 4
     assert list(range(4)) == list(ff.input_port.segments.keys())
     assert list(range(4)) == list(ff.output_port.segments.keys())
+    assert ff.has_en
+    assert not ff.has_rst
     assert ff.scan_ff_equivalent == ScanDFFE
     assert ff.verilog_template == 'always @({header}) begin\n\tif ({en}) begin\n\t\t{set_out}\n\tend\nend'
 
@@ -2393,6 +2404,8 @@ def test_adffe_structure(simple_module: Module) -> None:
     assert ff.output_port.width == 4
     assert list(range(4)) == list(ff.input_port.segments.keys())
     assert list(range(4)) == list(ff.output_port.segments.keys())
+    assert ff.has_en
+    assert ff.has_rst
     assert ff.scan_ff_equivalent == ScanADFFE
 
     _init_dff_structure(ff, True)

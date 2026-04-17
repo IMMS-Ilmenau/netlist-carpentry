@@ -77,7 +77,8 @@ def _un_gate(
     params: Optional[Dict[str, object]] = None,
 ) -> GATE:
     params = params or {}
-    _update_params(params, [A, Y])
+    _update_params(params, [Y])
+    _update_params(params, [A], 'A_WIDTH')
     g = module.create_instance(gate, inst_name, params)
     _check_out_connection(Y, g)
     if A is not None:
@@ -174,7 +175,9 @@ def _bin_gate(
     params: Optional[Dict[str, object]] = None,
 ) -> GATE:
     params = params or {}
-    _update_params(params, [A, B, Y])
+    _update_params(params, [A], 'A_WIDTH')
+    _update_params(params, [B], 'B_WIDTH')
+    _update_params(params, [Y])
     g = module.create_instance(gate, inst_name, params)
     _check_out_connection(Y, g)
     if A is not None:
@@ -321,7 +324,8 @@ def _binNto1_gate(
     params: Optional[Dict[str, object]] = None,
 ) -> GATE:
     params = params or {}
-    _update_params(params, [A, B], 'A_WIDTH')
+    _update_params(params, [A], 'A_WIDTH')
+    _update_params(params, [B], 'B_WIDTH')
     g = module.create_instance(gate, inst_name, params)
     _check_out_connection(Y, g)
     if A is not None:
@@ -493,7 +497,7 @@ def _arith_gate(
     params = params or {}
     _update_params(params, [A], 'A_WIDTH')
     _update_params(params, [B], 'B_WIDTH')
-    _update_params(params, [Y], 'Y_WIDTH')
+    _update_params(params, [Y])
     a_width: PositiveInt = params['A_WIDTH']  # type: ignore
     b_width: PositiveInt = params['B_WIDTH']  # type: ignore
     y_width: PositiveInt = params['Y_WIDTH']  # type: ignore

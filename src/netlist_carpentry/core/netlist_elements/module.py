@@ -45,13 +45,14 @@ from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2O
 from netlist_carpentry.utils.cfg import CFG
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.custom_list import CustomList
+from netlist_carpentry.utils.gate_lib_dataclasses import Parameters
 
 T_NETLIST_ELEMENT = TypeVar('T_NETLIST_ELEMENT', bound=NetlistElement)
 T_INSTANCE = TypeVar('T_INSTANCE', bound=Instance)
 T_PORT = Union[Port['Module'], Port[Instance]]
 ANY_SIGNAL_SOURCE = Union[PortSegmentPath, PortPath, PortSegment, T_PORT, WireSegmentPath, WireSegment, Wire]
 ANY_SIGNAL_TARGET = Union[PortSegmentPath, PortPath, PortSegment, T_PORT]
-
+PARAMETERS = Union[Dict[str, object], Parameters]
 if TYPE_CHECKING:
     from netlist_carpentry.routines.check.report import CheckReport
 
@@ -91,13 +92,13 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
     @overload
     def create_instance(
-        self, interface_definition: Type[T_INSTANCE], name: Optional[str] = None, params: Optional[Dict[str, object]] = None
+        self, interface_definition: Type[T_INSTANCE], name: Optional[str] = None, params: Optional[PARAMETERS] = None
     ) -> T_INSTANCE: ...
     @overload
-    def create_instance(self, interface_definition: Module, name: Optional[str] = None, params: Optional[Dict[str, object]] = None) -> Instance: ...
+    def create_instance(self, interface_definition: Module, name: Optional[str] = None, params: Optional[PARAMETERS] = None) -> Instance: ...
 
     def create_instance(
-        self, interface_definition: Union[Module, Type[T_INSTANCE]], name: Optional[str] = None, params: Optional[Dict[str, object]] = None
+        self, interface_definition: Union[Module, Type[T_INSTANCE]], name: Optional[str] = None, params: Optional[PARAMETERS] = None
     ) -> Instance:
         """
         Creates an instance within this module based on the given interface definition, instance name and parameters.
@@ -208,7 +209,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if old_instance not in self.instances:
             raise ObjectNotFoundError(f'Cannot replace instance {old_instance}, since no such instance exists in module {self.name}!')
         old_instance = self.instances[old_instance]
-        new_instance = self.create_instance(new_type_definition, old_instance.name + uuid4().hex, params=dict(old_instance.parameters))
+        new_instance = self.create_instance(new_type_definition, old_instance.name + uuid4().hex, params=old_instance.parameters.as_dict())
         self._substitute_check_ports(old_instance, new_instance)
         connections = old_instance.connections
         self.remove_instance(old_instance)

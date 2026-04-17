@@ -636,9 +636,9 @@ class ShiftX(ShiftGate, BaseModel):
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        a_width = int(self.parameters['A_WIDTH']) if 'A_WIDTH' in self.parameters else 1
-        b_width = int(self.parameters['B_WIDTH']) if 'B_WIDTH' in self.parameters else 1
-        y_width = int(self.parameters['Y_WIDTH']) if 'Y_WIDTH' in self.parameters else 1
+        a_width = self.parameters.A_WIDTH or 1
+        b_width = self.parameters.B_WIDTH or 1
+        y_width = self.parameters.Y_WIDTH or 1
         self.connect('A', None, direction=Direction.IN, width=a_width)
         self.connect('B', None, direction=Direction.IN, width=b_width)
         self.connect('Y', None, direction=Direction.OUT, width=y_width)
@@ -948,7 +948,7 @@ class Multiplexer(PrimitiveGate, BaseModel):
 
     instance_type: str = f'{CFG.id_internal}mux'
 
-    parameters: MuxParams = {}
+    parameters: MuxParams = MuxParams()
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         """
@@ -965,11 +965,11 @@ class Multiplexer(PrimitiveGate, BaseModel):
     @property
     def y_width(self) -> PositiveInt:
         """Width of the gate, based on a certain port's width, depending on the actual gate."""
-        return self.parameters['WIDTH'] if 'WIDTH' in self.parameters else 1
+        return self.parameters.WIDTH or 1
 
     @y_width.setter
     def y_width(self, new_width: PositiveInt) -> None:
-        self.parameters['WIDTH'] = new_width
+        self.parameters.WIDTH = new_width
 
     @property
     def bit_width(self) -> int:
@@ -982,11 +982,11 @@ class Multiplexer(PrimitiveGate, BaseModel):
         If bit_width is set to 1, there are 2^bitwidth = 2¹ = 2 input paths.
         If bit_width is set to 2, there are 2² = 4 input paths. ...
         """
-        return self.parameters['BIT_WIDTH'] if 'BIT_WIDTH' in self.parameters else 1
+        return self.parameters.BIT_WIDTH or 1
 
     @bit_width.setter
     def bit_width(self, new_bit_width: int) -> None:
-        self.parameters['BIT_WIDTH'] = new_bit_width
+        self.parameters.BIT_WIDTH = new_bit_width
 
     @property
     def output_port(self) -> Port[Instance]:
@@ -1120,11 +1120,10 @@ class Multiplexer(PrimitiveGate, BaseModel):
         val_true = self.p2v(self.ports['D1'], exclude_indices)
         return f'assign\t{out_signals}\t= {sel} ? {val_true} : {val_false};'
 
-    def sync_parameters(self) -> MuxParams:
+    def sync_parameters(self) -> None:
         super().sync_parameters()
         self.parameters['WIDTH'] = self.y_width
         self.parameters['BIT_WIDTH'] = self.bit_width
-        return self.parameters
 
     def is_d_port(self, port: Port[Instance]) -> bool:
         """
@@ -1143,10 +1142,10 @@ class Multiplexer(PrimitiveGate, BaseModel):
         connections = self.connections
         super_module = self.parent
         super_module.remove_instance(self.name)
+        self.sync_parameters()
         for idx in range(self.data_width):
-            params = self.sync_parameters()
-            params['WIDTH'] = 1
-            inst: Self = super_module.add_instance(self.__class__(name=f'{self.name}_{idx}', parameters=params))
+            self.parameters['WIDTH'] = 1
+            inst: Self = super_module.add_instance(self.__class__(name=f'{self.name}_{idx}', parameters=self.parameters))
             for pname in list(inst.ports.keys()):
                 p = inst.ports[pname]
                 if pname != 'S':
@@ -1182,7 +1181,7 @@ class Demultiplexer(PrimitiveGate, BaseModel):
     instance_type: str = f'{CFG.id_internal}demux'
     inactive_out_value: Signal = Signal.UNDEFINED
 
-    parameters: MuxParams = {}
+    parameters: MuxParams = MuxParams()
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         """
@@ -1199,11 +1198,11 @@ class Demultiplexer(PrimitiveGate, BaseModel):
     @property
     def y_width(self) -> PositiveInt:
         """Width of the gate, based on a certain port's width, depending on the actual gate."""
-        return self.parameters['WIDTH'] if 'WIDTH' in self.parameters else 1
+        return self.parameters.WIDTH or 1
 
     @y_width.setter
     def y_width(self, new_width: PositiveInt) -> None:
-        self.parameters['WIDTH'] = new_width
+        self.parameters.WIDTH = new_width
 
     @property
     def bit_width(self) -> PositiveInt:
@@ -1216,11 +1215,11 @@ class Demultiplexer(PrimitiveGate, BaseModel):
         If bit_width is set to 1, there are 2^bitwidth = 2¹ = 2 input paths.
         If bit_width is set to 2, there are 2² = 4 input paths. ...
         """
-        return self.parameters['BIT_WIDTH'] if 'BIT_WIDTH' in self.parameters else 1
+        return self.parameters.BIT_WIDTH or 1
 
     @bit_width.setter
     def bit_width(self, new_bit_width: int) -> None:
-        self.parameters['BIT_WIDTH'] = new_bit_width
+        self.parameters.BIT_WIDTH = new_bit_width
 
     @property
     def input_port(self) -> Port[Instance]:
@@ -1337,11 +1336,10 @@ class Demultiplexer(PrimitiveGate, BaseModel):
             cases += f"\t\t{self.bit_width}'b{format(i, f'0{self.bit_width}b')} : {out_signals} <= {in_signals};\n"
         return self.verilog_template.format(sel=self.p2v(self.ports['S']), cases=cases[:-1])
 
-    def sync_parameters(self) -> MuxParams:
+    def sync_parameters(self) -> None:
         super().sync_parameters()
         self.parameters['WIDTH'] = self.y_width
         self.parameters['BIT_WIDTH'] = self.bit_width
-        return self.parameters
 
     def is_y_port(self, port: Port[Instance]) -> bool:
         """
@@ -1385,10 +1383,10 @@ class Demultiplexer(PrimitiveGate, BaseModel):
         connections = self.connections
         super_module = self.parent
         super_module.remove_instance(self.name)
+        self.sync_parameters()
         for idx in range(self.data_width):
-            params = self.sync_parameters()
-            params['WIDTH'] = 1
-            inst: Self = super_module.add_instance(self.__class__(name=f'{self.name}_{idx}', parameters=params))
+            self.parameters['WIDTH'] = 1
+            inst: Self = super_module.add_instance(self.__class__(name=f'{self.name}_{idx}', parameters=self.parameters))
             for pname in list(inst.ports.keys()):
                 p = inst.ports[pname]
                 if pname != 'S':
@@ -1512,6 +1510,16 @@ class DFF(ClkMixin, BaseModel):
     prev_signals: Dict[str, Dict[int, Signal]] = {}
 
     @property
+    def has_en(self) -> bool:
+        """Whether this DFF instance has an EN (enable) port."""
+        return 'EN' in self.ports
+
+    @property
+    def has_rst(self) -> bool:
+        """Whether this DFF instance has an RST (reset) port."""
+        return 'RST' in self.ports
+
+    @property
     def scan_ff_equivalent(self) -> Type['ScanDFF']:
         """Returns the Scan-FF type equivalent for normal FF and the FF type equivalent for Scan-FF."""
         mapping: Dict[str, Type['ScanDFF']] = {
@@ -1542,7 +1550,8 @@ class DFF(ClkMixin, BaseModel):
 
         No connections are copied however, and the instance initially does not belong to any module.
         """
-        return self.scan_ff_equivalent(name=self.name + '_scan', parameters=self.sync_parameters())
+        self.sync_parameters()
+        return self.scan_ff_equivalent(name=self.name + '_scan', parameters=self.parameters)
 
     def evaluate(self) -> None:
         """
@@ -1634,7 +1643,7 @@ class ScanADFFE(ScanMixin, ADFFE):  # type: ignore[misc] # MRO is fine. Silence,
 class DLatch(EnMixin, StorageGate, BaseModel):
     instance_type: str = f'{CFG.id_internal}dlatch'
 
-    parameters: DLatchParams = {}
+    parameters: DLatchParams = DLatchParams()
 
     @property
     def verilog_template(self) -> str:

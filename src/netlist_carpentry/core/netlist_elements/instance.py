@@ -266,7 +266,7 @@ class Instance(NetlistElement, BaseModel):
         single_tmp = '\t.{pname}({pval}),\n'
         param_str = ''
         for pname, pval in self.parameters.items():
-            if self.module_definition is None or pname in self.module_definition.parameters:
+            if self.module_definition is None or pname in self.module_definition.parameters.as_dict():
                 pval = pval.value if isinstance(pval, Signal) else str(pval)
                 param_str += single_tmp.format(pname=pname, pval=pval)
         return '#(\n' + param_str[:-2] + '\n\t) ' if param_str else ''
@@ -570,7 +570,7 @@ class Instance(NetlistElement, BaseModel):
         """
         if port_name not in self.ports:
             raise ObjectNotFoundError(f'No port {port_name} exists in {self.__class__.__name__} {self.raw_path}!')
-        self.parameters[f'{port_name}_SIGNED'] = self.ports[port_name].parameters.get('signed', False)  # type: ignore
+        self.parameters[f'{port_name}_SIGNED'] = self.ports[port_name].parameters.get('signed', False)
 
     def split(self) -> Dict[NonNegativeInt, Self]:
         """
@@ -601,7 +601,7 @@ class Instance(NetlistElement, BaseModel):
 
     def _split_sync_params(self, slices: Iterable[Self]) -> None:
         for inst in slices:
-            inst.parameters = self.parameters.copy()
+            inst.parameters = self.parameters.model_copy()
 
     def change_mutability(self, is_now_locked: bool, recursive: bool = False) -> Self:
         """

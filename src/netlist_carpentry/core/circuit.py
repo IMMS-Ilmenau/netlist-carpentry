@@ -229,7 +229,7 @@ class Circuit(BaseModel):
             else:
                 raise ObjectNotFoundError(f'No module {old_module} exists in circuit {self.name}!')
         new_module = self.create_module(new_name)
-        new_module.parameters = old_module.parameters.copy()
+        new_module.parameters = old_module.parameters.model_copy()
         new_module.metadata = deepcopy(old_module.metadata)
         for wire in old_module.wires.values():
             new_module.create_wire(wire.name, wire.width, offset=wire.offset or 0)
@@ -239,7 +239,7 @@ class Circuit(BaseModel):
                 new_module.connect(ws_path.replace(old_module.name, new_name), p[idx])
         for instance in old_module.instances.values():
             idef = instance.module_definition if instance.module_definition is not None else instance.__class__
-            new_inst = new_module.create_instance(idef, instance.name, dict(instance.parameters))
+            new_inst = new_module.create_instance(idef, instance.name, instance.parameters)
             for pname, con_dict in instance.connections.items():
                 new_inst.disconnect(pname)
                 for idx, ws_path in con_dict.items():

@@ -13,7 +13,7 @@ from netlist_carpentry.core.exceptions import ParentNotFoundError, VerilogSyntax
 from netlist_carpentry.core.netlist_elements.element_path import ElementPath
 from netlist_carpentry.core.netlist_elements.mixins.hooks import HooksMixin
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT, NESTED_DICT, MetadataMixin
-from netlist_carpentry.utils.gate_lib_dataclasses import TypedParams
+from netlist_carpentry.utils.gate_lib_dataclasses import Parameters
 from netlist_carpentry.utils.verilog import VERILOG_KEYWORDS
 
 if TYPE_CHECKING:
@@ -36,7 +36,7 @@ class NetlistElement(HooksMixin, BaseModel):
     _locked: bool = False
     """Whether the element is structurally unchangeable (e.g. if set to True, connections cannot be changed). Defaults to False."""
 
-    parameters: TypedParams = {}
+    parameters: Parameters = Parameters()
     """Attributes of a netlist element. Can be user-defined, or e. g. by Yosys (such as `WIDTH` for some instances)."""
 
     metadata: MetadataMixin = MetadataMixin()

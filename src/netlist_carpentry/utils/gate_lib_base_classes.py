@@ -8,24 +8,18 @@ including methods for setting input signals, evaluating output signals, and upda
 See the gate_lib.py module for further information.
 """
 
+import warnings
 from typing import Dict, Iterable, List, Literal, Optional, Tuple, Type
 
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
 from netlist_carpentry import CFG, LOG, Direction, Instance, Module, Port, Signal
-from netlist_carpentry.core.exceptions import EvaluationError, UnsupportedOperationError
+from netlist_carpentry.core.exceptions import EvaluationError, WidthMismatchError
 from netlist_carpentry.core.netlist_elements.port import ANY_PORT
 from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2OBJ, WIRE_SEGMENT_X, WireSegment
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
-from netlist_carpentry.utils.gate_lib_dataclasses import (
-    BinaryParams,
-    DFFParams,
-    InstanceParams,
-    TypedParams,
-    UnaryParams,
-    _SequentialParams,
-)
+from netlist_carpentry.utils.gate_lib_dataclasses import BinaryParams, DFFParams, GateParams, Parameters, UnaryParams
 from netlist_carpentry.utils.safe_format_dict import SafeFormatDict
 
 
@@ -40,26 +34,41 @@ class PrimitiveGate(Instance, BaseModel):
     instance_type: str = CFG.id_internal
     """Identifier for instances of this gate type."""
 
-    parameters: TypedParams = {}
+    parameters: GateParams = GateParams()
     """Parameters of this gate, e.g. data width, signedness or polarity."""
 
     @property
     def y_width(self) -> PositiveInt:
         """Width of the gate, based on a certain port's width, depending on the actual gate."""
+        warnings.warn(
+            f'{self.__class__.__name__}.y_width is deprecated and will be removed in v1.0.0. If applicable, use {self.__class__.__name__}.data_width instead, or retrieve the width via {self.__class__.__name__}.ports[port_name].width!',
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._try_sync_parameters()
-        return int(self.parameters['Y_WIDTH']) if 'Y_WIDTH' in self.parameters else 1  # type: ignore[misc]
+        return int(self.parameters.Y_WIDTH) if hasattr(self.parameters, 'Y_WIDTH') else 1  # type: ignore[misc]
 
     @property
     def a_width(self) -> PositiveInt:
         """Width of the gate's `A` port."""
+        warnings.warn(
+            f'{self.__class__.__name__}.a_width is deprecated and will be removed in v1.0.0. If applicable, use {self.__class__.__name__}.data_width instead, or retrieve the width via {self.__class__.__name__}.ports[port_name].width!',
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._try_sync_parameters()
-        return int(self.parameters['A_WIDTH']) if 'A_WIDTH' in self.parameters else self.y_width  # type: ignore[misc]
+        return int(self.parameters.A_WIDTH) if hasattr(self.parameters, 'A_WIDTH') else self.y_width  # type: ignore[misc]
 
     @property
     def b_width(self) -> PositiveInt:
         """Width of the gate's `B` port."""
+        warnings.warn(
+            f'{self.__class__.__name__}.b_width is deprecated and will be removed in v1.0.0. If applicable, use {self.__class__.__name__}.data_width instead, or retrieve the width via {self.__class__.__name__}.ports[port_name].width!',
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._try_sync_parameters()
-        return int(self.parameters['B_WIDTH']) if 'B_WIDTH' in self.parameters else self.y_width  # type: ignore[misc]
+        return int(self.parameters.B_WIDTH) if hasattr(self.parameters, 'B_WIDTH') else self.y_width  # type: ignore[misc]
 
     @property
     def is_combinational(self) -> bool:
@@ -132,7 +141,12 @@ class PrimitiveGate(Instance, BaseModel):
         except KeyError:  # Happens during initialization phase, where ports do not have a width yet
             pass
 
-    def sync_parameters(self) -> InstanceParams:
+    def sync_parameters(self) -> Optional[Parameters]:
+        warnings.warn(
+            f'The return value {self.__class__.__name__}.sync_parameters() will be `None` starting from version 1.0.0. To retrieve the parameters, please use {self.__class__.__name__}.parameters after calling {self.__class__.__name__}.sync_parameters()!',
+            FutureWarning,
+            stacklevel=2,
+        )
         return self.parameters
 
     def p2v(self, port: ANY_PORT, exclude_indices: Optional[List[int]] = None) -> str:
@@ -183,15 +197,15 @@ class PrimitiveGate(Instance, BaseModel):
         return exclude_indices
 
     def _fix_signedness_mismatch(self, port_name: str, param_name: Literal['A_SIGNED', 'B_SIGNED']) -> bool:
-        if self.parameters.get(param_name, False) != self.ports[port_name].signed:
-            if param_name in self.parameters and 'signed' in self.ports[port_name].parameters:
+        if getattr(self.parameters, param_name, False) != self.ports[port_name].signed:
+            if hasattr(self.parameters, param_name) and 'signed' in self.ports[port_name].parameters:
                 LOG.warn(
                     f"Detected parameter mismatch: Parameter {param_name} of instance {self.raw_path} is different from the port's parameter 'signed'. "
                     + 'To change the signedness of the port, change it directly at the port, via port.set_signed(new_value). '
                     + "Aligning param_name with the port's current parameter to fix the mismatch..."
                 )
-            self.ports[port_name].parameters['signed'] = self.parameters.get(param_name, False)
-        return bool(self.parameters.get(param_name, False))
+            self.ports[port_name].parameters['signed'] = getattr(self.parameters, param_name, False)
+        return bool(getattr(self.parameters, param_name, False))
 
     def set(self, port_name: str, new_signal: SignalOrLogicLevel) -> None:
         """
@@ -250,7 +264,7 @@ class PrimitiveGate(Instance, BaseModel):
     def _split_sync_params(self, slices: Iterable[Self]) -> None:
         super()._split_sync_params(slices)
         for inst in slices:
-            inst.parameters['Y_WIDTH'] = 1
+            inst.parameters.Y_WIDTH = 1
 
 
 class UnaryGate(PrimitiveGate, BaseModel):
@@ -261,7 +275,7 @@ class UnaryGate(PrimitiveGate, BaseModel):
     This class provides a common interface for all unary gates, including methods for evaluating the gate's output and setting its output signal.
     """
 
-    parameters: UnaryParams = {}
+    parameters: UnaryParams = UnaryParams()
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         """
@@ -279,13 +293,21 @@ class UnaryGate(PrimitiveGate, BaseModel):
         return self.ports['A']
 
     @property
+    def y_width(self) -> PositiveInt:
+        """Width of the gate, based on a certain port's width, depending on the actual gate."""
+        self._try_sync_parameters()
+        return self.parameters.Y_WIDTH or 1
+
+    @property
+    def a_width(self) -> PositiveInt:
+        """Width of the gate's `A` port."""
+        self._try_sync_parameters()
+        return self.parameters.A_WIDTH or self.y_width
+
+    @property
     def a_signed(self) -> bool:
         """The signedness of input port A."""
         return self._fix_signedness_mismatch('A', 'A_SIGNED')
-
-    @property
-    def b_width(self) -> PositiveInt:
-        raise UnsupportedOperationError('Unary gates do not have a port B and thus no b_width!')
 
     @property
     def output_port(self) -> Port[Instance]:
@@ -318,11 +340,11 @@ class UnaryGate(PrimitiveGate, BaseModel):
             return self.verilog_template.format(out=self.verilog_net_map['Y'], in1=self._check_signal_signed(self.verilog_net_map['A']))
         return ''
 
-    def sync_parameters(self) -> UnaryParams:
+    def sync_parameters(self) -> Optional[UnaryParams]:
         super().sync_parameters()
-        self.parameters['A_WIDTH'] = self.input_port.width
-        self.parameters['A_SIGNED'] = self.input_port.signed
-        self.parameters['Y_WIDTH'] = self.data_width
+        self.parameters.A_WIDTH = self.ports['A'].width
+        self.parameters.A_SIGNED = self.ports['A'].signed
+        self.parameters.Y_WIDTH = self.data_width
         return self.parameters
 
     def signal_in(self, idx: NonNegativeInt = 0) -> Signal:
@@ -344,7 +366,25 @@ class UnaryGate(PrimitiveGate, BaseModel):
         return self.output_port.signal_array[idx]
 
 
-class ReduceGate(UnaryGate, BaseModel):
+class _Out1BitMixin(PrimitiveGate):
+    @property
+    def output_port(self) -> Port[Instance]:
+        """The output port of the gate."""
+        self._check_width()
+        return self.ports['Y']
+
+    def _check_width(self) -> None:
+        if 'Y' in self.ports and self.ports['Y'].width != 1:
+            raise WidthMismatchError(f'Reduce gates must have an output port width of 1, but {self.raw_path} is {self.output_port.width} bit wide!')
+
+    @property
+    def y_width(self) -> PositiveInt:
+        """Width of the gate, which is always 1 for gates that reduce N-bit inputs to 1 bit."""
+        self._check_width()
+        return 1
+
+
+class ReduceGate(_Out1BitMixin, UnaryGate):
     """
     A base class for reduce gates.
 
@@ -352,19 +392,16 @@ class ReduceGate(UnaryGate, BaseModel):
     This class provides a common interface for all reduce gates, including methods for evaluating the gate's output and setting its output signal.
     """
 
+    parameters: UnaryParams = UnaryParams()
+
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         """
         Initializes the gate's ports and connections.
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        self.connect('A', None, direction=Direction.IN, width=self.y_width)
+        self.connect('A', None, direction=Direction.IN, width=self.a_width)
         self.connect('Y', None, direction=Direction.OUT)
-
-    @property
-    def y_width(self) -> PositiveInt:
-        """Width of the gate, based on a certain port's width, depending on the actual gate."""
-        return self.parameters['A_WIDTH'] if 'A_WIDTH' in self.parameters else 1
 
     @property
     def splittable(self) -> bool:
@@ -401,7 +438,7 @@ class BinaryGate(PrimitiveGate, BaseModel):
     This class provides a common interface for all binary gates, including methods for evaluating the gate's output and setting its output signal.
     """
 
-    parameters: BinaryParams = {}
+    parameters: BinaryParams = BinaryParams()
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         """
@@ -420,9 +457,27 @@ class BinaryGate(PrimitiveGate, BaseModel):
         return (self.ports['A'], self.ports['B'])
 
     @property
+    def y_width(self) -> PositiveInt:
+        """Width of the gate, based on a certain port's width, depending on the actual gate."""
+        self._try_sync_parameters()
+        return self.parameters.Y_WIDTH or 1
+
+    @property
+    def a_width(self) -> PositiveInt:
+        """Width of the gate's `A` port."""
+        self._try_sync_parameters()
+        return self.parameters.A_WIDTH or self.y_width
+
+    @property
     def a_signed(self) -> bool:
         """The signedness of input port A."""
         return self._fix_signedness_mismatch('A', 'A_SIGNED')
+
+    @property
+    def b_width(self) -> PositiveInt:
+        """Width of the gate's `B` port."""
+        self._try_sync_parameters()
+        return self.parameters.B_WIDTH or self.y_width
 
     @property
     def b_signed(self) -> bool:
@@ -458,13 +513,13 @@ class BinaryGate(PrimitiveGate, BaseModel):
             return self.verilog_template.format(out=out, in1=in1, in2=in2)
         return ''
 
-    def sync_parameters(self) -> BinaryParams:
+    def sync_parameters(self) -> Optional[BinaryParams]:
         super().sync_parameters()
-        self.parameters['A_WIDTH'] = self.ports['A'].width
-        self.parameters['A_SIGNED'] = self.ports['A'].signed
-        self.parameters['B_WIDTH'] = self.ports['B'].width
-        self.parameters['B_SIGNED'] = self.ports['B'].signed
-        self.parameters['Y_WIDTH'] = self.data_width
+        self.parameters.A_WIDTH = self.ports['A'].width
+        self.parameters.A_SIGNED = self.ports['A'].signed
+        self.parameters.B_WIDTH = self.ports['B'].width
+        self.parameters.B_SIGNED = self.ports['B'].signed
+        self.parameters.Y_WIDTH = self.data_width
         return self.parameters
 
     def _check_signal_signed(self, a: str, b: str) -> Tuple[str, str]:
@@ -513,7 +568,7 @@ class ArithmeticGate(BinaryGate, BaseModel):
     This class provides a common interface for all arithmetic gates, including methods for evaluating the gate's output and setting its output signal.
     """
 
-    parameters: BinaryParams = {}
+    parameters: BinaryParams = BinaryParams()
 
     @property
     def input_ports(self) -> Tuple[Port[Instance], Port[Instance]]:
@@ -534,16 +589,6 @@ class ArithmeticGate(BinaryGate, BaseModel):
             Port: The output port of the gate.
         """
         return self.ports['Y']
-
-    @property
-    def a_signed(self) -> bool:
-        """The signedness of input port A."""
-        return self._fix_signedness_mismatch('A', 'A_SIGNED')
-
-    @property
-    def b_signed(self) -> bool:
-        """The signedness of input port B."""
-        return self._fix_signedness_mismatch('B', 'B_SIGNED')
 
     @property
     def splittable(self) -> bool:
@@ -593,13 +638,13 @@ class ArithmeticGate(BinaryGate, BaseModel):
         in1, in2 = self._check_signal_signed(self.verilog_net_map['A'], self.verilog_net_map['B'])
         return self.verilog_template.format(out=out, in1=in1, in2=in2)
 
-    def sync_parameters(self) -> BinaryParams:
+    def sync_parameters(self) -> Optional[BinaryParams]:
         super().sync_parameters()
-        self.parameters['A_WIDTH'] = self.ports['A'].width
-        self.parameters['A_SIGNED'] = self.ports['A'].signed
-        self.parameters['B_WIDTH'] = self.ports['B'].width
-        self.parameters['B_SIGNED'] = self.ports['B'].signed
-        self.parameters['Y_WIDTH'] = self.data_width
+        self.parameters.A_WIDTH = self.ports['A'].width
+        self.parameters.A_SIGNED = self.ports['A'].signed
+        self.parameters.B_WIDTH = self.ports['B'].width
+        self.parameters.B_SIGNED = self.ports['B'].signed
+        self.parameters.Y_WIDTH = self.data_width
         return self.parameters
 
     def inputs_int(self) -> Tuple[int, int]:
@@ -611,7 +656,9 @@ class ArithmeticGate(BinaryGate, BaseModel):
         return sig1_int, sig2_int
 
 
-class BinaryNto1Gate(BinaryGate, BaseModel):
+class BinaryNto1Gate(_Out1BitMixin, BinaryGate, BaseModel):
+    parameters: BinaryParams = BinaryParams()
+
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         """
         Initializes the gate's ports and connections.
@@ -619,13 +666,9 @@ class BinaryNto1Gate(BinaryGate, BaseModel):
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
         super().model_post_init(__context)
-        self.ports.pop('Y')
+        self.connect('A', None, direction=Direction.IN, width=self.a_width)
+        self.connect('B', None, direction=Direction.IN, width=self.b_width)
         self.connect('Y', None, direction=Direction.OUT)
-
-    @property
-    def y_width(self) -> PositiveInt:
-        """Width of the gate, based on a certain port's width, depending on the actual gate."""
-        return self.parameters['A_WIDTH'] if 'A_WIDTH' in self.parameters else 1
 
     @property
     def splittable(self) -> bool:
@@ -651,7 +694,7 @@ class BinaryNto1Gate(BinaryGate, BaseModel):
 
 
 class StorageGate(PrimitiveGate, BaseModel):
-    parameters: _SequentialParams = {}
+    parameters: DFFParams = DFFParams()
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         """
@@ -659,15 +702,24 @@ class StorageGate(PrimitiveGate, BaseModel):
 
         This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
         """
-        self.connect('D', None, direction=Direction.IN, width=self.y_width)
-        self.connect('Q', None, direction=Direction.OUT, width=self.y_width)
+        self.connect('D', None, direction=Direction.IN, width=self.width)
+        self.connect('Q', None, direction=Direction.OUT, width=self.width)
 
         self._curr_out = [Signal.UNDEFINED for i in range(self.data_width)]
         return super().model_post_init(__context)
 
     @property
     def y_width(self) -> PositiveInt:
-        return self.parameters['WIDTH'] if 'WIDTH' in self.parameters else 1
+        warnings.warn(
+            f'{self.__class__.__name__}.y_width is deprecated and will be removed in v1.0.0. Use {self.__class__.__name__}.width instead!',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.width
+
+    @property
+    def width(self) -> PositiveInt:
+        return self.parameters.WIDTH or 1
 
     @property
     def is_combinational(self) -> bool:
@@ -706,9 +758,9 @@ class StorageGate(PrimitiveGate, BaseModel):
         wire = self.p2v(port) if self.p2v(port) != "1'bx" else ''
         return ('posedge ' if polarity == Signal.HIGH else 'negedge ') + wire if wire else ''
 
-    def sync_parameters(self) -> _SequentialParams:
+    def sync_parameters(self) -> Optional[Parameters]:
         super().sync_parameters()
-        self.parameters['WIDTH'] = self.data_width
+        self.parameters.WIDTH = self.data_width
         return self.parameters
 
     def _split(self) -> Dict[NonNegativeInt, Self]:
@@ -732,7 +784,7 @@ class StorageGate(PrimitiveGate, BaseModel):
     def _split_sync_params(self, slices: Iterable[Self]) -> None:
         super()._split_sync_params(slices)
         for inst in slices:
-            inst.parameters['WIDTH'] = 1
+            inst.parameters.WIDTH = 1
 
 
 class ClkMixin(StorageGate):
@@ -741,16 +793,16 @@ class ClkMixin(StorageGate):
     This class provides a common interface for all clocked gates, including methods for evaluating the gate's output and setting its output signal.
     """
 
-    parameters: DFFParams = {}
+    parameters: DFFParams = DFFParams()
 
     @property
     def clk_polarity(self) -> Signal:
         """Which clock edge activates the flip-flop. Default is Signal.HIGH, i.e. rising edge."""
-        return self.parameters['CLK_POLARITY'] if 'CLK_POLARITY' in self.parameters else Signal.HIGH
+        return self.parameters.CLK_POLARITY or Signal.HIGH
 
     @clk_polarity.setter
     def clk_polarity(self, new_signal: Signal) -> None:
-        self.parameters['CLK_POLARITY'] = new_signal
+        self.parameters.CLK_POLARITY = new_signal
 
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         """
@@ -782,9 +834,9 @@ class ClkMixin(StorageGate):
         """
         return self._v_header(self.clk_port, self.clk_polarity)
 
-    def sync_parameters(self) -> DFFParams:
+    def sync_parameters(self) -> Optional[DFFParams]:
         super().sync_parameters()
-        self.parameters['CLK_POLARITY'] = self.clk_polarity
+        self.parameters.CLK_POLARITY = self.clk_polarity
         return self.parameters
 
     def set_clk(self, new_signal: SignalOrLogicLevel) -> None:
@@ -799,16 +851,14 @@ class ClkMixin(StorageGate):
 
 
 class EnMixin(StorageGate):
-    parameters: DFFParams = {}
-
     @property
     def en_polarity(self) -> Signal:
         """Which EN-signal level enables writing on the data storage. Default is Signal.HIGH."""
-        return self.parameters['EN_POLARITY'] if 'EN_POLARITY' in self.parameters else Signal.HIGH
+        return self.parameters.EN_POLARITY or Signal.HIGH
 
     @en_polarity.setter
     def en_polarity(self, new_signal: Signal) -> None:
-        self.parameters['EN_POLARITY'] = new_signal
+        self.parameters.EN_POLARITY = new_signal
 
     @property
     def en_port(self) -> Port[Instance]:
@@ -848,9 +898,9 @@ class EnMixin(StorageGate):
         context_map.update(en=self._verilog_en)
         return context_map
 
-    def sync_parameters(self) -> DFFParams:
+    def sync_parameters(self) -> Optional[DFFParams]:
         super().sync_parameters()
-        self.parameters['EN_POLARITY'] = self.en_polarity
+        self.parameters.EN_POLARITY = self.en_polarity
         return self.parameters
 
     def set_en(self, new_signal: SignalOrLogicLevel) -> None:
@@ -873,25 +923,23 @@ class EnMixin(StorageGate):
 
 
 class RstMixin(StorageGate):
-    parameters: DFFParams = {}
-
     @property
     def rst_polarity(self) -> Signal:
         """Which reset level resets the flip-flop. Default is Signal.HIGH: the flipflop is in reset, if the reset signal is HIGH."""
-        return self.parameters['ARST_POLARITY'] if 'ARST_POLARITY' in self.parameters else Signal.HIGH
+        return self.parameters.ARST_POLARITY or Signal.HIGH
 
     @rst_polarity.setter
     def rst_polarity(self, new_signal: Signal) -> None:
-        self.parameters['ARST_POLARITY'] = new_signal
+        self.parameters.ARST_POLARITY = new_signal
 
     @property
     def rst_val_int(self) -> int:
         """Reset value of the flip-flop as integer. Default is 0."""
-        return self.parameters['ARST_VALUE'] if 'ARST_VALUE' in self.parameters else 0
+        return self.parameters.ARST_VALUE or 0
 
     @rst_val_int.setter
     def rst_val_int(self, new_rst_val_int: int) -> None:
-        self.parameters['ARST_VALUE'] = new_rst_val_int
+        self.parameters.ARST_VALUE = new_rst_val_int
 
     @property
     def rst_port(self) -> Port[Instance]:
@@ -957,10 +1005,10 @@ class RstMixin(StorageGate):
         context_map.update(header=self._verilog_header, is_rst=self._verilog_rst_net, rst_out=rst_out)
         return context_map
 
-    def sync_parameters(self) -> DFFParams:
+    def sync_parameters(self) -> Optional[DFFParams]:
         super().sync_parameters()
-        self.parameters['ARST_POLARITY'] = self.rst_polarity
-        self.parameters['ARST_VALUE'] = self.rst_val_int
+        self.parameters.ARST_POLARITY = self.rst_polarity
+        self.parameters.ARST_VALUE = self.rst_val_int
         return self.parameters
 
     def set_rst(self, new_signal: SignalOrLogicLevel) -> None:
@@ -982,12 +1030,12 @@ class RstMixin(StorageGate):
         super()._split_sync_params(slices)
         idx = 0
         for slice in slices:
-            slice.parameters['ARST_VALUE'] = int(self.rst_val[idx].value)
+            slice.parameters.ARST_VALUE = int(self.rst_val[idx].value)
             idx += 1
 
 
 class ScanMixin(StorageGate):
-    parameters: DFFParams = {}
+    parameters: DFFParams = DFFParams()
 
     @property
     def se_port(self) -> Port[Instance]:
@@ -1071,8 +1119,8 @@ class ScanMixin(StorageGate):
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
         super().model_post_init(__context)
         self.connect('SE', None, direction=Direction.IN)
-        self.connect('SI', None, direction=Direction.IN, width=self.y_width)
-        self.connect('SO', None, direction=Direction.OUT, width=self.y_width)
+        self.connect('SI', None, direction=Direction.IN, width=self.width)
+        self.connect('SO', None, direction=Direction.OUT, width=self.width)
 
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
         if self.se_signal is Signal.HIGH:

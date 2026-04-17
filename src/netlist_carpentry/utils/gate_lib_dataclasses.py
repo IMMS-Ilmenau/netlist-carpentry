@@ -1,59 +1,122 @@
 """Module for typed dictionaries used throughout the gate library for convenience."""
 
-from typing import TypedDict
+import warnings
+from typing import Dict, List, Optional, Tuple, TypedDict
 
-from pydantic import PositiveInt
-from typing_extensions import NotRequired
+from pydantic import BaseModel, ConfigDict, NonNegativeInt, PositiveInt
+from typing_extensions import NotRequired, deprecated
 
 from netlist_carpentry import Signal
 
 
+@deprecated('TypedParams will be removed in 1.0.0! Use gate_lib_dataclasses.Parameters instead.')
 class TypedParams(TypedDict):
     pass
 
 
-class InstanceParams(TypedParams):
-    pass
-
-
-class WireParams(TypedParams):
-    signed: NotRequired[int]
-
-
+@deprecated('_CombinationalParams will be removed in 1.0.0! Use gate_lib_dataclasses.Parameters instead.')
 class _CombinationalParams(TypedParams):
     Y_WIDTH: NotRequired[PositiveInt]
     A_WIDTH: NotRequired[PositiveInt]
     A_SIGNED: NotRequired[bool]
 
 
-class UnaryParams(_CombinationalParams):
-    pass
-
-
-class BinaryParams(_CombinationalParams):
-    B_WIDTH: NotRequired[PositiveInt]
-    B_SIGNED: NotRequired[bool]
-
-
-class MuxParams(_CombinationalParams):
-    WIDTH: NotRequired[PositiveInt]
-    BIT_WIDTH: NotRequired[PositiveInt]
-
-
+@deprecated('_SequentialParams will be removed in 1.0.0! Use gate_lib_dataclasses.Parameters instead.')
 class _SequentialParams(TypedParams):
     WIDTH: NotRequired[PositiveInt]
 
 
-class DFFParams(_SequentialParams):
-    CLK_POLARITY: NotRequired[Signal]
-    EN_POLARITY: NotRequired[Signal]
-    ARST_POLARITY: NotRequired[Signal]
-    ARST_VALUE: NotRequired[int]
+class Parameters(BaseModel):
+    model_config = ConfigDict(extra='allow')
+
+    def __getitem__(self, key: str) -> object:
+        issue_call = 'parameters["{' + str(key) + '}"]'
+        warnings.warn(
+            f'Retrieving {key} parameter via `{issue_call}` is deprecated and will be removed in v1.0.0. Use `parameters.{key}` instead!',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if getattr(self, key, None) is not None:  # type: ignore
+            return getattr(self, key, None)  # type: ignore
+        raise KeyError(f'No parameter {key} found!')
+
+    def __setitem__(self, key: str, value: object) -> None:
+        issue_call = 'parameters["{' + key + '}"]' + f' = {value}'
+        warnings.warn(
+            f'Setting {key} parameter via `{issue_call}` is deprecated and will be removed in v1.0.0. Use `parameters.{key} = {value}` instead!',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        setattr(self, key, value)
+
+    def __len__(self) -> NonNegativeInt:
+        return len(self.as_dict())
+
+    def __eq__(self, value: object) -> bool:
+        if isinstance(value, Parameters):
+            return super().__eq__(value)
+        if isinstance(value, dict):
+            return self.as_dict() == value
+        return NotImplemented
+
+    def as_dict(self) -> Dict[str, object]:
+        """Returns this parameter set as a dictionary.
+
+        Does not include parameters that are `None`.
+
+        Returns:
+            Dict[str, object]: This parameter set as a dictionary.
+        """
+        return self.model_dump(exclude_none=True)  # type: ignore[misc]
+
+    def items(self) -> List[Tuple[str, object]]:
+        return self.as_dict().items()
 
 
-class DLatchParams(_SequentialParams):
-    EN_POLARTY: NotRequired[Signal]
+class InstanceParams(Parameters):
+    pass
 
 
+class GateParams(InstanceParams):
+    pass
+
+
+class WireParams(BaseModel):
+    signed: Optional[int]
+
+
+class UnaryParams(GateParams):
+    Y_WIDTH: Optional[PositiveInt] = None
+    A_WIDTH: Optional[PositiveInt] = None
+    A_SIGNED: Optional[bool] = False
+
+
+class BinaryParams(GateParams):
+    Y_WIDTH: Optional[PositiveInt] = None
+    A_WIDTH: Optional[PositiveInt] = None
+    A_SIGNED: Optional[bool] = False
+    B_WIDTH: Optional[PositiveInt] = None
+    B_SIGNED: Optional[bool] = False
+
+
+class MuxParams(GateParams):
+    WIDTH: Optional[PositiveInt] = None
+    BIT_WIDTH: Optional[PositiveInt] = None
+
+
+class DFFParams(GateParams):
+    WIDTH: Optional[PositiveInt] = None
+    CLK_POLARITY: Optional[Signal] = None
+    ARST_POLARITY: Optional[Signal] = None
+    ARST_VALUE: Optional[int] = None
+    EN_POLARITY: Optional[Signal] = None
+
+
+class DLatchParams(GateParams):
+    EN_POLARITY: Optional[Signal] = None
+    WIDTH: Optional[PositiveInt] = None
+
+
+@deprecated('AllParams will be removed in 1.0.0! Use gate_lib_dataclasses.Parameters instead.')
 class AllParams(UnaryParams, BinaryParams, MuxParams, DFFParams):
     pass
