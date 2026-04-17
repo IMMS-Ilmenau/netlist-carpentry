@@ -70,7 +70,14 @@ class Parameters(BaseModel):
         return self.model_dump(exclude_none=True)  # type: ignore[misc]
 
     def items(self) -> List[Tuple[str, object]]:
-        return self.as_dict().items()
+        """Returns the parameter names and values as a list of tuples.
+
+        This is basically the same as `dict.items()`.
+
+        Returns:
+            List[Tuple[str, object]]: The parameter names and values as a list of tuples.
+        """
+        return list(self.as_dict().items())
 
 
 class InstanceParams(Parameters):
@@ -82,16 +89,22 @@ class GateParams(InstanceParams):
 
 
 class WireParams(BaseModel):
+    """Common parameters for Wires."""
+
     signed: Optional[int]
 
 
 class UnaryParams(GateParams):
+    """Common parameters for Unary cells and derived classes."""
+
     Y_WIDTH: Optional[PositiveInt] = None
     A_WIDTH: Optional[PositiveInt] = None
     A_SIGNED: Optional[bool] = False
 
 
 class BinaryParams(GateParams):
+    """Common parameters for Binary cells and derived classes."""
+
     Y_WIDTH: Optional[PositiveInt] = None
     A_WIDTH: Optional[PositiveInt] = None
     A_SIGNED: Optional[bool] = False
@@ -100,11 +113,15 @@ class BinaryParams(GateParams):
 
 
 class MuxParams(GateParams):
+    """Common parameters for Muxes and Demuxes."""
+
     WIDTH: Optional[PositiveInt] = None
     BIT_WIDTH: Optional[PositiveInt] = None
 
 
 class DFFParams(GateParams):
+    """Common parameters for DFFs and derived classes."""
+
     WIDTH: Optional[PositiveInt] = None
     CLK_POLARITY: Optional[Signal] = None
     ARST_POLARITY: Optional[Signal] = None
@@ -113,6 +130,8 @@ class DFFParams(GateParams):
 
 
 class DLatchParams(GateParams):
+    """Common parameters for DLatches."""
+
     EN_POLARITY: Optional[Signal] = None
     WIDTH: Optional[PositiveInt] = None
 
