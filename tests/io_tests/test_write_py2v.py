@@ -209,8 +209,8 @@ def test_module2v(writer: P2VTransformer, standard_module: Module) -> None:
     wire = wire_4b(init_module=False)
     standard_module.add_wire(wire)
     standard_module.connect(wire[1], standard_module.create_port('out_assign', Direction.OUT)[0])
-    standard_module.parameters['foo'] = 'bar'
-    standard_module.parameters['baz'] = 42
+    standard_module.parameters.foo = 'bar'
+    standard_module.parameters.baz = 42
     standard_module.instances['test_instance'].modify_connection('Y', standard_module.wires['wire1b'][1].path)
     standard_module.remove_instance('test_instance')
     inst.disconnect('PortC')

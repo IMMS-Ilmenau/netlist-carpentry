@@ -102,15 +102,15 @@ def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
         assert primitive_gate.y_width == 1
         assert primitive_gate.a_width == 1
 
-        primitive_gate.parameters['Y_WIDTH'] = 8
+        primitive_gate.parameters.Y_WIDTH = 8
         assert primitive_gate.y_width == 8
         assert primitive_gate.a_width == 8
 
-        primitive_gate.parameters['A_WIDTH'] = 4
+        primitive_gate.parameters.A_WIDTH = 4
         assert primitive_gate.y_width == 8
         assert primitive_gate.a_width == 4
-        assert primitive_gate.parameters['Y_WIDTH'] == 8
-        assert primitive_gate.parameters['A_WIDTH'] == 4
+        assert primitive_gate.parameters.Y_WIDTH == 8
+        assert primitive_gate.parameters.A_WIDTH == 4
 
 
 def test_unary_gate(unary_gate: UnaryGate) -> None:
@@ -131,7 +131,7 @@ def test_unary_gate(unary_gate: UnaryGate) -> None:
     assert unary_gate.verilog == ''
     assert unary_gate.signal_in(0) is Signal.FLOATING
     assert unary_gate.signal_out(0) is Signal.UNDEFINED
-    assert unary_gate.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 1, 'Y_WIDTH': 1}
+    assert unary_gate.sync_parameters(warn=False) == {'A_SIGNED': False, 'A_WIDTH': 1, 'Y_WIDTH': 1}
     assert unary_gate.parameters == {'A_SIGNED': False, 'A_WIDTH': 1, 'Y_WIDTH': 1}
 
     unary_gate.ports['Y'].create_port_segments(3, 1)
@@ -145,7 +145,7 @@ def test_unary_gate(unary_gate: UnaryGate) -> None:
     unary_gate.ports['A'].parameters['signed'] = True
     warns = LOG.warns_quantity
     assert unary_gate.a_signed is False
-    assert unary_gate.parameters['A_SIGNED'] is False
+    assert unary_gate.parameters.A_SIGNED is False
     assert LOG.warns_quantity == warns + 1
 
 
@@ -161,7 +161,7 @@ def test_unary_gate_8bit(simple_module: Module) -> None:
     assert g.input_port.width == 8
     assert list(range(8)) == list(g.output_port.segments.keys())
     assert list(range(8)) == list(g.input_port.segments.keys())
-    assert g.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 8, 'Y_WIDTH': 8}
+    assert g.sync_parameters(warn=False) == {'A_SIGNED': False, 'A_WIDTH': 8, 'Y_WIDTH': 8}
     assert g.parameters == {'A_SIGNED': False, 'A_WIDTH': 8, 'Y_WIDTH': 8}
 
     g = UnaryGate(name='unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8, 'A_WIDTH': 4}, module=simple_module)
@@ -171,7 +171,7 @@ def test_unary_gate_8bit(simple_module: Module) -> None:
     assert g.input_port.width == 4
     assert list(range(8)) == list(g.output_port.segments.keys())
     assert list(range(4)) == list(g.input_port.segments.keys())
-    assert g.sync_parameters() == {'A_SIGNED': False, 'A_WIDTH': 4, 'Y_WIDTH': 8}
+    assert g.sync_parameters(warn=False) == {'A_SIGNED': False, 'A_WIDTH': 4, 'Y_WIDTH': 8}
     assert g.parameters == {'A_SIGNED': False, 'A_WIDTH': 4, 'Y_WIDTH': 8}
 
 
@@ -322,7 +322,7 @@ def test_pos_gate(simple_module: Module) -> None:
         6: Signal.LOW,
         7: Signal.LOW,
     }
-    g.parameters['A_SIGNED'] = True
+    g.parameters.A_SIGNED = True
     g.ports['A'][0].set_signal(Signal.HIGH)
     g.ports['A'][2].tie_signal(Signal.HIGH)
     g.ports['A'][3].set_signal(Signal.HIGH)  # 1111 -> -1 ==> pos makes it sign-extended ==> 11111111
@@ -414,7 +414,7 @@ def test_reducer(reduce_gate: ReduceGate) -> None:
     assert all(reduce_gate.signal_in(i) is Signal.FLOATING for i in reduce_gate.ports['A'].segments)
     assert reduce_gate.signal_out() is Signal.UNDEFINED
     reduce_gate.ports['A'].parameters['signed'] = 1
-    assert reduce_gate.sync_parameters() == {'A_WIDTH': 4, 'A_SIGNED': True, 'Y_WIDTH': 1}
+    assert reduce_gate.sync_parameters(warn=False) == {'A_WIDTH': 4, 'A_SIGNED': True, 'Y_WIDTH': 1}
     assert reduce_gate.parameters == {'A_WIDTH': 4, 'A_SIGNED': True, 'Y_WIDTH': 1}
     assert not reduce_gate.splittable
 
@@ -652,7 +652,7 @@ def test_binary_gate(binary_gate: BinaryGate) -> None:
     assert binary_gate.signals_in(0) == (Signal.FLOATING, Signal.FLOATING)
     assert binary_gate.signal_out(0) is Signal.UNDEFINED
     binary_gate.ports['B'].parameters['signed'] = '1'
-    assert binary_gate.sync_parameters() == {'A_WIDTH': 1, 'A_SIGNED': False, 'B_SIGNED': True, 'B_WIDTH': 1, 'Y_WIDTH': 1}
+    assert binary_gate.sync_parameters(warn=False) == {'A_WIDTH': 1, 'A_SIGNED': False, 'B_SIGNED': True, 'B_WIDTH': 1, 'Y_WIDTH': 1}
     assert binary_gate.parameters == {'A_WIDTH': 1, 'A_SIGNED': False, 'B_SIGNED': True, 'B_WIDTH': 1, 'Y_WIDTH': 1}
     assert binary_gate.splittable
 
@@ -661,8 +661,8 @@ def test_binary_gate(binary_gate: BinaryGate) -> None:
     warns = LOG.warns_quantity
     assert binary_gate.a_signed is False
     assert binary_gate.b_signed is True
-    assert binary_gate.parameters['A_SIGNED'] is False
-    assert binary_gate.parameters['B_SIGNED'] is True
+    assert binary_gate.parameters.A_SIGNED is False
+    assert binary_gate.parameters.B_SIGNED is True
     assert LOG.warns_quantity == warns + 2
 
 
@@ -809,8 +809,8 @@ def test_and_gate_signed(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.1'), index=1)
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
-    g.parameters['A_SIGNED'] = True
-    g.parameters['B_SIGNED'] = True
+    g.parameters.A_SIGNED = True
+    g.parameters.B_SIGNED = True
     assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) & $signed({wireB[3], wireB[1:0]});"
     assert g.verilog_net_map == {'Y': '{wire[3], wire[1:0]}', 'A': "{wireA2, 1'b1, wireA1[0]}", 'B': '{wireB[3], wireB[1:0]}'}
 
@@ -998,7 +998,7 @@ def test_shift_signed_gate(simple_module: Module) -> None:
     assert g.instance_type == '§shift'
     assert not g.splittable
     assert g.verilog_template == 'assign\t{out} = {in1} >> {in2};'
-    g.parameters['B_SIGNED'] = True
+    g.parameters.B_SIGNED = True
     assert g.b_signed is True
     assert g.verilog_template == 'assign\t{out} = {in1} << -{in2};'
     assert g.verilog == ''
@@ -1017,11 +1017,11 @@ def test_shift_signed_gate(simple_module: Module) -> None:
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
     assert g.verilog == "assign\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} << -{wireB[3], wireB[1:0]};"
-    g.parameters['B_SIGNED'] = False
+    g.parameters.B_SIGNED = False
     assert g.verilog == "assign\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} >> {wireB[3], wireB[1:0]};"
-    g.parameters['A_SIGNED'] = True
+    g.parameters.A_SIGNED = True
     assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
-    g.parameters['B_SIGNED'] = True
+    g.parameters.B_SIGNED = True
     assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << -{wireB[3], wireB[1:0]};"
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
@@ -1035,36 +1035,36 @@ def test_shift_signed_gate(simple_module: Module) -> None:
     assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.HIGH}
 
     # A signed, B unsigned: right shift, but A is signed
-    g.parameters['A_SIGNED'] = True
+    g.parameters.A_SIGNED = True
     g.ports['A'].set_signals('0110')
     g.ports['B'].set_signals('0001')
     g.evaluate()
     assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.HIGH}
-    g.parameters['A_SIGNED'] = True
+    g.parameters.A_SIGNED = True
     g.ports['A'].set_signals('1011')  # -5
     g.ports['B'].set_signals('0010')
     g.evaluate()
     assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
 
     # A signed, B signed: left shift, but A is signed
-    g.parameters['B_SIGNED'] = True
+    g.parameters.B_SIGNED = True
     g.ports['A'].set_signals('1011')  # -5
     g.ports['B'].set_signals('0001')  # B == 1 > 0: Right Shift by 1: '1011' >> 1 = '1101' in signed context
     g.evaluate()
     assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.HIGH}
-    g.parameters['A_SIGNED'] = True
+    g.parameters.A_SIGNED = True
     g.ports['A'].set_signals('1011')  # -5
     g.ports['B'].set_signals('1111')  # B == -1 < 0: Left Shift by 1: '1011' << 1 = '0110'
     g.evaluate()
     assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
 
     # A unsigned, B signed: logical left shift
-    g.parameters['A_SIGNED'] = False
+    g.parameters.A_SIGNED = False
     g.ports['A'].set_signals('1011')  # 11
     g.ports['B'].set_signals('0001')  # B == 1 > 0: Right Shift by 1: '1011' >> 1 = '0101' since A is unsigned
     g.evaluate()
     assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.HIGH}
-    g.parameters['A_SIGNED'] = True
+    g.parameters.A_SIGNED = True
     g.ports['A'].set_signals('1011')  # -5
     g.ports['B'].set_signals('1111')  # B == -1 < 0: Left Shift by 1: '1011' << 1 = '0110'
     g.evaluate()
@@ -1072,7 +1072,7 @@ def test_shift_signed_gate(simple_module: Module) -> None:
 
     g.ports['A'].parameters['signed'] = '0'
     g.ports['B'].parameters['signed'] = '1'
-    assert g.sync_parameters() == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 4}
+    assert g.sync_parameters(warn=False) == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 4}
     assert g.parameters == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 4}
 
 
@@ -1099,9 +1099,9 @@ def test_shl_gate(simple_module: Module) -> None:
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
     assert g.verilog == "assign\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} << {wireB[3], wireB[1:0]};"
-    g.parameters['A_SIGNED'] = True
+    g.parameters.A_SIGNED = True
     assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << {wireB[3], wireB[1:0]};"
-    g.parameters['B_SIGNED'] = True  # B_SIGNED == 1 should not change Verilog output
+    g.parameters.B_SIGNED = True  # B_SIGNED == 1 should not change Verilog output
     assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) << {wireB[3], wireB[1:0]};"
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
@@ -1147,9 +1147,9 @@ def test_shr_gate(simple_module: Module) -> None:
     # 2nd is missing on purpose: g.modify_connection('Y', WireSegmentPath(raw='a.wire.2'), index=2)
     g.modify_connection('Y', WireSegmentPath(raw='a.wire.3'), index=3)
     assert g.verilog == "assign\t{wire[3], wire[1:0]} = {wireA2, 1'b1, wireA1[0]} >> {wireB[3], wireB[1:0]};"
-    g.parameters['A_SIGNED'] = True
+    g.parameters.A_SIGNED = True
     assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
-    g.parameters['B_SIGNED'] = True  # B_SIGNED == 1 should not change Verilog output
+    g.parameters.B_SIGNED = True  # B_SIGNED == 1 should not change Verilog output
     assert g.verilog == "assign\t{wire[3], wire[1:0]} = $signed({wireA2, 1'b1, wireA1[0]}) >> {wireB[3], wireB[1:0]};"
 
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
@@ -1200,9 +1200,9 @@ def test_shiftx_gate(simple_module: Module) -> None:
     simple_module.disconnect(g.ports['A'])
     simple_module.connect(simple_module.create_wire('w4', 4), g.ports['A'])
     assert g.verilog == "assign\twire = w4[{wireB[3], 1'bx, wireB[1:0]} +: 4];"
-    g.parameters['A_SIGNED'] = True
+    g.parameters.A_SIGNED = True
     assert g.verilog == "assign\twire = $signed(w4)[{wireB[3], 1'bx, wireB[1:0]} +: 4];"
-    g.parameters['B_SIGNED'] = True  # B_SIGNED == 1 should not change Verilog output
+    g.parameters.B_SIGNED = True  # B_SIGNED == 1 should not change Verilog output
     assert g.verilog == "assign\twire = $signed(w4)[$signed({wireB[3], 1'bx, wireB[1:0]}) +: 4];"
 
 
@@ -1761,7 +1761,7 @@ def test_adder_structure(simple_module: Module) -> None:
 
     a.ports['A'].parameters['signed'] = '0'
     a.ports['B'].parameters['signed'] = '1'
-    assert a.sync_parameters() == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 5}
+    assert a.sync_parameters(warn=False) == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 5}
     assert a.parameters == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 5}
     assert not a.splittable
 
@@ -1798,7 +1798,7 @@ def test_adder_behavior(simple_module: Module) -> None:
     a.evaluate()  # 12 + 6 = 18
     assert a.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.LOW, 4: Signal.HIGH}
 
-    a.parameters['B_SIGNED'] = True
+    a.parameters.B_SIGNED = True
     a.tie_port('B', 0, '0')
     a.tie_port('B', 1, '1')
     a.tie_port('B', 2, '0')
@@ -1870,7 +1870,7 @@ def test_subtractor_behavior(simple_module: Module) -> None:
     s.modify_connection('Y', WireSegmentPath(raw='a.carry.0'), index=4)
     s.evaluate()
     assert s.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH, 4: Signal.HIGH}
-    s.parameters['B_SIGNED'] = True
+    s.parameters.B_SIGNED = True
     s.tie_port('B', 0, '1')
     s.tie_port('B', 1, '0')
     s.tie_port('B', 2, '1')

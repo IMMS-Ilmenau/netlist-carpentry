@@ -1,6 +1,5 @@
 """Module for typed dictionaries used throughout the gate library for convenience."""
 
-import warnings
 from typing import Dict, List, Optional, Tuple, TypedDict
 
 from pydantic import BaseModel, ConfigDict, NonNegativeInt, PositiveInt
@@ -30,23 +29,11 @@ class Parameters(BaseModel):
     model_config = ConfigDict(extra='allow')
 
     def __getitem__(self, key: str) -> object:
-        issue_call = 'parameters["{' + str(key) + '}"]'
-        warnings.warn(
-            f'Retrieving {key} parameter via `{issue_call}` is deprecated and will be removed in v1.0.0. Use `parameters.{key}` instead!',
-            DeprecationWarning,
-            stacklevel=2,
-        )
         if getattr(self, key, None) is not None:  # type: ignore
             return getattr(self, key, None)  # type: ignore
         raise KeyError(f'No parameter {key} found!')
 
     def __setitem__(self, key: str, value: object) -> None:
-        issue_call = 'parameters["{' + key + '}"]' + f' = {value}'
-        warnings.warn(
-            f'Setting {key} parameter via `{issue_call}` is deprecated and will be removed in v1.0.0. Use `parameters.{key} = {value}` instead!',
-            DeprecationWarning,
-            stacklevel=2,
-        )
         setattr(self, key, value)
 
     def __len__(self) -> NonNegativeInt:

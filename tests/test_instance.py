@@ -192,7 +192,7 @@ def test_verilog(standard_instance_with_ports: Instance) -> None:
 
     c = Circuit(name='c')
     c.add_module(standard_instance_with_ports.parent)
-    standard_instance_with_ports.parameters['foo'] = 'bar'
+    standard_instance_with_ports.parameters.foo = 'bar'
     target_v = 'test_instance_type test_instance2 #(\n\t.foo(bar)\n\t) (\n\t.PortA(wire4b[1]),\n\t.PortB({wire4b[2], wire4b[3], wire4b[2], wire4b[1]}),\n\t.PortC(wire4b[4])\n);'
     found_v = standard_instance_with_ports.verilog
     assert target_v == found_v
@@ -202,14 +202,14 @@ def test_verilog_parameters() -> None:
     c = Circuit(name='c')
     m1 = c.create_module('m1')
     m2 = c.create_module('m2')
-    m2.parameters['foo'] = 'bar'
-    m2.parameters['baz'] = '42'
+    m2.parameters.foo = 'bar'
+    m2.parameters.baz = '42'
     inst = m1.create_instance(m2, 'inst')
     assert inst.verilog == 'm2 inst ();'
 
-    inst.parameters['foo'] = 'baz'
-    inst.parameters['baz'] = 42
-    inst.parameters['bar'] = 42
+    inst.parameters.foo = 'baz'
+    inst.parameters.baz = 42
+    inst.parameters.bar = 42
     assert inst.verilog == 'm2 inst #(\n\t.foo(baz),\n\t.baz(42)\n\t) ();'
 
 
@@ -471,7 +471,7 @@ def test_update_signedness(standard_instance_with_ports: Instance) -> None:
     assert 'PortA_SIGNED' not in standard_instance_with_ports.parameters
     standard_instance_with_ports.update_signedness('PortA')
     assert standard_instance_with_ports.ports['PortA'].signed
-    assert standard_instance_with_ports.parameters['PortA_SIGNED']
+    assert standard_instance_with_ports.parameters.PortA_SIGNED
 
     with pytest.raises(ObjectNotFoundError):
         standard_instance_with_ports.update_signedness('abc')

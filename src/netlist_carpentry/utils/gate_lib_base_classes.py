@@ -137,16 +137,19 @@ class PrimitiveGate(Instance, BaseModel):
 
     def _try_sync_parameters(self) -> None:
         try:
-            self.sync_parameters()
+            self.sync_parameters(False)
         except KeyError:  # Happens during initialization phase, where ports do not have a width yet
             pass
 
-    def sync_parameters(self) -> Optional[Parameters]:
-        warnings.warn(
-            f'The return value {self.__class__.__name__}.sync_parameters() will be `None` starting from version 1.0.0. To retrieve the parameters, please use {self.__class__.__name__}.parameters after calling {self.__class__.__name__}.sync_parameters()!',
-            FutureWarning,
-            stacklevel=2,
-        )
+    def sync_parameters(self, warn: bool = True) -> Optional[Parameters]:
+        if warn:
+            warnings.warn(
+                f'The return value {self.__class__.__name__}.sync_parameters() will be `None` starting from version 1.0.0. '
+                + f'To retrieve the parameters, please use {self.__class__.__name__}.parameters after calling {self.__class__.__name__}.sync_parameters()! '
+                + f'You can silence this warning with `{self.__class__.__name__}.sync_parameters(warn=False)`.',
+                FutureWarning,
+                stacklevel=2,
+            )
         return self.parameters
 
     def p2v(self, port: ANY_PORT, exclude_indices: Optional[List[int]] = None) -> str:
@@ -340,8 +343,8 @@ class UnaryGate(PrimitiveGate, BaseModel):
             return self.verilog_template.format(out=self.verilog_net_map['Y'], in1=self._check_signal_signed(self.verilog_net_map['A']))
         return ''
 
-    def sync_parameters(self) -> Optional[UnaryParams]:
-        super().sync_parameters()
+    def sync_parameters(self, warn: bool = True) -> Optional[UnaryParams]:
+        super().sync_parameters(warn)
         self.parameters.A_WIDTH = self.ports['A'].width
         self.parameters.A_SIGNED = self.ports['A'].signed
         self.parameters.Y_WIDTH = self.data_width
@@ -513,8 +516,8 @@ class BinaryGate(PrimitiveGate, BaseModel):
             return self.verilog_template.format(out=out, in1=in1, in2=in2)
         return ''
 
-    def sync_parameters(self) -> Optional[BinaryParams]:
-        super().sync_parameters()
+    def sync_parameters(self, warn: bool = True) -> Optional[BinaryParams]:
+        super().sync_parameters(warn)
         self.parameters.A_WIDTH = self.ports['A'].width
         self.parameters.A_SIGNED = self.ports['A'].signed
         self.parameters.B_WIDTH = self.ports['B'].width
@@ -638,8 +641,8 @@ class ArithmeticGate(BinaryGate, BaseModel):
         in1, in2 = self._check_signal_signed(self.verilog_net_map['A'], self.verilog_net_map['B'])
         return self.verilog_template.format(out=out, in1=in1, in2=in2)
 
-    def sync_parameters(self) -> Optional[BinaryParams]:
-        super().sync_parameters()
+    def sync_parameters(self, warn: bool = True) -> Optional[BinaryParams]:
+        super().sync_parameters(warn)
         self.parameters.A_WIDTH = self.ports['A'].width
         self.parameters.A_SIGNED = self.ports['A'].signed
         self.parameters.B_WIDTH = self.ports['B'].width
@@ -758,8 +761,8 @@ class StorageGate(PrimitiveGate, BaseModel):
         wire = self.p2v(port) if self.p2v(port) != "1'bx" else ''
         return ('posedge ' if polarity == Signal.HIGH else 'negedge ') + wire if wire else ''
 
-    def sync_parameters(self) -> Optional[Parameters]:
-        super().sync_parameters()
+    def sync_parameters(self, warn: bool = True) -> Optional[Parameters]:
+        super().sync_parameters(warn)
         self.parameters.WIDTH = self.data_width
         return self.parameters
 
@@ -834,8 +837,8 @@ class ClkMixin(StorageGate):
         """
         return self._v_header(self.clk_port, self.clk_polarity)
 
-    def sync_parameters(self) -> Optional[DFFParams]:
-        super().sync_parameters()
+    def sync_parameters(self, warn: bool = True) -> Optional[DFFParams]:
+        super().sync_parameters(warn)
         self.parameters.CLK_POLARITY = self.clk_polarity
         return self.parameters
 
@@ -898,8 +901,8 @@ class EnMixin(StorageGate):
         context_map.update(en=self._verilog_en)
         return context_map
 
-    def sync_parameters(self) -> Optional[DFFParams]:
-        super().sync_parameters()
+    def sync_parameters(self, warn: bool = True) -> Optional[DFFParams]:
+        super().sync_parameters(warn)
         self.parameters.EN_POLARITY = self.en_polarity
         return self.parameters
 
@@ -1005,8 +1008,8 @@ class RstMixin(StorageGate):
         context_map.update(header=self._verilog_header, is_rst=self._verilog_rst_net, rst_out=rst_out)
         return context_map
 
-    def sync_parameters(self) -> Optional[DFFParams]:
-        super().sync_parameters()
+    def sync_parameters(self, warn: bool = True) -> Optional[DFFParams]:
+        super().sync_parameters(warn)
         self.parameters.ARST_POLARITY = self.rst_polarity
         self.parameters.ARST_VALUE = self.rst_val_int
         return self.parameters

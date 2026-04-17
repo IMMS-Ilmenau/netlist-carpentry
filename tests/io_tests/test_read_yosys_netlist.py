@@ -153,11 +153,11 @@ def test_adder_netlist_transform_to_circuit(simple_reader: YNR) -> None:
     add = adder.instances_by_types['§add'][0]
     assert isinstance(add, Adder)
     assert len(add.parameters) == 5
-    assert add.parameters['A_SIGNED'] == 0
-    assert add.parameters['A_WIDTH'] == 8
-    assert add.parameters['B_SIGNED'] == 0
-    assert add.parameters['B_WIDTH'] == 8
-    assert add.parameters['Y_WIDTH'] == 9
+    assert add.parameters.A_SIGNED == 0
+    assert add.parameters.A_WIDTH == 8
+    assert add.parameters.B_SIGNED == 0
+    assert add.parameters.B_WIDTH == 8
+    assert add.parameters.Y_WIDTH == 9
 
     assert len(add.metadata.yosys) == 1
 
@@ -173,10 +173,10 @@ def test_adder_netlist_transform_to_circuit(simple_reader: YNR) -> None:
     dff = adder.instances_by_types['§adff'][0]
     assert isinstance(dff, DFF)
     assert len(dff.parameters) == 4
-    assert dff.parameters['ARST_POLARITY'] == Signal.HIGH
-    assert dff.parameters['ARST_VALUE'] == 0
-    assert dff.parameters['CLK_POLARITY'] == Signal.HIGH
-    assert dff.parameters['WIDTH'] == 9
+    assert dff.parameters.ARST_POLARITY == Signal.HIGH
+    assert dff.parameters.ARST_VALUE == 0
+    assert dff.parameters.CLK_POLARITY == Signal.HIGH
+    assert dff.parameters.WIDTH == 9
 
     assert len(dff.metadata.yosys) == 1
 
@@ -357,11 +357,11 @@ def test_build_instances(simple_reader: YNR) -> None:
 
     assert isinstance(add, Adder)
     assert len(add.parameters) == 5
-    assert add.parameters['A_SIGNED'] is False
-    assert add.parameters['A_WIDTH'] == 8
-    assert add.parameters['B_SIGNED'] is True
-    assert add.parameters['A_WIDTH'] == 8
-    assert add.parameters['Y_WIDTH'] == 9
+    assert add.parameters.A_SIGNED is False
+    assert add.parameters.A_WIDTH == 8
+    assert add.parameters.B_SIGNED is True
+    assert add.parameters.A_WIDTH == 8
+    assert add.parameters.Y_WIDTH == 9
     assert len(add.ports) == 3
     assert add.input_ports == (add.ports['A'], add.ports['B'])
     assert add.ports['A'].width == 8
@@ -381,10 +381,10 @@ def test_build_instances(simple_reader: YNR) -> None:
 
     assert isinstance(adff, ADFF)
     assert len(adff.parameters) == 4
-    assert adff.parameters['ARST_POLARITY'] == Signal.HIGH
-    assert adff.parameters['ARST_VALUE'] == 0
-    assert adff.parameters['CLK_POLARITY'] == Signal.HIGH
-    assert adff.parameters['WIDTH'] == 9
+    assert adff.parameters.ARST_POLARITY == Signal.HIGH
+    assert adff.parameters.ARST_VALUE == 0
+    assert adff.parameters.CLK_POLARITY == Signal.HIGH
+    assert adff.parameters.WIDTH == 9
     assert len(adff.ports) == 4  # 4 Ports from dict
     assert adff.input_ports == (adff.ports['D'], adff.ports['CLK'], adff.ports['RST'])
     assert adff.output_port == adff.ports['Q']
@@ -485,9 +485,9 @@ def test_build_parameters(simple_reader: YNR) -> None:
 
     simple_reader._build_module_parameters(m, {'parameters': {'foo': '42', 'bar': 'baz', 'qux': '000110100100'}})
 
-    assert m.parameters['foo'] == '42'
-    assert m.parameters['bar'] == 'baz'
-    assert m.parameters['qux'] == 420
+    assert m.parameters.foo == '42'
+    assert m.parameters.bar == 'baz'
+    assert m.parameters.qux == 420
 
 
 def test_get_inst(hierarchical_reader: YNR) -> None:

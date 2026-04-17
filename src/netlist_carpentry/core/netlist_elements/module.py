@@ -123,7 +123,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             Instance: The instance that was created and added.
         """
         if params is None:
-            params = {}
+            params = Parameters()
         if name is None:
             name = self._get_generic_inst_name(interface_definition)
         if isinstance(interface_definition, Module):
@@ -135,7 +135,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 if interface_definition.name not in self.circuit:
                     self.circuit.add_module(interface_definition)
         else:
-            inst = interface_definition(name=name, module=self, parameters=params)  # type: ignore
+            inst = interface_definition(name=name, module=self, parameters=dict(params))  # type: ignore
         return self.add_instance(inst)
 
     def _get_generic_inst_name(self, module_or_inst_cls: Union[Module, Type[Instance]]) -> str:

@@ -156,7 +156,7 @@ def test_copy_module(empty_circuit: Circuit) -> None:
     p = created.create_port('p')
     w = created.create_wire('w')
     inst = created.create_instance(empty_circuit.create_module('m2'), 'inst')
-    created.parameters['foo'] = 'bar'
+    created.parameters.foo = 'bar'
 
     copy = empty_circuit.copy_module(empty_circuit['testModule'], 'copy')
 

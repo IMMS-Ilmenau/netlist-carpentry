@@ -1562,7 +1562,7 @@ def test_split_instance(dff_module: Module) -> None:
     assert len(dff_module.instances) == 1
     assert len(dff_module.instances_by_types['§dff']) == 1
     dff = dff_module.instances_by_types['§dff'][0]
-    dff.parameters['CLK_POLARITY'] = Signal.LOW
+    dff.parameters.CLK_POLARITY = Signal.LOW
     connections = dff.connections
     dffs = dff_module.split(dff)
     assert dff.name not in dff_module.instances
@@ -1577,19 +1577,19 @@ def test_split_instance(dff_module: Module) -> None:
         assert inst.ports['D'][0].ws_path == connections['D'][idx]
         assert inst.ports['CLK'][0].ws_path == connections['CLK'][0]
         assert inst.ports['Q'][0].ws_path == connections['Q'][idx]
-        assert inst.parameters['WIDTH'] == 1
-        assert inst.parameters['CLK_POLARITY'] == dff.parameters['CLK_POLARITY']
+        assert inst.parameters.WIDTH == 1
+        assert inst.parameters.CLK_POLARITY == dff.parameters.CLK_POLARITY
 
 
 def test_split_instance_rst_val(dff_circuit_simple: Circuit) -> None:
     adffe = dff_circuit_simple.get_from_path(dff_circuit_simple.instances['§adffe'][0])
-    adffe.parameters['ARST_VALUE'] = 85  # '01010101'
+    adffe.parameters.ARST_VALUE = 85  # '01010101'
     slices = adffe.split()
     for idx, dslice in slices.items():
         if idx % 2:  # Odd indices (backwards, since LSB-first in dictionary)
-            assert dslice.parameters['ARST_VALUE'] == 0
+            assert dslice.parameters.ARST_VALUE == 0
         else:  # Even
-            assert dslice.parameters['ARST_VALUE'] == 1
+            assert dslice.parameters.ARST_VALUE == 1
 
 
 def test_split_all(dff_module: Module) -> None:
