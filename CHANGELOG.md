@@ -11,10 +11,13 @@
   - `PrimitiveGate.parameters` now is of type `Parameters`, which is a `pydantic.BaseModel`
   - Indexing still works, but will be removed in 1.0.0 (added DeprecationWarning)
 - Added several DeprecationWarnings and FutureWarnings for properties and methods that will be heavily changed or deleted in 1.0.0
+- Updated a bunch of docstrings
 
 ## FIXED
 - Fixed width parameter setting/copying issues for many gates
 - Some gates that previously forced equal widths for some ports, now also support ports with different widths
+- Fixed issues where reading Verilog files was not possible on Windows
+- mkdocs-jupyter was moved from general dependencies to dev-dependencies in `pyproject.toml`, so it is no longer installed in the standard user version, and only in the dev version
 
 # Older Versions
 
