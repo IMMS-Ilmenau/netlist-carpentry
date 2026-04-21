@@ -18,7 +18,8 @@ def test_build_script_simple() -> None:
     assert 'opt; clean; check' in content
     assert 'insbuf; proc' in content
     assert 'write_json' in content and 'thermo_enc.json' in content
-    subprocess.call(['chmod', 'u+x', 'tests/files/test_script'])
+    path = Path('tests/files/test_script')
+    path.chmod(path.stat().st_mode | 0o111)
     return_value = subprocess.call(['tests/files/test_script'])
     assert return_value == 0
     os.remove('tests/files/test_script')
@@ -46,7 +47,8 @@ def test_build_script_params() -> None:
     assert 'opt; clean; check' in content
     assert 'insbuf; proc' not in content
     assert 'write_json' in content and 'thermo_enc.json' in content
-    subprocess.call(['chmod', 'u+x', 'tests/files/test_script'])
+    path = Path('tests/files/test_script')
+    path.chmod(path.stat().st_mode | 0o111)
     return_value = subprocess.call(['tests/files/test_script'])
     assert return_value == 0
     os.remove('tests/files/test_script')

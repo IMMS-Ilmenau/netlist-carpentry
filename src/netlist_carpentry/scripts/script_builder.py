@@ -135,5 +135,5 @@ def build_and_execute(
     """
     build_script(script_path, input_file_paths, output_file_path, **kwargs)  # type: ignore[misc]
     stdout = None if verbose else subprocess.PIPE
-    subprocess.call(['chmod', 'u+x', script_path])
+    script_path.chmod(script_path.stat().st_mode | 0o111)
     return subprocess.run(script_path, stdout=stdout, stderr=subprocess.PIPE)
