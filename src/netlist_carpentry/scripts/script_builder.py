@@ -115,7 +115,7 @@ def build_script(
 
 def build_and_execute(
     script_path: Path, input_file_paths: List[Path], output_file_path: Path, verbose: bool = False, **kwargs: Any
-) -> subprocess.CompletedProcess[bytes]:
+) -> subprocess.Popen[str]:
     """
     Build a Yosys script and execute it.
 
@@ -136,4 +136,6 @@ def build_and_execute(
     build_script(script_path, input_file_paths, output_file_path, **kwargs)  # type: ignore[misc]
     stdout = None if verbose else subprocess.PIPE
     script_path.chmod(script_path.stat().st_mode | 0o111)
-    return subprocess.run(script_path, stdout=stdout, stderr=subprocess.PIPE)
+    process = subprocess.Popen(script_path, stdout=stdout, stderr=subprocess.PIPE, text=True)
+    process.wait()
+    return process

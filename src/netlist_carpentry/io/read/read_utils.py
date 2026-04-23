@@ -79,12 +79,12 @@ def read(
             script_path, paths, json_path, verbose=verbose, top=top, source_paths=source_paths, no_hierarchy=no_hierarchy, **kwargs
         )
         LOG.debug(f'Generated Yosys netlist from {len(paths)} files in {round(time() - start, 2)}s!')
-        if gen_process.stderr:
-            for err in gen_process.stderr.decode().splitlines():
-                LOG.error(err)
+        errors = gen_process.stderr.read()
+        if errors:
+            LOG.error(errors)
         if gen_process.returncode != 0:
-            stdout = gen_process.stdout.decode() if gen_process.stdout else ''
-            raise RuntimeError(f'Failed to generate JSON netlist:\n{stdout}\n{gen_process.stderr.decode()}')
+            stdout = gen_process.stdout.read() if gen_process.stdout else ''
+            raise RuntimeError(f'Failed to generate JSON netlist:\n{stdout}\n{errors}')
         return read_json(json_path, circuit_name)
 
 
@@ -95,7 +95,7 @@ def generate_json_netlist(
     verbose: bool = False,
     yosys_script_path: Union[str, Path] = '',
     no_hierarchy: bool = False,
-) -> subprocess.CompletedProcess[bytes]:
+) -> subprocess.Popen[str]:
     """Generate a JSON netlist from the given input file using Yosys.
 
     Args:
@@ -109,7 +109,7 @@ def generate_json_netlist(
             If True, the yosys "hierarchy" path is skipped. Defaults to False.
 
     Returns:
-        subprocess.CompletedProcess[bytes]: The return object of the subprocess that executed Yosys.
+        subprocess.Popen[str]: The return object of the subprocess that executed Yosys.
     """
     from netlist_carpentry import NC_SCRIPTS_DIR
 
