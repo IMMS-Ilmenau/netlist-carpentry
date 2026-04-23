@@ -18,7 +18,7 @@ dependencies = [
     "networkx>=3.2.1",
     # TODO Add dependencies here
     "pydantic>=2.10.6",
-    "pywellen>=0.19.3",
+    "pywellen>=0.20.5",
     "rich>=13.9.4",
     "scipy>=1.13.1",
     "tqdm>=4.67.1",
