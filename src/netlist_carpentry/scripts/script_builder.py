@@ -174,19 +174,19 @@ def build_and_execute(
         subprocess.CompletedProcess[bytes]: The result of the subprocess execution.
     """
     yosys_args: str = build_script(script_path, input_file_paths, output_file_path, source_paths=source_paths, **kwargs)  # type: ignore[misc]
-    stdout = None if verbose else subprocess.PIPE
+    vhdl_given = any(fpath.suffix == '.vhdl' or fpath.suffix == '.vhd' for fpath in input_file_paths)
+    modules = '-m ghdl' if vhdl_given else ''
+    source_paths = source_paths or []
+    sources = []
+    for p in source_paths:
+        list_part = ['source', p, '&&'] if SUPPORTS_BASH else [p, '&&']
+        sources.extend(list_part)
     yosys_payload = f'{"; ".join(yosys_args.splitlines())}'
-    if SUPPORTS_BASH:
-        script_path.chmod(script_path.stat().st_mode | 0o111)
-        print(script_path.expanduser().resolve())
-        process = subprocess.Popen(['sh', str(script_path.expanduser().resolve())], stdout=stdout, stderr=subprocess.PIPE, text=True)
-        process.wait()
-        return process
-    else:
-        out_target = subprocess.PIPE if verbose else subprocess.DEVNULL
-        result = subprocess.Popen(['yosys', '-p', yosys_payload], shell=True, stdout=out_target, stderr=subprocess.PIPE, text=True, bufsize=1)
-        if verbose:
-            for line in result.stdout:
-                print(line, end='')
-        result.wait()
-        return result
+    out_target = subprocess.PIPE if verbose else subprocess.DEVNULL
+    cmd = [*sources, 'yosys', modules, f'-p "{yosys_payload}"']
+    result = subprocess.Popen([' '.join(cmd)], shell=True, stdout=out_target, stderr=subprocess.STDOUT, text=True)
+    if verbose and result.stdout is not None:
+        for line in result.stdout:
+            print(line, end='')
+    result.wait()
+    return result
