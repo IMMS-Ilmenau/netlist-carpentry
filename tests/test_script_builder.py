@@ -11,7 +11,7 @@ def test_build_script_simple() -> None:
     build_script(Path('tests/files/test_script'), [Path('tests/files/thermo_enc.v')], Path('thermo_enc.json'), no_hierarchy=True)
     with open('tests/files/test_script') as f:
         content = f.read()
-    assert content.startswith('#!/bin/bash')
+    assert content.startswith('#!/bin/env bash')
     assert 'read_verilog' in content and 'tests/files/thermo_enc.v' in content
     assert 'hierarchy  -libdir .' in content
     assert 'memory' in content
@@ -38,7 +38,7 @@ def test_build_script_params() -> None:
     )
     with open('tests/files/test_script') as f:
         content = f.read()
-    assert content.startswith('#!/bin/bash')
+    assert content.startswith('#!/bin/env bash')
     assert 'read_verilog ' in content and '/tests/files/thermo_enc.v' in content
     assert 'hierarchy -top thermo_enc -libdir .' in content
     assert 'memory' not in content

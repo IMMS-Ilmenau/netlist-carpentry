@@ -1,23 +1,29 @@
 """Module for generation and execution of synthesis scripts with Yosys, creating generic JSON netlists."""
 
+import platform
 import subprocess
 from pathlib import Path
 from typing import Any, List, Optional
 
-verilog_template = """#!/bin/bash
+SUPPORTS_BASH = platform.system() != 'Windows'
+verilog_template = """#!/bin/env bash
+
+set -e
 
 {source_files}
-yosys {modules}-p "
-    {read_str}
-    {hierarchy}
-    proc
-    {memory}
-    {techmaps}
-    {share}
-    opt; clean; check
-    {insbuf_str}
-    {write_str}
-"
+yosys {modules}-p "{yosys_cmd}"
+"""
+
+yosys_cmd = """\
+{read_str}
+{hierarchy}
+proc
+{memory}
+{techmaps}
+{share}
+opt; clean; check
+{insbuf_str}
+{write_str}
 """
 
 
@@ -28,10 +34,10 @@ def _yosys_read_cmd(input_file_paths: List[Path]) -> str:
             raise IsADirectoryError('Input file path is a directory!')
         file_ext = input_file_path.suffix.lstrip('.').lower()
         if file_ext == 'vhdl' or file_ext == 'vhd':
-            read_lst.append(f'ghdl -read {input_file_path.expanduser().resolve()}')
+            read_lst.append(f'ghdl -read {input_file_path.expanduser().resolve().as_posix()}')
         else:
             sv_ext = '-sv ' if file_ext == 'sv' else ''
-            read_lst.append(f'read_verilog {sv_ext}{input_file_path.expanduser().resolve()}')
+            read_lst.append(f'read_verilog {sv_ext}{input_file_path.expanduser().resolve().as_posix()}')
     return '\n\t'.join(read_lst)
 
 
@@ -40,7 +46,10 @@ def _source_files_cmd(source_paths: List[str]) -> str:
     for source_path in source_paths:
         path = Path(source_path).expanduser().resolve()
         path.chmod(path.stat().st_mode | 0o111)
-        source_lst.append(f'source {path}\n')
+        if SUPPORTS_BASH:
+            source_lst.append(f'source {path}\n')
+        else:
+            source_lst.append(f'{path}\n')
     return ''.join(source_lst)
 
 
@@ -61,7 +70,7 @@ def build_script(
     source_paths: Optional[List[str]] = None,
     no_hierarchy: bool = False,
     share: bool = False,
-) -> None:
+) -> str:
     """
     Build a Yosys script for synthesis.
 
@@ -87,7 +96,25 @@ def build_script(
         share (bool, optional): Whether to execute the Yosys `share` pass to share the same
             instances for mutually exclusive operations. May decrease area demands, but worsen timing. Defaults to False.
     """
-    source_files = _source_files_cmd(source_paths or [])
+    vhdl_given = any(fpath.suffix == '.vhdl' or fpath.suffix == '.vhd' for fpath in input_file_paths)
+    modules = '-m ghdl ' if vhdl_given else ''
+    yosys_commands = get_yosys_cmds(input_file_paths, output_file_path, top, insbuf, process_memory, techmap_paths, no_hierarchy, share)
+    source_paths = source_paths or []
+    sources = '\n'.join('source ' + p for p in source_paths)
+    render_bash_script(script_path, sources, yosys_commands, modules)
+    return yosys_commands
+
+
+def get_yosys_cmds(
+    input_file_paths: List[Path],
+    output_file_path: Path,
+    top: str = '',
+    insbuf: bool = True,
+    process_memory: bool = True,
+    techmap_paths: List[Path] = [],
+    no_hierarchy: bool = False,
+    share: bool = False,
+) -> str:
     vhdl_given = any(fpath.suffix == '.vhdl' or fpath.suffix == '.vhd' for fpath in input_file_paths)
     modules = '-m ghdl ' if vhdl_given else ''
     read_str = _yosys_read_cmd(input_file_paths)
@@ -98,8 +125,7 @@ def build_script(
     share_str = 'opt; share -aggressive' if share else ''
     insbuf_str = 'insbuf; proc' if insbuf else ''
     write_str = f'write_json {output_file_path.expanduser().resolve()}'
-    yosys = verilog_template.format(
-        source_files=source_files,
+    yosys = yosys_cmd.format(
         modules=modules,
         read_str=read_str,
         hierarchy=hierarchy,
@@ -109,12 +135,23 @@ def build_script(
         insbuf_str=insbuf_str,
         write_str=write_str,
     )
+    return yosys
+
+
+def render_bash_script(script_path: Path, source_files: str, yosys: str, modules: str) -> None:
+    script_content = verilog_template.format(source_files=source_files, yosys_cmd=yosys, modules=modules)
     with open(script_path, 'w') as f:
-        f.write(yosys)
+        f.write(script_content)
 
 
 def build_and_execute(
-    script_path: Path, input_file_paths: List[Path], output_file_path: Path, verbose: bool = False, **kwargs: Any
+    script_path: Path,
+    input_file_paths: List[Path],
+    output_file_path: Path,
+    verbose: bool = False,
+    *,
+    source_paths: Optional[List[str]] = None,
+    **kwargs: Any,
 ) -> subprocess.Popen[str]:
     """
     Build a Yosys script and execute it.
@@ -128,14 +165,28 @@ def build_and_execute(
         output_file_path (Path): Path to the output JSON file.
         verbose (bool, optional): If True, print output to stdout.
             Defaults to False, which suppresses output and only prints errors.
+        source_paths (Optional[List[str]], optional): A list of paths to files to source before running Yosys.
+            Can be used to enable plugins or activate environments, e.g. the OSS CAD SUITE.
+            Defaults to None, in which case no additional files are sourced.
         **kwargs: Additional arguments passed to build_script.
 
     Returns:
         subprocess.CompletedProcess[bytes]: The result of the subprocess execution.
     """
-    build_script(script_path, input_file_paths, output_file_path, **kwargs)  # type: ignore[misc]
+    yosys_args: str = build_script(script_path, input_file_paths, output_file_path, source_paths=source_paths, **kwargs)  # type: ignore[misc]
     stdout = None if verbose else subprocess.PIPE
-    script_path.chmod(script_path.stat().st_mode | 0o111)
-    process = subprocess.Popen(script_path, stdout=stdout, stderr=subprocess.PIPE, text=True)
-    process.wait()
-    return process
+    yosys_payload = f'{"; ".join(yosys_args.splitlines())}'
+    if SUPPORTS_BASH:
+        script_path.chmod(script_path.stat().st_mode | 0o111)
+        print(script_path.expanduser().resolve())
+        process = subprocess.Popen(['sh', str(script_path.expanduser().resolve())], stdout=stdout, stderr=subprocess.PIPE, text=True)
+        process.wait()
+        return process
+    else:
+        out_target = subprocess.PIPE if verbose else subprocess.DEVNULL
+        result = subprocess.Popen(['yosys', '-p', yosys_payload], shell=True, stdout=out_target, stderr=subprocess.PIPE, text=True, bufsize=1)
+        if verbose:
+            for line in result.stdout:
+                print(line, end='')
+        result.wait()
+        return result

@@ -79,10 +79,10 @@ def read(
             script_path, paths, json_path, verbose=verbose, top=top, source_paths=source_paths, no_hierarchy=no_hierarchy, **kwargs
         )
         LOG.debug(f'Generated Yosys netlist from {len(paths)} files in {round(time() - start, 2)}s!')
-        errors = gen_process.stderr.read()
+        errors = gen_process.stderr.read() if gen_process.stderr is not None else ''
         if errors:
             LOG.error(errors)
-        if gen_process.returncode != 0:
+        if int(gen_process.returncode) != 0:
             stdout = gen_process.stdout.read() if gen_process.stdout else ''
             raise RuntimeError(f'Failed to generate JSON netlist:\n{stdout}\n{errors}')
         return read_json(json_path, circuit_name)

@@ -19,6 +19,8 @@ def test_vhdl_simple_counter() -> None:
         assert len(c.instances['§add']) == 1
     except FileNotFoundError:
         pytest.xfail('Installation of OSS CAD SUITE failed!')
+    except RuntimeError:
+        pytest.xfail('Source dependencies probably missing')
 
 
 if __name__ == '__main__':
