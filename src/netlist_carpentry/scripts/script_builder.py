@@ -184,7 +184,7 @@ def build_and_execute(
     yosys_payload = f'{"; ".join(yosys_args.splitlines())}'
     out_target = subprocess.PIPE if verbose else subprocess.DEVNULL
     cmd = [*sources, 'yosys', modules, f'-p "{yosys_payload}"']
-    result = subprocess.Popen([' '.join(cmd)], shell=True, stdout=out_target, stderr=subprocess.STDOUT, text=True)
+    result = subprocess.Popen(' '.join(cmd), shell=True, stdout=out_target, stderr=subprocess.STDOUT, text=True)
     if verbose and result.stdout is not None:
         for line in result.stdout:
             print(line, end='')
