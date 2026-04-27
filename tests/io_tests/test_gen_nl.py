@@ -9,14 +9,14 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def test_generate_json_netlist() -> None:
-    files_path = f'{SCRIPT_DIR}/../files/'
+    files_path = Path(f'{SCRIPT_DIR}/../files/').resolve()
     hdl_base = 'simpleAdder'
-    adder_json = f'{files_path}/{hdl_base}.json'
+    adder_json = Path(f'{files_path}/{hdl_base}.json')
     if os.path.exists(adder_json):
         os.remove(adder_json)
     assert not os.path.exists(adder_json)
 
-    generate_json_netlist(Path(files_path + 'simpleAdder.v'), Path(files_path + 'simpleAdder.json'), 'simpleAdder', verbose=True)
+    generate_json_netlist(Path(files_path) / 'simpleAdder.v', Path(files_path) / 'simpleAdder.json', 'simpleAdder', verbose=True)
     assert os.path.exists(adder_json)
 
 
