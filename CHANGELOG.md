@@ -12,8 +12,10 @@
   - Indexing still works, but will be removed in 1.0.0 (added DeprecationWarning)
 - Added several DeprecationWarnings and FutureWarnings for properties and methods that will be heavily changed or deleted in 1.0.0
 - Updated a bunch of docstrings
+- `pywellen` is now an optional dependency, can be installed via `pip install netlist-carpentry[vcd]`
 
 ## FIXED
+- Many fixes of issues only present on Windows machines
 - Fixed width parameter setting/copying issues for many gates
 - Some gates that previously forced equal widths for some ports, now also support ports with different widths
 - Fixed issues where reading Verilog files was not possible on Windows
