@@ -586,7 +586,7 @@ def test_uniquify_paths(uniquify_circuit: Circuit) -> None:
 
 
 def test_flatten() -> None:
-    orig = 'tests/files/dff_circuit_only_pos.v'
+    orig = Path('tests/files/dff_circuit_only_pos.v')
     dff_circuit = read(orig, top='Top')
     m2 = dff_circuit['M2']
     m21 = dff_circuit['M21']
@@ -599,7 +599,7 @@ def test_flatten() -> None:
     m21_conn = m21_inst.connections
     dff_circuit.flatten(skip_modules=['M22'])
 
-    flat = 'tests/files/gen/circuit_flat.v'
+    flat = Path('tests/files/gen/circuit_flat.v')
     dff_circuit.write(flat, overwrite=True)
     proc1 = run_equiv(orig, flat, 'Top', 'Top')
     proc2 = run_eqy([orig], [flat], 'Top', 'Top', overwrite=True)
@@ -681,23 +681,24 @@ def test_write(connected_circuit: Circuit) -> None:
 
 @pytest.mark.skipif(os.environ.get('EQY_MISSING') == 'true', reason='EQY missing in CI')
 def test_prove_equivalence(connected_circuit: Circuit) -> None:
-    vpath = 'tests/files/gen/connected_circuit.v'
+    vpath = Path('tests/files/gen/connected_circuit.v')
     connected_circuit.write(vpath, True)
-    process = connected_circuit.prove_equivalence([vpath], 'tests/files/gen/eqy_out')
+    process = connected_circuit.prove_equivalence([vpath], Path('tests/files/gen/eqy_out'))
 
     assert process.returncode == 0
 
-    process = connected_circuit.prove_equivalence([vpath], 'tests/files/gen/eqy_out', gold_top_module='nonexisting_module', quiet=True)
+    process = connected_circuit.prove_equivalence([vpath], Path('tests/files/gen/eqy_out'), gold_top_module='nonexisting_module', quiet=True)
+    err = 'ERROR: Reading sources failed'
     assert process.returncode == 1
-    assert b'ERROR: Reading sources failed' in process.stderr
+    assert err in process.stdout.read() or err in process.stderr.read()
 
 
 @pytest.mark.skipif(os.environ.get('EQY_MISSING') == 'true', reason='EQY missing in CI')
 def test_prove_equivalence_other_circuit(connected_circuit: Circuit) -> None:
-    vpath = 'tests/files/gen/connected_circuit.v'
+    vpath = Path('tests/files/gen/connected_circuit.v')
     other_circuit = read(vpath)
     connected_circuit.write(vpath, True)
-    process = connected_circuit.prove_equivalence(other_circuit, 'tests/files/gen/eqy_out')
+    process = connected_circuit.prove_equivalence(other_circuit, Path('tests/files/gen/eqy_out'))
 
     assert process.returncode == 0
 

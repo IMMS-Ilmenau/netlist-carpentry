@@ -655,16 +655,31 @@ class Circuit(BaseModel):
 
     @overload
     def prove_equivalence(
-        self, gold_design: List[str], out_dir: str, eqy_script_path: str = '', gold_top_module: str = '', quiet: bool = False
-    ) -> subprocess.CompletedProcess[bytes]: ...
+        self,
+        gold_design: List[str],
+        out_dir: Union[Path, str],
+        eqy_script_path: Union[Path, str] = '',
+        gold_top_module: str = '',
+        quiet: bool = False,
+    ) -> subprocess.Popen[bytes]: ...
     @overload
     def prove_equivalence(
-        self, gold_design: 'Circuit', out_dir: str, eqy_script_path: str = '', gold_top_module: str = '', quiet: bool = False
-    ) -> subprocess.CompletedProcess[bytes]: ...
+        self,
+        gold_design: 'Circuit',
+        out_dir: Union[Path, str],
+        eqy_script_path: Union[Path, str] = '',
+        gold_top_module: str = '',
+        quiet: bool = False,
+    ) -> subprocess.Popen[bytes]: ...
 
     def prove_equivalence(
-        self, gold_design: Union[List[str], 'Circuit'], out_dir: str, eqy_script_path: str = '', gold_top_module: str = '', quiet: bool = False
-    ) -> subprocess.CompletedProcess[bytes]:
+        self,
+        gold_design: Union[List[str], 'Circuit'],
+        out_dir: Union[Path, str],
+        eqy_script_path: Union[Path, str] = '',
+        gold_top_module: str = '',
+        quiet: bool = False,
+    ) -> subprocess.Popen[bytes]:
         """
         Proves equivalence of the circuit against a set of gold Verilog files.
 
@@ -678,7 +693,7 @@ class Circuit(BaseModel):
             gold_design (Union[List[str], Circuit]): A list of paths to the gold Verilog files.
                 Alternatively, another Circuit object can be provided, which is then used for comparison.
                 In this case, the Circuit object is first converted back to Verilog and then the equivalence check is executed.
-            out_dir (str): The directory to write the output files to.
+            out_dir (Union[Path, str]): The directory to write the output files to.
             eqy_script_path (str, optional): The path to the eqy script. If not provided, an eqy script will be generated. Defaults to ''.
             gold_top_module (str, optional): The name of the top module in the gold Verilog files. Defaults to '',
                 in which case the top module will be inferred from this circuit object.
@@ -688,15 +703,16 @@ class Circuit(BaseModel):
         Returns:
             subprocess.CompletedProcess: The result of the execution plus some metadata.
         """
+        out_dir = Path(out_dir)
         if isinstance(gold_design, Circuit):
-            out_file = f'{out_dir}/{gold_design.name}_out.v'
+            out_file = out_dir / f'{gold_design.name}_out.v'
             gold_design.write(out_file, overwrite=True)
             gold_design = [out_file]
-        eqy_out = out_dir + '/out'
+        eqy_out = out_dir / 'out'
         Path(eqy_out).mkdir(parents=True, exist_ok=True)
         if not eqy_script_path:
-            eqy_script_path = out_dir + '/script.eqy'
-        output_vfile = f'{out_dir}/{self.name}_out.v'
+            eqy_script_path = out_dir / 'script.eqy'
+        output_vfile = out_dir / f'{self.name}_out.v'
         self.write(output_vfile, overwrite=True)
         if not gold_top_module:
             LOG.warn(f'No gold top name specified! Assuming same top module as in gate circuit ({self.top_name})...')

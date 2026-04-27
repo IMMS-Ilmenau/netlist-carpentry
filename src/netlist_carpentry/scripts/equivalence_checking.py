@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, List, Optional, Union, overload
 
 from pydantic import PositiveInt
 
+import netlist_carpentry.scripts.script_caller as sc
+
 if TYPE_CHECKING:
     from netlist_carpentry import Circuit
 
@@ -84,9 +86,9 @@ class EquivalenceChecking:
         Returns:
             str: The formatted EQY template string.
         """
-        gold = '\n'.join(f'read_verilog {p}' for p in self.gold_vfile_paths)
+        gold = '\n'.join(f'read_verilog {Path(p).as_posix()}' for p in self.gold_vfile_paths)
         gold_top_module = 'prep -top ' + self.gold_top_module + ' -flatten' if self.gold_top_module is not None else 'prep -auto-top -flatten'
-        gate = '\n'.join(f'read_verilog {p}' for p in self.gate_vfile_paths)
+        gate = '\n'.join(f'read_verilog {Path(p).as_posix()}' for p in self.gate_vfile_paths)
         gate_top_module = 'prep -top ' + self.gate_top_module + ' -flatten' if self.gate_top_module is not None else 'prep -auto-top -flatten'
         return EQY_TEMPLATE.format(gold_vsources=gold, gold_top_module=gold_top_module, gate_vsources=gate, gate_top_module=gate_top_module)
 
@@ -109,7 +111,7 @@ class EquivalenceChecking:
         output_path: Optional[str] = None,
         overwrite: bool = False,
         quiet: bool = False,
-    ) -> Process:
+    ) -> subprocess.Popen[str]:
         """
         Runs the Yosys EQY tool to prove the logical equivalence of the Verilog designs for the given Verilog designs.
 
@@ -143,12 +145,13 @@ class EquivalenceChecking:
             eqy_dir = workdir if output_path is not None else workdir + '/eqy'
             if overwrite and os.path.exists(eqy_dir):
                 shutil.rmtree(eqy_dir, ignore_errors=True)
-            dir_path = os.path.dirname(os.path.abspath(__file__))
-            stdout = subprocess.PIPE if quiet else None
-            stderr = subprocess.PIPE if quiet else None
-            process = subprocess.run(
-                [f'{dir_path}/eqy.sh', str(self.script_path.resolve()), str(Path(eqy_dir).resolve())], stdout=stdout, stderr=stderr
-            )
+            clean_env = os.environ.copy()
+
+            # Due to weird issue on Windows
+            clean_env.pop('PYTHONHOME', None)
+            clean_env.pop('PYTHONPATH', None)
+
+            process = sc.call(['eqy', str(self.script_path), '-d', str(Path(eqy_dir))], not quiet, env=clean_env)
         return process
 
 
@@ -161,7 +164,7 @@ def run_eqy(
     output_path: Optional[str] = None,
     overwrite: bool = False,
     quiet: bool = False,
-) -> Process: ...
+) -> subprocess.Popen[str]: ...
 
 
 @overload
@@ -175,7 +178,7 @@ def run_eqy(
     output_path: Optional[str] = None,
     overwrite: bool = False,
     quiet: bool = False,
-) -> Process: ...
+) -> subprocess.Popen[str]: ...
 
 
 def run_eqy(
@@ -188,7 +191,7 @@ def run_eqy(
     output_path: Optional[str] = None,
     overwrite: bool = False,
     quiet: bool = False,
-) -> Process:
+) -> subprocess.Popen[str]:
     """
     Runs the Yosys EQY tool to prove the logical equivalence of the Verilog designs for the given Verilog designs.
 
@@ -233,14 +236,17 @@ def run_eqy(
         if script_path is not None:
             Path(script_path).parent.mkdir(parents=True, exist_ok=True)
         with context as script_dir:
-            script_path = script_dir + '/eqy.eqy' if script_path is None else script_path
+            script_path = str(Path(script_dir) / 'eqy.eqy') if script_path is None else script_path
             eqy = EquivalenceChecking(gold_design, gold_top, gate_design, gate_top, script_path)
             return eqy.run_eqy(output_path, overwrite, quiet)
 
 
-EQUIV_TEMPLATE = """#!/bin/bash
+EQUIV_TEMPLATE = """#!/bin/env bash
 
-yosys -p "
+yosys -p "{equiv_cmds}"
+"""
+
+EQUIV_CMDS = """
 read_verilog {gold} # Load the "Gold" (Reference) design
 prep -top {gold_top} -flatten
 {rename_wires}
@@ -265,20 +271,19 @@ equiv_struct    # Structural matching (matches logic cones, e.g. wires with same
 equiv_induct    # Temporal induction (for sequential logic/FFs)
 
 # Check results
-equiv_status -assert"
-"""
+equiv_status -assert"""
 
 
 def _equiv_template(gold: str, gate: str, gold_top: Optional[str], gate_top: Optional[str], *, no_name_matching: bool = False) -> str:
     no_matching = 'rename -hide w:* i:* %d     # Rename and hide all wires that are NOT ports to prevent false matching (gold.w1 may be structurally different from gate.w1, but logically equivalent)'
     rename_wires = no_matching if no_name_matching else ''
-    return EQUIV_TEMPLATE.format(gold=gold, gate=gate, gold_top=gold_top, gate_top=gate_top, rename_wires=rename_wires)
+    return EQUIV_CMDS.format(gold=gold, gate=gate, gold_top=gold_top, gate_top=gate_top, rename_wires=rename_wires)
 
 
 @overload
 def run_equiv(
     gold_design: Circuit, gate_design: Circuit, *, quiet: bool = False, out_dir: Optional[str] = None, no_name_matching: bool = False
-) -> Process: ...
+) -> subprocess.Popen[str]: ...
 
 
 @overload
@@ -291,7 +296,7 @@ def run_equiv(
     quiet: bool = False,
     out_dir: Optional[str] = None,
     no_name_matching: bool = False,
-) -> Process: ...
+) -> subprocess.Popen[str]: ...
 
 
 def run_equiv(
@@ -303,7 +308,7 @@ def run_equiv(
     quiet: bool = False,
     out_dir: Optional[str] = None,
     no_name_matching: bool = False,
-) -> Process:
+) -> subprocess.Popen[str]:
     """
     Runs a predefined script using the equiv_* passes from Yosys to prove the logical equivalence of the Verilog designs for the given Verilog designs.
 
@@ -342,18 +347,19 @@ def run_equiv(
             gate_top = gate_design.top_name
             gate_design = gate_path
         script_path = Path(f'{tmp_dir}/equiv.sh')
+        equiv_cmds = _equiv_template(gold_design, gate_design, gold_top, gate_top, no_name_matching=no_name_matching)
         with open(script_path, 'w') as f:
-            f.write(_equiv_template(gold_design, gate_design, gold_top, gate_top, no_name_matching=no_name_matching))
-        stdout = subprocess.PIPE if quiet else None
-        stderr = subprocess.PIPE if quiet else None
+            f.write(EQUIV_TEMPLATE.format(equiv_cmds=equiv_cmds))
         script_path.chmod(script_path.stat().st_mode | 0o111)
-        return subprocess.run([script_path], stdout=stdout, stderr=stderr)
+        return sc.call(['yosys', '-p', f'"{equiv_cmds}"'], not quiet)
 
 
-EQUIV_MITER_TEMPLATE = """#!/bin/bash
+EQUIV_MITER_TEMPLATE = """#!/bin/env bash
 
-yosys -p "
-read_verilog {gold} # Load the "Gold" (Reference) design
+yosys -p "{equiv_miter_cmds}"
+"""
+
+EQUIV_MITER_CMDS = """read_verilog {gold} # Load the "Gold" (Reference) design
 prep -top {gold_top}
 techmap; flatten; abc -fast; clk2fflogic; opt_clean
 rename {gold_top} gold
@@ -375,13 +381,13 @@ techmap
 opt -full
 
 # Prove equivalence using SAT
-sat -verify {sat_strat} -set-init-zero -prove trigger 0 -show-inputs -show-outputs -show-public -show-regs"
+sat -verify {sat_strat} -set-init-zero -prove trigger 0 -show-inputs -show-outputs -show-public -show-regs
 """
 
 
 def _equiv_miter_template(gold: str, gate: str, gold_top: Optional[str], gate_top: Optional[str], *, cycles: Optional[PositiveInt] = None) -> str:
     sat_strat = f'-seq {cycles}' if cycles is not None else '-tempinduct'
-    return EQUIV_MITER_TEMPLATE.format(gold=gold, gate=gate, gold_top=gold_top, gate_top=gate_top, sat_strat=sat_strat)
+    return EQUIV_MITER_CMDS.format(gold=gold, gate=gate, gold_top=gold_top, gate_top=gate_top, sat_strat=sat_strat)
 
 
 def run_equiv_miter(
@@ -393,7 +399,7 @@ def run_equiv_miter(
     quiet: bool = False,
     out_dir: Optional[str] = None,
     cycles: Optional[PositiveInt] = None,
-) -> Process:
+) -> subprocess.Popen[str]:
     """
     Runs a predefined script to prove the logical equivalence for the given Verilog designs using a miter/SAT approach in Yosys.
 
@@ -440,7 +446,6 @@ def run_equiv_miter(
         script_path = Path(f'{tmp_dir}/equiv_miter.sh')
         with open(script_path, 'w') as f:
             f.write(_equiv_miter_template(gold_design, gate_design, gold_top, gate_top, cycles=cycles))
-        stdout = subprocess.PIPE if quiet else None
-        stderr = subprocess.PIPE if quiet else None
+        cmds = _equiv_miter_template(gold_design, gate_design, gold_top, gate_top, cycles=cycles)
         script_path.chmod(script_path.stat().st_mode | 0o111)
-        return subprocess.run([script_path], stdout=stdout, stderr=stderr)
+        return sc.call(['yosys', '-p', f'"{cmds}"'], verbose=not quiet)

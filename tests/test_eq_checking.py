@@ -1,5 +1,6 @@
 import os
 import shutil
+from pathlib import Path
 
 import pytest
 from utils import save_results
@@ -14,18 +15,18 @@ from netlist_carpentry.scripts.equivalence_checking import EquivalenceChecking
 
 
 def test_eqy_basics() -> None:
-    eqy = EquivalenceChecking([], '', [], '', 'some/path')
-    assert str(eqy.script_path) == 'some/path'
+    eqy = EquivalenceChecking([], '', [], '', Path('some/path'))
+    assert eqy.script_path == Path('some/path')
 
     eqy._create_eqy_file()
     with pytest.raises(FileExistsError):
         eqy._create_eqy_file()
-    if os.path.exists('some/path'):
+    if os.path.exists(Path('some/path')):
         shutil.rmtree('some')
 
 
 def test_create_eqy_file() -> None:
-    eqy_path = 'tests/files/gen/test_create_eqy_file.eqy'
+    eqy_path = Path('tests/files/gen/test_create_eqy_file.eqy')
     eqy = EquivalenceChecking(['input_file1.v', 'input_file2.v'], 'test_top', [], None, eqy_path)
     if os.path.exists(eqy_path):
         os.remove(eqy_path)
@@ -51,7 +52,7 @@ def test_create_eqy_file() -> None:
 
 def test_decentral_mux_eqy_creation() -> None:
     name = 'decentral_mux'
-    eqy_path = f'tests/files/gen/{name}.eqy'
+    eqy_path = Path(f'tests/files/gen/{name}.eqy')
     eqy = EquivalenceChecking([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name, eqy_path)
     eqy._create_eqy_file()
     with open(eqy_path) as f:
@@ -134,7 +135,7 @@ def test_run_equiv_simple() -> None:
     equiv_proc = run_equiv('tests/files/or_pattern_find.v', 'tests/files/simple_or_structure.v', 'or_pattern_find', 'simple_or_structure', quiet=True)
     assert equiv_proc.returncode == 1
     assert equiv_proc.stdout is not None  # Output piped to stdout variable
-    assert b'ERROR' in equiv_proc.stderr  # Errors piped to stderr variable
+    assert 'ERROR' in equiv_proc.stderr.read()  # Errors piped to stderr variable
 
 
 def test_run_equiv_circuit() -> None:
@@ -148,7 +149,7 @@ def test_run_equiv_circuit() -> None:
     equiv_proc = run_equiv(gold, gate, quiet=True)
     assert equiv_proc.returncode == 0
     assert equiv_proc.stdout is not None
-    assert equiv_proc.stderr == b''
+    assert equiv_proc.stderr.read() == ''
 
 
 @pytest.mark.skipif(os.environ.get('EQY_MISSING') == 'true', reason='EQY missing in CI')
@@ -164,8 +165,9 @@ def test_run_eqy_circuit() -> None:
     equiv_proc = run_eqy(gold, gate, quiet=True)  # Different top module names let EQY fail
     assert equiv_proc.returncode == 1
     assert equiv_proc.stdout is not None
-    assert b'ERROR: Failed to combine designs. For details see ' in equiv_proc.stderr
-    assert b"/combine.log'.\n" in equiv_proc.stderr
+    err = equiv_proc.stderr.read()
+    assert 'ERROR: Failed to combine designs. For details see ' in err
+    assert "combine.log'.\n" in err
 
 
 def test_chain_optimizer_equiv() -> None:
@@ -177,7 +179,7 @@ def test_chain_optimizer_equiv() -> None:
     )
     assert equiv_proc.returncode == 0
     assert equiv_proc.stdout is not None
-    assert equiv_proc.stderr == b''
+    assert equiv_proc.stderr.read() == ''
 
 
 def test_chain_optimizer_equiv_out_dir() -> None:
@@ -197,7 +199,7 @@ def test_chain_optimizer_equiv_out_dir() -> None:
     )
     assert equiv_proc.returncode == 0
     assert equiv_proc.stdout is not None
-    assert equiv_proc.stderr == b''
+    assert equiv_proc.stderr.read() == ''
 
     assert os.path.exists('tests/files/gen/chain_opt_equiv')
     assert os.path.exists('tests/files/gen/chain_opt_equiv/equiv.sh')
@@ -216,7 +218,7 @@ def test_chain_optimizer_equiv_miter() -> None:
     equiv_proc = run_equiv_miter(gold, gate, quiet=True)  # Different top module names let EQY fail
     assert equiv_proc.returncode == 0
     assert equiv_proc.stdout is not None
-    assert equiv_proc.stderr == b''
+    assert equiv_proc.stderr.read() == ''
 
 
 def test_chain_optimizer_equiv_miter_out_dir() -> None:
@@ -236,7 +238,7 @@ def test_chain_optimizer_equiv_miter_out_dir() -> None:
     )
     assert equiv_proc.returncode == 0
     assert equiv_proc.stdout is not None
-    assert equiv_proc.stderr == b''
+    assert equiv_proc.stderr.read() == ''
 
     assert os.path.exists('tests/files/gen/chain_opt_equiv')
     assert os.path.exists('tests/files/gen/chain_opt_equiv/equiv_miter.sh')

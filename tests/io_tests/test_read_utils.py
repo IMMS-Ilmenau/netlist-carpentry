@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 
 sys.path.append('.')
 
@@ -10,7 +11,7 @@ from netlist_carpentry.core.circuit import Circuit
 
 
 def test_static_read_json() -> None:
-    circuit = read_json('tests/files/simpleAdder.json')
+    circuit = read_json(Path('tests/files/simpleAdder.json').expanduser().resolve())
     assert circuit is not None
     assert isinstance(circuit, Circuit)
     assert len(circuit.modules) == 1
@@ -25,7 +26,7 @@ def test_static_read_json() -> None:
 
 
 def test_static_read_verilog() -> None:
-    circuit = read('tests/files/simpleAdder.v', 'simpleAdder')
+    circuit = read(Path('tests/files/simpleAdder.v'), 'simpleAdder')
     assert circuit is not None
     assert isinstance(circuit, Circuit)
     assert len(circuit.modules) == 1

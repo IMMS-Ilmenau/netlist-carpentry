@@ -3,6 +3,7 @@ import datetime
 import inspect
 import os
 import pstats
+from pathlib import Path
 from typing import Callable, Union
 
 from typing_extensions import TypeAlias
@@ -20,13 +21,13 @@ StrOrBytesPath: TypeAlias = Union[str, bytes, os.PathLike[str], os.PathLike[byte
 def save_results(text_to_save: str, format_extension: str = '', additional_name: str = '') -> None:
     additional_name = '.' + additional_name if additional_name else ''
     prev_frame = inspect.stack()[1]
-    fpath = prev_frame.filename
-    fname = fpath[fpath.rindex('/') + 1 : fpath.rindex('.')]
+    fpath = Path(prev_frame.filename).expanduser().resolve()
+    fname = fpath.stem
     fnc_name = prev_frame.function
     comment_char = '//' if format_extension == 'v' else '#'
     name = f'{fname}.{fnc_name}{additional_name}.{format_extension}'.replace(CFG.id_internal, CFG.id_external)
-    os.makedirs('tests/files/gen', exist_ok=True)
-    with open(f'tests/files/gen/{name}', 'w') as f:
+    os.makedirs(Path('tests/files/gen'), exist_ok=True)
+    with open(Path('tests/files/gen') / name, 'w') as f:
         f.write(f'{comment_char} Test results from {datetime.datetime.now().strftime("%d. %B %Y, %H:%M:%S")}\n\n')
         f.write(text_to_save)
 
