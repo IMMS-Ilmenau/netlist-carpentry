@@ -1,10 +1,17 @@
-# Changelog 0.4.0
+# Changelog 0.4.0 (2026-04-27)
 
-## ADDED
+## FIXED
+- Fixed issues arising when the optional VCD dependency (i.e. `pywellen`) is not installed, now also showing an appropriate error message
+
+# Older Versions
+
+## Changelog 0.4.0 (2026-04-27)
+
+### ADDED
 - `netlist_carpentry.utils.gate_lib.DFF` and derived classes now have properties `has_en` (has enable port, bool) and `has_rst` (has reset port, bool)
 - Added `netlist_carpentry.utils.gate_lib_dataclasses.Parameters` class, which unifies all previous base parameter classes (`TypedParams`, `InstanceParams`, `_CombinationalParams`,  `_SequentialParams`, and `AllParams`) - they still exist, but are marked with a deprecation warning, referencing the new `Parameters` class
 
-## CHANGED
+### CHANGED
 - `netlist_carpentry.utils.gate_lib_base_classes.StorageGate` (i.e. sequential gates, like `DFF` and `DLatch` instances) now have a property `width`, instead of `y_width` (added deprecation warning)
 - Changed functionality of gate parameters
   - Instead of `netlist_carpentry.PrimitiveGate.parameters["PARAM"]`, `netlist_carpentry.PrimitiveGate.parameters.PARAM` is now possible
@@ -14,14 +21,13 @@
 - Updated a bunch of docstrings
 - `pywellen` is now an optional dependency, can be installed via `pip install netlist-carpentry[vcd]`
 
-## FIXED
+### FIXED
 - Many fixes of issues only present on Windows machines
 - Fixed width parameter setting/copying issues for many gates
 - Some gates that previously forced equal widths for some ports, now also support ports with different widths
 - Fixed issues where reading Verilog files was not possible on Windows
 - mkdocs-jupyter was moved from general dependencies to dev-dependencies in `pyproject.toml`, so it is no longer installed in the standard user version, and only in the dev version
 
-# Older Versions
 
 ## Changelog 0.3.8 (2026-04-15)
 

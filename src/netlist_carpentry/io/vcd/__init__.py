@@ -26,3 +26,7 @@ if HAS_VCD:
         'get_hierarchy_dict',
         'map_names_to_circuit',
     ]
+else:
+    raise ImportError(
+        "Dependency 'pywellen' for VCD processing is missing! Install it via `pip install netlist-carpentry[vcd]` or directly via `pip install pywellen`!"
+    )

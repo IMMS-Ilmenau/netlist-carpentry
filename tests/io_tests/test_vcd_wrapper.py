@@ -1,3 +1,4 @@
+import importlib
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -144,6 +145,16 @@ def test_vcd_waveform_str_path() -> None:
     wf = VCDWaveform(Path('tests/files/sim/adder_basics/tb_adder_basics.vcd'))
     assert len(wf.top_scopes) == 1
     assert len(wf.all_vars) == 13
+
+
+def test_vcd_importing() -> None:
+    import netlist_carpentry.io.vcd
+
+    tmp = netlist_carpentry.HAS_VCD
+    setattr(netlist_carpentry, 'HAS_VCD', False)
+    with pytest.raises(ImportError):
+        importlib.reload(netlist_carpentry.io.vcd)
+    setattr(netlist_carpentry, 'HAS_VCD', tmp)
 
 
 if __name__ == '__main__':
