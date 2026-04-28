@@ -2,6 +2,13 @@
 import os
 import shutil
 
+try:
+    import pywellen  # noqa: F401
+
+    HAS_VCD = True
+except ImportError:
+    HAS_VCD = False
+
 from netlist_carpentry.utils import CFG, LOG, initialize_logging, VERILOG_KEYWORDS  # Config and log must be loaded before the other modules
 from netlist_carpentry.core.graph import EMPTY_GRAPH
 from netlist_carpentry.core.enums import Direction, Signal

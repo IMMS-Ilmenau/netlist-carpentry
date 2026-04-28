@@ -1,22 +1,29 @@
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
-from pywellen import Waveform
 
-from netlist_carpentry import read
-from netlist_carpentry.io.vcd.wrapper import VCDWaveform
+from netlist_carpentry import HAS_VCD, read
+
+if HAS_VCD or TYPE_CHECKING:
+    from netlist_carpentry.io.vcd.wrapper import VCDWaveform
+
 from tests.test_verilog import _setup_run_circuit
+
+pytestmark = pytest.mark.skipif(not HAS_VCD, reason="Optional library 'pywellen' is not installed!")
 
 
 @pytest.fixture()
-def adder_vcd() -> VCDWaveform:
+def adder_vcd() -> 'VCDWaveform':
+    from pywellen import Waveform
+
     c = read('tests/files/simpleAdder.v')
     _setup_run_circuit('adder_basics', c)
     return VCDWaveform(Waveform('tests/files/sim/adder_basics/tb_adder_basics.vcd'))
 
 
-def test_vcd_var(adder_vcd: VCDWaveform) -> None:
+def test_vcd_var(adder_vcd: 'VCDWaveform') -> None:
     top_scope = adder_vcd.top_scopes[0]
     scope = top_scope.scopes[0]
     var = scope.vars[0]
@@ -59,7 +66,7 @@ def test_vcd_var(adder_vcd: VCDWaveform) -> None:
     assert repr(var) == 'Wire(tb_adder_basics.adder.clk)'
 
 
-def test_vcd_var_changes(adder_vcd: VCDWaveform) -> None:
+def test_vcd_var_changes(adder_vcd: 'VCDWaveform') -> None:
     for var in adder_vcd.all_vars.values():
         if var.name == 'out':
             assert len(var.all_changes) == 4
@@ -99,7 +106,7 @@ def test_vcd_var_changes(adder_vcd: VCDWaveform) -> None:
             assert len(var.all_changes) == 1
 
 
-def test_vcd_scope(adder_vcd: VCDWaveform) -> None:
+def test_vcd_scope(adder_vcd: 'VCDWaveform') -> None:
     top_scope = adder_vcd.top_scopes[0]
     scope = top_scope.scopes[0]
     assert scope.name == 'adder'
@@ -112,7 +119,7 @@ def test_vcd_scope(adder_vcd: VCDWaveform) -> None:
     assert repr(scope) == 'module(tb_adder_basics.adder)'
 
 
-def test_vcd_waveform(adder_vcd: VCDWaveform) -> None:
+def test_vcd_waveform(adder_vcd: 'VCDWaveform') -> None:
     assert len(adder_vcd.top_scopes) == 1
     assert len(adder_vcd.all_vars) == 13
     assert all('tb_adder_basics' in v for v in adder_vcd.all_vars)
