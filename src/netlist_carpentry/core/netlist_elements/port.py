@@ -704,7 +704,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         return drivers
 
     def loads(self) -> Dict[NonNegativeInt, List[PortSegment]]:
-        return {idx: self.module.wires[self[idx].ws_path.parent.name].loads()[idx] for idx, _ in self}
+        return {idx: self.module.wires[self[idx].ws_path.parent.name].loads()[ps.ws.index] for idx, ps in self}
 
     def set_signed(self, signed: bool) -> bool:
         prev = self.signed
