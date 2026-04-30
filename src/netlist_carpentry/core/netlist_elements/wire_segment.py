@@ -326,6 +326,11 @@ class WireSegment(_Segment, BaseModel):
         """
         return self.is_dangling() or self.has_multiple_drivers()
 
+    def _set_name_recursively(self, old_name: str, new_name: str) -> None:
+        for ps in self.port_segments:
+            ps.set_ws_path(self.path)
+        return super()._set_name_recursively(old_name, new_name)
+
     def evaluate(self) -> None:
         if not self.is_constant:
             new_signal = self._get_curr_signal()

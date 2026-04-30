@@ -78,10 +78,12 @@ def standard_port_in(init_module: bool = True) -> Port[Instance]:
 
 def standard_port_out(init_module: bool = True) -> Port[Module]:
     module = Module(name='test_module1')
+    w = module.create_wire('wire1', width=2)
     p = module.create_port('test_port2', direction=Direction.OUT, width=2)
     p.msb_first = False
     p[0].set_ws_path('test_module1.wire1.0')
     p[1].set_ws_path('test_module1.wire1.0')
+    w[0].port_segments.extend([p[0], p[1]])
     if not init_module:
         p.module_or_instance = None
     return p

@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional, overload
+from typing import TYPE_CHECKING, Dict, Optional, Union, overload
 
 from pydantic import NonNegativeInt
 
 from netlist_carpentry import Signal
+from netlist_carpentry.core.exceptions import IdentifierConflictError
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 from netlist_carpentry.core.protocols.signals import LogicLevel, SignalOrLogicLevel
 
+if TYPE_CHECKING:
+    from netlist_carpentry.core.netlist_elements.port import ANY_PORT
+    from netlist_carpentry.core.netlist_elements.wire import Wire
+
 
 class _Segment(NetlistElement):
+    @property
+    def parent(self) -> Union[Wire, ANY_PORT]:
+        raise NotImplementedError(f'Not implemented for class {self.__class__.__name__}!')
+
     @property
     def index(self) -> int:
         """
@@ -51,6 +60,9 @@ class _Segment(NetlistElement):
         raise NotImplementedError(f'Not implemented for class {self.__class__.__name__}!')
 
     def set_name(self, new_name: str) -> None:
+        if new_name != self.name and int(new_name) in self.parent.segments:
+            raise IdentifierConflictError(f'A segment {new_name} already exists in {self.parent.__class__.__name__} {self.parent.raw_path}!')
         if new_name.isdecimal():
+            self.parent.segments[int(new_name)] = self.parent.segments.pop(self.index)  # type: ignore[assignment]
             return super().set_name(new_name)
         raise ValueError(f'Cannot apply name {new_name} to segment {self.raw_path}: Only numeric values are allowed!')

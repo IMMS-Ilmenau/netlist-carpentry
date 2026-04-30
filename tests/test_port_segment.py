@@ -8,6 +8,7 @@ from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.exceptions import (
     AlreadyConnectedError,
     DetachedSegmentError,
+    IdentifierConflictError,
     InvalidDirectionError,
     InvalidSignalError,
     ObjectLockedError,
@@ -277,6 +278,37 @@ def test_port_direction(standard_port_in: Port[Instance], standard_port_out: Por
     standard_port_in[0].parent.direction = Direction.IN_OUT
     assert standard_port_in[0].parent.direction == Direction.IN_OUT
     assert standard_port_in[0].direction == Direction.IN_OUT
+
+
+def test_set_name(standard_port_out: Port[Module]) -> None:
+    assert standard_port_out[0].name == '0'
+    assert 0 in standard_port_out[0].parent.segments
+    assert standard_port_out[0].parent.segments[0] is standard_port_out[0]
+    assert standard_port_out[0].ws.port_segments[0].name == '0'
+    assert standard_port_out[0].ws.port_segments[0] is standard_port_out[0]
+
+    standard_port_out[0].set_name('0')
+    assert standard_port_out[0].name == '0'
+    assert 0 in standard_port_out[0].parent.segments
+    assert standard_port_out[0].parent.segments[0] is standard_port_out[0]
+    assert standard_port_out[0].ws.port_segments[0].name == '0'
+    assert standard_port_out[0].ws.port_segments[0] is standard_port_out[0]
+
+    with pytest.raises(IdentifierConflictError):
+        standard_port_out[0].set_name('1')
+    assert standard_port_out[0].name == '0'
+    assert 0 in standard_port_out[0].parent.segments
+    assert standard_port_out[0].parent.segments[0] is standard_port_out[0]
+    assert standard_port_out[0].ws.port_segments[0].name == '0'
+    assert standard_port_out[0].ws.port_segments[0] is standard_port_out[0]
+
+    standard_port_out[0].set_name('2')
+    assert standard_port_out[2].name == '2'
+    assert standard_port_out[2].index == 2
+    assert 0 not in standard_port_out[2].parent.segments
+    assert standard_port_out[2].parent.segments[2] is standard_port_out[2]
+    assert standard_port_out[2].ws.port_segments[0].name == '2'
+    assert standard_port_out[2].ws.port_segments[0] is standard_port_out[2]
 
 
 def test_set_ws_path(port_segment: PortSegment) -> None:

@@ -24,11 +24,10 @@ def test_set_signal(segment_base: _Segment) -> None:
 
 def test_set_name(segment_base: _Segment) -> None:
     assert segment_base.name == '3'
-    segment_base.set_name('2')
-    assert segment_base.name == '2'
+    with pytest.raises(NotImplementedError):
+        segment_base.set_name('2')
     with pytest.raises(ValueError):
         segment_base.set_name('foo')  # Only numbers allowed
-    assert segment_base.name == '2'
 
 
 if __name__ == '__main__':

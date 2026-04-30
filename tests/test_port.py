@@ -363,10 +363,10 @@ def test_connected_wire_segments(standard_port_in: Port[Instance], standard_port
 
     pseg = standard_port_in.get_port_segment(0)
     pseg.set_name('1')
-    standard_port_in._add_port_segment(pseg)
+    with pytest.raises(IdentifierConflictError):
+        standard_port_in._add_port_segment(pseg)
     dict3 = standard_port_in.connected_wire_segments
-    assert len(dict3) == 2
-    assert dict3[0] == standard_port_in[0].ws_path
+    assert len(dict3) == 1
     assert dict3[1] == standard_port_in[1].ws_path
 
     p = Port(name='', direction=Direction.IN_OUT, module_or_instance=None)

@@ -36,20 +36,17 @@ from netlist_carpentry.utils.log import initialize_logging
 
 @pytest.fixture
 def wire_segment() -> WireSegment:
-    from utils import standard_wire
-
-    wire = standard_wire()
-    inst = Instance(name='b', instance_type='c', module=None)
     module = Module(name='a')
+    wire = module.create_wire('wire1')
+    inst = Instance(name='b', instance_type='c', module=module)
     p1 = Port(name='p1', direction=Direction.OUT, module_or_instance=inst)
     p2 = Port(name='p2', direction=Direction.IN, module_or_instance=inst)
     p3 = Port(name='p3', direction=Direction.OUT, module_or_instance=module)
     p1.create_port_segment(0).set_ws_path('a.c.0')
     p2.create_port_segment(0).set_ws_path('a.c.0')
     p3.create_port_segment(0).set_ws_path('a.c.0')
-    w = WireSegment(name='0', wire=wire)
-    w.add_port_segments([p1[0], p2[0], p3[0]])
-    return w
+    wire[0].add_port_segments([p1[0], p2[0], p3[0]])
+    return wire[0]
 
 
 @pytest.fixture
@@ -68,7 +65,7 @@ def _add_multidriver(wire_segment: WireSegment) -> None:
 def test_wire_segment_basics(wire_segment: WireSegment) -> None:
     assert wire_segment.name == '0'
     assert wire_segment.path.type is EType.WIRE_SEGMENT
-    assert wire_segment.path.raw == 'wire1.0'
+    assert wire_segment.path.raw == 'a.wire1.0'
     assert wire_segment.type is EType.WIRE_SEGMENT
     assert wire_segment.index == 0
     assert wire_segment.signal is Signal.UNDEFINED
@@ -294,6 +291,29 @@ def test_has_problems(wire_segment: WireSegment) -> None:
     assert wire_segment.has_problems()
 
 
+def test_set_name(wire_segment: WireSegment) -> None:
+    assert wire_segment.name == '0'
+    assert 0 in wire_segment.parent.segments
+    assert wire_segment.parent.segments[0] is wire_segment
+    for ps in wire_segment.port_segments:
+        assert ps.ws.name == '0'
+
+    wire_segment.set_name('0')
+    assert wire_segment.name == '0'
+    assert 0 in wire_segment.parent.segments
+    assert wire_segment.parent.segments[0] is wire_segment
+    for ps in wire_segment.port_segments:
+        assert ps.ws.name == '0'
+
+    wire_segment.set_name('1')
+    assert wire_segment.name == '1'
+    assert wire_segment.index == 1
+    assert 0 not in wire_segment.parent.segments
+    assert wire_segment.parent.segments[1] is wire_segment
+    for ps in wire_segment.port_segments:
+        assert ps.ws.name == '1'
+
+
 def test_evaluate(wire_segment: WireSegment) -> None:
     for p in wire_segment.port_segments:
         assert p.signal == Signal.UNDEFINED
@@ -317,7 +337,7 @@ def test_evaluate(wire_segment: WireSegment) -> None:
 
 
 def test_wire_segment_str(wire_segment: WireSegment) -> None:
-    assert str(wire_segment) == 'WireSegment "0" with path wire1.0'
+    assert str(wire_segment) == 'WireSegment "0" with path a.wire1.0'
 
     assert str(WIRE_SEGMENT_0) == 'Constant WireSegment "0" with path 0 and signal 0'
     assert str(WIRE_SEGMENT_1) == 'Constant WireSegment "1" with path 1 and signal 1'
@@ -326,7 +346,7 @@ def test_wire_segment_str(wire_segment: WireSegment) -> None:
 
 
 def test_wire_segment_repr(wire_segment: WireSegment) -> None:
-    assert repr(wire_segment) == 'WireSegment(wire1.0, Signal:x, 3 port(s))'
+    assert repr(wire_segment) == 'WireSegment(a.wire1.0, Signal:x, 3 port(s))'
 
     assert repr(WIRE_SEGMENT_0) == 'Constant WireSegment "0" WireSeg(0)'
     assert repr(WIRE_SEGMENT_1) == 'Constant WireSegment "1" WireSeg(1)'

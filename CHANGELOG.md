@@ -2,6 +2,8 @@
 
 ## FIXED
 - Fixed issues arising when the optional VCD dependency (i.e. `pywellen`) is not installed, now also showing an appropriate error message
+- Fixed bug in the `netlist_carpentry.Port.loads()` method, causing a crash whenever Port and Wire (segments) have different offsets
+- Fixed issues with renaming of port or wire segments, losing previous connections (#43)
 
 # Older Versions
 
