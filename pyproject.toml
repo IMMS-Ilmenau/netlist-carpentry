@@ -57,7 +57,7 @@ netlist-carpentry = { workspace = true }
 # Dependency groups
 [dependency-groups]
 dev = [
-    "netlist-carpentry[type-stubs]",
+    "netlist-carpentry[type-stubs,vcd]",
     # tox
     "tox>=4.24.1",
     "tox-uv>=1.21.1",
