@@ -122,7 +122,7 @@ def get_yosys_cmds(
     read_str = _yosys_read_cmd(input_file_paths)
     top = f'-top {top}' if top else '-auto-top' if not no_hierarchy else ''
     hierarchy = f'hierarchy {top} -libdir .'
-    memory = 'memory' if process_memory else ''
+    memory = 'memory' if process_memory else 'memory -nomap'
     techmaps = '\n'.join(f'techmap -map {Path(techmap).expanduser().resolve()}\n' for techmap in _get_techmap_paths(techmap_paths))
     share_str = 'opt; share -aggressive' if share else ''
     insbuf_str = 'insbuf; proc' if insbuf else ''

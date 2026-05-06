@@ -1,11 +1,17 @@
-# Changelog 0.4.0 (2026-04-27)
+# Changelog 0.4.1
 
 ## FIXED
+- Whenever `netlist_carpentry.read()` is called with `process_memory=False`, Yosys will now generate a single `mem_v2` cell instead of multiple memrd, memwr and meminit cells
+
+# Older Versions
+
+## Changelog 0.4.0 (2026-04-27)
+
+### FIXED
 - Fixed issues arising when the optional VCD dependency (i.e. `pywellen`) is not installed, now also showing an appropriate error message
 - Fixed bug in the `netlist_carpentry.Port.loads()` method, causing a crash whenever Port and Wire (segments) have different offsets
 - Fixed issues with renaming of port or wire segments, losing previous connections (#43)
 
-# Older Versions
 
 ## Changelog 0.4.0 (2026-04-27)
 

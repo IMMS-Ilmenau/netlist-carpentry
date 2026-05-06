@@ -41,7 +41,7 @@ def test_build_script_params() -> None:
     assert content.startswith('#!/bin/env bash')
     assert 'read_verilog ' in content and '/tests/files/thermo_enc.v' in content
     assert 'hierarchy -top thermo_enc -libdir .' in content
-    assert 'memory' not in content
+    assert 'memory -nomap' in content
     assert 'techmap -map' in content and 'tests/files/pmux2mux.v' in content
     assert 'opt; share -aggressive' in content
     assert 'opt; clean; check' in content
