@@ -1,7 +1,14 @@
 # Changelog 0.4.1
 
 ## FIXED
+- Fixed an issue within the `netlist_carpentry.Port.loads()` method (wrong index mappings if offsets differ)
 - Whenever `netlist_carpentry.read()` is called with `process_memory=False`, Yosys will now generate a single `mem_v2` cell instead of multiple memrd, memwr and meminit cells
+- Fixed missing dependency in dev mode, now the vcd option (pywellen) is also included in the dev options
+- Some internal fixes regarding class hierarchies in the gate lib
+  - Simplified mixin classes `ClkMixin`, `EnMixin`, `RstMixin`, `ScanMixin`
+  - Moved `ClkMixin`, `EnMixin`, `RstMixin`, `ScanMixin` to `netlist_carpentry.utils.gate_mixins`, they still accessible from its previous location, but a deprecation warning will occur
+  - Fixed hierarchies of several gate classes (DFF and derivatives, DLatch)
+- Fixed several type hints
 
 # Older Versions
 
