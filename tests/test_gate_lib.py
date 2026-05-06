@@ -30,6 +30,7 @@ from netlist_carpentry.utils.gate_lib import (
     ScanADFFE,
     ScanDFF,
     ScanDFFE,
+    StorageGate,
     UnaryGate,
 )
 from netlist_carpentry.utils.log import LOG
@@ -95,8 +96,7 @@ def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
     assert primitive_gate.is_combinational
     assert not primitive_gate.is_sequential
     assert primitive_gate.verilog_template == 'assign\t{out} = {in1};'
-    with pytest.raises(NotImplementedError):
-        primitive_gate.verilog_net_map
+    assert primitive_gate.verilog_net_map == {}
 
     with pytest.warns(DeprecationWarning, match='is deprecated and will be removed in v1.0.0'):
         assert primitive_gate.y_width == 1
@@ -2112,10 +2112,13 @@ def test_modulo_behavior(simple_module: Module) -> None:
 def test_clocked_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ClkMixin
 
-    g = ClkMixin(
+    class ClockedGate(ClkMixin, StorageGate):
+        pass
+
+    g = ClockedGate(
         instance_type='clocked_gate',
         name='clocked_gate_inst',
-        parameters={'CLK_POLARITY': Signal.LOW, 'RST_POLARITY': Signal.LOW},
+        parameters={'CLK_POLARITY': Signal.LOW, 'RST_POLARITY': Signal.LOW, 'WIDTH': 1},
         module=simple_module,
     )
 

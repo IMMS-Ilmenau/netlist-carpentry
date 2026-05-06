@@ -75,6 +75,31 @@ class GateParams(InstanceParams):
     pass
 
 
+class ClockParamsMixin:
+    CLK_POLARITY: Optional[Signal] = None
+
+
+class EnableParamsMixin:
+    EN_POLARITY: Optional[Signal] = None
+
+
+class ResetParamsMixin:
+    ARST_POLARITY: Optional[Signal] = None
+    ARST_VALUE: Optional[int] = None
+
+
+class ClockParams(ClockParamsMixin, GateParams):
+    pass
+
+
+class EnableParams(EnableParamsMixin, GateParams):
+    pass
+
+
+class ResetParams(ResetParamsMixin, GateParams):
+    pass
+
+
 class WireParams(BaseModel):
     """Common parameters for Wires."""
 
@@ -106,14 +131,10 @@ class MuxParams(GateParams):
     BIT_WIDTH: Optional[PositiveInt] = None
 
 
-class DFFParams(GateParams):
+class DFFParams(ClockParams, EnableParams, ResetParams):
     """Common parameters for DFFs and derived classes."""
 
     WIDTH: Optional[PositiveInt] = None
-    CLK_POLARITY: Optional[Signal] = None
-    ARST_POLARITY: Optional[Signal] = None
-    ARST_VALUE: Optional[int] = None
-    EN_POLARITY: Optional[Signal] = None
 
 
 class DLatchParams(GateParams):

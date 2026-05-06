@@ -25,7 +25,7 @@ from netlist_carpentry.io.read.yosys_netlist_types import (
     YosysPortDirections,
 )
 from netlist_carpentry.utils.gate_lib import ADFF, DFF, get
-from netlist_carpentry.utils.gate_lib_base_classes import EnMixin
+from netlist_carpentry.utils.gate_mixins import EnMixin
 
 
 class YosysNetlistReader(AbstractReader):

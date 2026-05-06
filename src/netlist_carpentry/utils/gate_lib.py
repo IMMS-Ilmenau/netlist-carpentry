@@ -22,17 +22,14 @@ from netlist_carpentry.utils.gate_lib_base_classes import (
     ArithmeticGate,
     BinaryGate,
     BinaryNto1Gate,
-    ClkMixin,
-    EnMixin,
     PrimitiveGate,
     ReduceGate,
-    RstMixin,
-    ScanMixin,
     ShiftGate,
     StorageGate,
     UnaryGate,
 )
-from netlist_carpentry.utils.gate_lib_dataclasses import DLatchParams, MuxParams, Parameters
+from netlist_carpentry.utils.gate_lib_dataclasses import DFFParams, DLatchParams, MuxParams, Parameters
+from netlist_carpentry.utils.gate_mixins import ClkMixin, EnMixin, RstMixin, ScanMixin
 from netlist_carpentry.utils.safe_format_dict import SafeFormatDict
 
 _gate_lib_map: Dict[str, Type[PrimitiveGate]] = {}
@@ -1491,7 +1488,7 @@ class Modulo(ArithmeticGate, BaseModel):
         return Signal.from_int(sig1_int % sig2_int, fixed_width=self.output_port.width)
 
 
-class DFF(ClkMixin, BaseModel):
+class DFF(ClkMixin, StorageGate, BaseModel):
     """
     A D flip-flop (DFF) is a clocked gate that stores a value on its input port and outputs it on its output port.
     The value is stored when the clock signal has a rising edge.
@@ -1509,6 +1506,8 @@ class DFF(ClkMixin, BaseModel):
 
     Yosys introduces a variety of flip-flop descriptor types. See the Yosys documentation for more information.
     """
+    parameters: DFFParams = DFFParams()
+
     prev_signals: Dict[str, Dict[int, Signal]] = {}
 
     @property
@@ -1537,9 +1536,18 @@ class DFF(ClkMixin, BaseModel):
         return 'always @({header}) begin\n\t{set_out}\nend'
 
     @property
+    def _verilog_clk(self) -> str:
+        """
+        The verilog representation of the clock sensitivity list entry.
+
+        Has the form `posedge clk_net_name` or `negedge clk_net_name`, depending on the clock polarity.
+        """
+        return self._v_header(self.clk_port, self.clk_polarity)
+
+    @property
     def verilog_context_map(self) -> SafeFormatDict:
         context_map = super().verilog_context_map
-        context_map.update(header=super()._verilog_clk, set_out=self._storage_assigns())
+        context_map.update(header=self._verilog_clk, set_out=self._storage_assigns())
         return context_map
 
     @property
