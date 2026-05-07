@@ -50,7 +50,7 @@ from netlist_carpentry.utils.gate_lib_dataclasses import Parameters
 T_NETLIST_ELEMENT = TypeVar('T_NETLIST_ELEMENT', bound=NetlistElement)
 T_INSTANCE = TypeVar('T_INSTANCE', bound=Instance)
 T_PORT = Union[Port['Module'], Port[Instance]]
-ANY_SIGNAL_SOURCE = Union[PortSegmentPath, PortPath, PortSegment, T_PORT, WireSegmentPath, WireSegment, Wire]
+ANY_SIGNAL_SOURCE = Union[PortSegmentPath, PortPath, PortSegment, T_PORT, WireSegmentPath, WirePath, WireSegment, Wire]
 ANY_SIGNAL_TARGET = Union[PortSegmentPath, PortPath, PortSegment, T_PORT]
 PARAMETERS = Union[Dict[str, object], Parameters]
 if TYPE_CHECKING:
@@ -59,7 +59,9 @@ if TYPE_CHECKING:
 
 class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin, NetlistElement, BaseModel):
     _wire_gen_i: int = 0
+    """Internal index for naming of generated wire names."""
     _inst_gen_i: int = 0
+    """Internal index for naming of generated instance names."""
 
     def __eq__(self, value: object) -> bool:
         if not isinstance(value, Module):
@@ -69,6 +71,11 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         return self.instances == value.instances and self.ports == value.ports and self.wires == value.wires
 
     def _raise_if_occupied(self, name: str) -> None:
+        """Raises an IdentifierConflictError, if the given name is already used for a port, wire or instance.
+
+        Args:
+            name (str): The name to check, if an object with this name already exists.
+        """
         if self.name_occupied(name):
             raise IdentifierConflictError(f'An object with name {name} exists already in module {self.name}!')
 
@@ -116,7 +123,8 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Args:
             interface_definition (Union[Module, Instance]): The module whose interface is to be copied to the new instance.
                 Alternatively, the primitive instance **class**, whose interface is to be copied to the new instance.
-            name (str): The target name of the instance to be created.
+            name (Optional[str], optional): The target name of the instance to be created. Defaults to None,
+                in which case a generic name is created and used.
             params (Dict[str, object]): A dictionary containing parameters for the instance to be created
 
         Returns:
@@ -139,6 +147,15 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         return self.add_instance(inst)
 
     def _get_generic_inst_name(self, module_or_inst_cls: Union[Module, Type[Instance]]) -> str:
+        """Returns a generic name for a given module or instance class, which is used for instantiating said object.
+
+        The generic name is based on the type abbreviation, which is either the module name (if it is a module),
+        or the class name (if it is an instance).
+        A generic name for a module `Foo` would be `_Foo_0_`, which will be the generic name for an instance of module `Foo`,
+        if no name is specified when calling `Module.create_instance()`.
+        Analogously, if an instance class is passed, e.g. the class `AndGate` from the gate library, the generic name will be
+        `_AndGate_0_` (or `_AndGate_1_` if the previous already exists, and so on).
+        """
         type_abbrev = module_or_inst_cls.name if isinstance(module_or_inst_cls, Module) else module_or_inst_cls.__name__
         while f'_{type_abbrev}_{self._inst_gen_i}_' in self.instances:
             self._inst_gen_i += 1
@@ -599,6 +616,29 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         return name in self.instances or name in self.ports or name in self.wires
 
     def connect(self, source: ANY_SIGNAL_SOURCE, target: ANY_SIGNAL_TARGET, new_wire_name: Optional[str] = None) -> None:
+        """Connects the target (a portlike object) to the source (a portlike or a wirelike object).
+
+        This method takes the objects and establishes a connection between them, taking source as the origin for the connection.
+        There are several requirements:
+        - The target object must be an unconnected port (or port segment).
+        - If the source is a wire (or wire segment), the target port is connected to the given wire.
+        - If the source is an unconnected port (or port segment), a new wire will be created, so that the target port
+        will be connected to the source port via this newly created wire wire.
+        - If the source is a port (or port segment), which is already connected to a wire (or wire segment), then
+        target port will be connected to the source port via this wire.
+        - Both the source and the target must be from the same object group, i.e. both must either be individual segments,
+        or at least have the same width!
+        - Both the source and the target may also be path objects (PortPath, PortSegmentPath for both source and target;
+        or WirePath, WireSegmentPath but only for the source).
+
+        Args:
+            source (ANY_SIGNAL_SOURCE): The source for the connection. May be a Wire, WireSegment, Port, PortSegment or any corresponding path.
+                Think of it as the originator.
+            target (ANY_SIGNAL_TARGET): The target for the connection. May be a Port, PortSegment or any corresponding path.
+                Think of it as the object that "copies" the connection from the source.
+            new_wire_name (Optional[str], optional): A wire name which is used if a new wire must be created (source and target are portlike objects,
+                and source is unconnected). If None, a generic name is created for this case. Defaults to None.
+        """
         # First, get objects from path
         source_obj = self._get_from_path_or_object(source)
         target_obj = self._get_from_path_or_object(target)

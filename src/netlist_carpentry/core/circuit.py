@@ -585,6 +585,15 @@ class Circuit(BaseModel):
         return mapdict
 
     def flatten(self, skip_modules: Optional[List[str]] = None) -> None:
+        """Flatten this circuit, by replacing all submodule instances by their module definition.
+
+        Each submodule instance is removed and the content of the module definition is added to the parent module.
+        The previous instance ports are thus connected directly to the instances inside the submodules.
+
+        Args:
+            skip_modules (Optional[List[str]], optional): Names of modules (i.e. the module definition name, not the instance name),
+                which should not be flattened. Accordingly, every module whose name is in `skip_modules` is ignored. Defaults to None.
+        """
         if skip_modules is None:
             skip_modules = []
         for m in self:
@@ -661,7 +670,7 @@ class Circuit(BaseModel):
         eqy_script_path: Union[Path, str] = '',
         gold_top_module: str = '',
         quiet: bool = False,
-    ) -> subprocess.Popen[bytes]: ...
+    ) -> subprocess.Popen[str]: ...
     @overload
     def prove_equivalence(
         self,
@@ -670,7 +679,7 @@ class Circuit(BaseModel):
         eqy_script_path: Union[Path, str] = '',
         gold_top_module: str = '',
         quiet: bool = False,
-    ) -> subprocess.Popen[bytes]: ...
+    ) -> subprocess.Popen[str]: ...
 
     def prove_equivalence(
         self,
@@ -679,7 +688,7 @@ class Circuit(BaseModel):
         eqy_script_path: Union[Path, str] = '',
         gold_top_module: str = '',
         quiet: bool = False,
-    ) -> subprocess.Popen[bytes]:
+    ) -> subprocess.Popen[str]:
         """
         Proves equivalence of the circuit against a set of gold Verilog files.
 
@@ -697,17 +706,17 @@ class Circuit(BaseModel):
             eqy_script_path (str, optional): The path to the eqy script. If not provided, an eqy script will be generated. Defaults to ''.
             gold_top_module (str, optional): The name of the top module in the gold Verilog files. Defaults to '',
                 in which case the top module will be inferred from this circuit object.
-            quiet (bool, optional): If True, pipes all Yosys output into the subprocess.CompletedProcess object.
+            quiet (bool, optional): If True, pipes all Yosys output into the subprocess.Popen object.
                 If False, prints all Yosys output to the console. Defaults to False.
 
         Returns:
-            subprocess.CompletedProcess: The result of the execution plus some metadata.
+            subprocess.Popen: The result of the execution plus some metadata.
         """
         out_dir = Path(out_dir)
         if isinstance(gold_design, Circuit):
             out_file = out_dir / f'{gold_design.name}_out.v'
             gold_design.write(out_file, overwrite=True)
-            gold_design = [out_file]
+            gold_design = [str(out_file)]
         eqy_out = out_dir / 'out'
         Path(eqy_out).mkdir(parents=True, exist_ok=True)
         if not eqy_script_path:
@@ -718,7 +727,14 @@ class Circuit(BaseModel):
             LOG.warn(f'No gold top name specified! Assuming same top module as in gate circuit ({self.top_name})...')
             gold_top_module = self.top_name
         return run_eqy(
-            gold_design, [output_vfile], gold_top_module, self.top_name, script_path=eqy_script_path, output_path=eqy_out, overwrite=True, quiet=quiet
+            gold_design,
+            [str(output_vfile)],
+            gold_top_module,
+            self.top_name,
+            script_path=str(eqy_script_path),
+            output_path=str(eqy_out),
+            overwrite=True,
+            quiet=quiet,
         )
 
     def optimize(self) -> bool:
@@ -756,9 +772,11 @@ class Circuit(BaseModel):
 
     def evaluate(self) -> None:
         """
-        Evaluates the circuit.
+        Evaluates the circuit's signal states.
 
-        This method evaluates the top module in the circuit and all modules that are part of it, in a top-down manner.
+        This method evaluates all signals in the top module and all modules that are part of it, in a top-down manner.
+        At the end of the evaluation process, each signal present at the beginning was propagated forward.
+        Wherever possible, the state of each instance and wire has been evaluated based on the current input signals.
         """
         self.top.evaluate()
 
