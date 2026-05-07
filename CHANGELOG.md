@@ -12,6 +12,7 @@
   - Moved `ClkMixin`, `EnMixin`, `RstMixin`, `ScanMixin` to `netlist_carpentry.utils.gate_mixins`, they still accessible from its previous location, but a deprecation warning will occur
   - Fixed hierarchies of several gate classes (DFF and derivatives, DLatch)
 - Fixed several type hints
+- Fixed outdated/missing docstrings
 
 
 # Older Versions
