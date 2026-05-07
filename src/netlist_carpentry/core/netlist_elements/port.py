@@ -683,6 +683,24 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
     @overload
     def driver(self) -> Dict[NonNegativeInt, Optional[PortSegment]]: ...
     def driver(self, single: bool = False) -> Union[ANY_PORT, Dict[NonNegativeInt, Optional[PortSegment]]]:
+        """Returns the driver of this port if it has one, otherwise None.
+
+        Can only be retrieved if this port is a load port.
+
+        Args:
+            single (bool, optional): Whether to return a single port, but this only works if each segment
+                of this port is connected to the same port. Defaults to False.
+
+        Raises:
+            InvalidDirectionError: If this port is a signal driving port.
+            WidthMismatchError: Only if `single` is True: May happen if at least one index is undriven, or if this port is driven
+                by different ports for different segments.
+
+        Returns:
+            Union[ANY_PORT, Dict[NonNegativeInt, Optional[PortSegment]]]: Either a single port that drives this port (if `single` is True),
+                or a dictionary containing the driver (which is the opposing port segment) for each segment of this port. If the entry is None,
+                then the corresponding port segment is undriven.
+        """
         if self.is_driver:
             raise InvalidDirectionError(f'Cannot get driving port of port {self.raw_path}: This port is a driver and thus does not have a driver!')
         drivers: Dict[NonNegativeInt, Optional[PortSegment]] = {}
@@ -704,9 +722,27 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         return drivers
 
     def loads(self) -> Dict[NonNegativeInt, List[PortSegment]]:
+        """Returns the loads of this port as a dictionary of indices with associated port segment lists.
+
+        If this port itself is a load port, it is also included into the list of load for each segment.
+
+        Returns:
+            Dict[NonNegativeInt, List[PortSegment]]: A dict of all indices mapped to port segments that receive the same signal via the same wire.
+                If this port itself is a load port, it is also included into the list of load for each segment.
+        """
         return {idx: self.module.wires[self[idx].ws_path.parent.name].loads()[ps.ws.index] for idx, ps in self}
 
     def set_signed(self, signed: bool) -> bool:
+        """Modifies the signedness of this port and returns whether the signedness has changed.
+
+        Args:
+            signed (bool): The new signedness of this port. If `True`, the port is now signed.
+                If `False`, the port is now unsigned
+
+        Returns:
+            bool: True if the signedness was changed (i.e. the new value is different from the previous value),
+                False otherwise.
+        """
         prev = self.signed
         self.parameters['signed'] = int(signed)
         if self.is_instance_port:

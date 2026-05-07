@@ -284,8 +284,8 @@ class NetlistElement(HooksMixin, BaseModel):
         Args:
             include_empty (bool, optional): Whether to include objects without metadata into the normalized dictionary,
                 in which case the value is just an empty dictionary. Defaults to False.
-            sort_by (Literal["path", "category"], optional): Whether the hierarchical path or the metadata categories
-                should be the main dictionary keys. Defaults to 'path'.
+            sort_by (Literal[&apos;path&apos;, &apos;category&apos;], optional): Whether the hierarchical path or the
+                metadata categories should be the main dictionary keys. Defaults to 'path'.
             filter (Callable[[str, NESTED_DICT], bool], optional): A filter function that takes two parameters, where
                 the first represents the metadata category and the second represents the metadata dictionary.
                 Defaults to `lambda cat, md: True`, which evaluates to True for all elements and thus does not filter

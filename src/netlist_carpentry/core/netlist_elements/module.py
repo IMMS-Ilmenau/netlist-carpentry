@@ -874,6 +874,14 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         return {index: self.get_from_path(connections[index]) for index in connections}
 
     def update_module_instances(self) -> None:
+        """Updates all related entries in the `instances` dictionary of this module's superordinate circuit.
+
+        This method iterates through all entries of the parent circuit's `instances` dictionary that refer to instances
+        of this module (i.e. it searches for all instances of this module within the circuit). For each found instance
+        of this module, it updates the instance interface. If new ports were added to this module, each module instance
+        will receive the new port (but without any connections to it). If a port was deleted from this module, each module
+        instance will also lose the corresponding port, which gets disconnected from any previously connected wire.
+        """
         for inst_path in self.circuit.instances[self.name]:
             inst = self.circuit.get_from_path(inst_path)
             for pname, p in self.ports.items():
@@ -1348,6 +1356,19 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         sort_by: Literal['path', 'category'] = 'path',
         filter: Callable[[str, NESTED_DICT], bool] = lambda cat, md: True,
     ) -> None:
+        """Exports this module's metadata in JSON format and writes it to the specified file.
+
+        Args:
+            path (Union[str, Path]): The path to a file into which the metadata is written in JSON format.
+            include_empty (bool, optional): Whether to include objects without metadata into the normalized dictionary,
+                in which case the value is just an empty dictionary. Defaults to False.
+            sort_by (Literal[&apos;path&apos;, &apos;category&apos;], optional): Whether the hierarchical path or the
+                metadata categories should be the main dictionary keys. Defaults to 'path'.
+            filter (Callable[[str, NESTED_DICT], bool], optional): A filter function that takes two parameters, where
+                the first represents the metadata category and the second represents the metadata dictionary.
+                Defaults to `lambda cat, md: True`, which evaluates to True for all elements and thus does not filter
+                anything.
+        """
         if isinstance(path, str):
             path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)

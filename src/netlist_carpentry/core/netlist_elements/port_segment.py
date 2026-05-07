@@ -159,6 +159,7 @@ class PortSegment(_Segment, BaseModel):
 
     @property
     def signal_int(self) -> Optional[int]:
+        """The signal of this port segment as an integer (0 or 1), if it is defined, otherwise None."""
         return int(self.signal.value) if self.signal.is_defined else None
 
     @property
@@ -417,6 +418,17 @@ class PortSegment(_Segment, BaseModel):
             self._signal = signal
 
     def driver(self) -> Optional[PortSegment]:
+        """Returns the driver of this port segment if it has one, otherwise None.
+
+        Can only be retrieved if this port segment belongs to a load port.
+
+        Raises:
+            InvalidDirectionError: If this port is a signal driving port (e.g. instance output or module input).
+
+        Returns:
+            Optional[PortSegment]: The opposing port segment that drives signal values onto this port segment.
+                Can only be retrieved if this port segment belongs to a load port.
+        """
         if self.is_driver:
             raise InvalidDirectionError(
                 f'Cannot get driving port of port segment {self.raw_path}: This port segment is a driver and thus does not have a driver!'
@@ -424,6 +436,14 @@ class PortSegment(_Segment, BaseModel):
         return self.parent.module.wires[self.ws_path.parent.name].driver()[self.index]
 
     def loads(self) -> List[PortSegment]:
+        """Returns the loads of this port segment as a list of port segments.
+
+        If this port segment itself belongs to a load port, it is also included into the list of loads.
+
+        Returns:
+            List[PortSegment]: A list of all port segments that receive the same signal via the same wire.
+                If this port segment belongs to a load port, it is also included into the list of loads.
+        """
         return self.parent.module.wires[self.ws_path.parent.name].loads()[self.index]
 
     def change_connection(self, new_wire_segment_path: WireSegmentPath = WireSegmentPath(raw='')) -> None:
