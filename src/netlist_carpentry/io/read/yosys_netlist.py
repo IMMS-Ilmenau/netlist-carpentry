@@ -1,11 +1,12 @@
 """Module handling the reading of a Yosys-generated JSON netlist and transformation into corresponding Python objects."""
+# mypy: disable-error-code="unreachable"
 
 import json
 import os
 import re
 from pathlib import Path
 from time import time
-from typing import Dict, List, Optional, Set, Union
+from typing import Dict, List, Optional, Set, Union, overload
 
 from tqdm import tqdm
 
@@ -25,7 +26,7 @@ from netlist_carpentry.io.read.yosys_netlist_types import (
     YosysPortDirections,
 )
 from netlist_carpentry.utils.gate_lib import ADFF, DFF, get
-from netlist_carpentry.utils.gate_mixins import EnMixin
+from netlist_carpentry.utils.gate_mixins import EnableMixinProtocol
 
 
 class YosysNetlistReader(AbstractReader):
@@ -147,34 +148,45 @@ class YosysNetlistReader(AbstractReader):
         """Recursively replace all occurrences of `old_val` with `new_val` in dictionary keys and values."""
         if isinstance(inner_dict, dict):  # type:ignore # If it's a dictionary, process keys and values
             return {k.replace(old_val, new_val): self._replace_in_module_dict(v, old_val, new_val) for k, v in inner_dict.items()}  # type:ignore
-        elif isinstance(inner_dict, list):  # type:ignore # If it's a list, process each item
+        elif isinstance(inner_dict, list):  # If it's a list, process each item
             return [self._replace_in_module_dict(item, old_val, new_val) for item in inner_dict]
         elif isinstance(inner_dict, str):  # If it's a string, replace old_val with new_val
             return inner_dict.replace(old_val, new_val)
         else:
             return inner_dict  # Return unchanged for other data types
 
-    def _clean_dict(self, nl_dict: Union[object, Dict[str, object]]) -> Dict[str, object]:
-        if isinstance(nl_dict, str):
-            return re.sub(r'[^A-Za-z0-9_]', CFG.id_internal, nl_dict)
-
-        if isinstance(nl_dict, list):
-            return [self._clean_dict(x) for x in nl_dict]
-
+    def _clean_dict(self, nl_dict: Dict[str, object]) -> Dict[str, object]:
         if isinstance(nl_dict, dict):
-            new_dict = {}
+            new_dict: Dict[str, object] = {}
             for k, v in nl_dict.items():
-                clean_k = self._clean_dict(k)
+                clean_k = self._clean_dict_substitute_str(k)
                 # Resolve collisions
                 original = clean_k
                 counter = 1
                 while clean_k in new_dict:
                     clean_k = f'{original}_{counter}'
                     counter += 1
-                new_dict[clean_k] = self._clean_dict(v)
+                new_dict[clean_k] = self._clean_dict_element(v)
             return new_dict
 
-        return nl_dict
+    @overload
+    def _clean_dict_element(self, element: List[str]) -> List[str]: ...
+    @overload
+    def _clean_dict_element(self, element: str) -> str: ...
+    @overload
+    def _clean_dict_element(self, element: object) -> object: ...
+
+    def _clean_dict_element(self, element: object) -> object:
+        if isinstance(element, str):
+            return self._clean_dict_substitute_str(element)
+        if isinstance(element, list):
+            return [self._clean_dict_element(x) for x in element]
+        if isinstance(element, dict):
+            return self._clean_dict(element)
+        return element
+
+    def _clean_dict_substitute_str(self, dict_entry: str) -> str:
+        return re.sub(r'[^A-Za-z0-9_]', CFG.id_internal, dict_entry)
 
     def simplify_module_name(self, module_name: str) -> str:
         new_m = module_name
@@ -186,7 +198,7 @@ class YosysNetlistReader(AbstractReader):
                 for idx, mseg in enumerate(module_names):
                     if all(ch in '01' for ch in mseg) and '32' in module_names[idx - 1]:
                         new_m = new_m[: -len(module_names[idx - 1])]
-                        new_m += str(int(mseg, 2))  # type:ignore
+                        new_m += str(int(mseg, 2))
                     else:
                         new_m += CFG.id_internal + mseg
             else:
@@ -366,8 +378,8 @@ class YosysNetlistReader(AbstractReader):
     def _build_parameters(self, dict_holder: NetlistElement, module_dict: AllYosysTypes) -> None:
         if 'parameters' in module_dict:
             for attr_name, attr_val in module_dict['parameters'].items():  # type:ignore
-                if 'SIGNED' in attr_name:
-                    dict_holder.parameters[attr_name] = bool(int(attr_val, 2))
+                if 'SIGNED' in attr_name:  # type: ignore[misc]
+                    dict_holder.parameters[attr_name] = bool(int(attr_val, 2))  # type: ignore[misc]
                 else:
                     dict_holder.parameters[attr_name] = self._try_get_int(attr_val)  # type:ignore
 
@@ -420,7 +432,7 @@ class YosysNetlistReader(AbstractReader):
             if 'ARST_POLARITY' in inst_data['parameters']:
                 rst_pol = self._try_get_int(inst_data['parameters']['ARST_POLARITY'])
                 inst.rst_polarity = Signal.get(rst_pol)
-        if isinstance(inst, EnMixin):
+        if isinstance(inst, EnableMixinProtocol):
             if 'EN_POLARITY' in inst_data['parameters']:
                 en_pol = self._try_get_int(inst_data['parameters']['EN_POLARITY'])
                 inst.en_polarity = Signal.get(en_pol)

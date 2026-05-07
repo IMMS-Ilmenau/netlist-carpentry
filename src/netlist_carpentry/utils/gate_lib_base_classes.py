@@ -206,15 +206,15 @@ class PrimitiveGate(Instance, BaseModel):
         return exclude_indices
 
     def _fix_signedness_mismatch(self, port_name: str, param_name: Literal['A_SIGNED', 'B_SIGNED']) -> bool:
-        if getattr(self.parameters, param_name, False) != self.ports[port_name].signed:
+        if getattr(self.parameters, param_name, False) != self.ports[port_name].signed:  # type:ignore
             if hasattr(self.parameters, param_name) and 'signed' in self.ports[port_name].parameters:
                 LOG.warn(
                     f"Detected parameter mismatch: Parameter {param_name} of instance {self.raw_path} is different from the port's parameter 'signed'. "
                     + 'To change the signedness of the port, change it directly at the port, via port.set_signed(new_value). '
                     + "Aligning param_name with the port's current parameter to fix the mismatch..."
                 )
-            self.ports[port_name].parameters['signed'] = getattr(self.parameters, param_name, False)
-        return bool(getattr(self.parameters, param_name, False))
+            self.ports[port_name].parameters['signed'] = getattr(self.parameters, param_name, False)  # type:ignore
+        return bool(getattr(self.parameters, param_name, False))  # type:ignore
 
     def set(self, port_name: str, new_signal: SignalOrLogicLevel) -> None:
         """
@@ -273,7 +273,7 @@ class PrimitiveGate(Instance, BaseModel):
     def _split_sync_params(self, slices: Iterable[Self]) -> None:
         super()._split_sync_params(slices)
         for inst in slices:
-            inst.parameters.Y_WIDTH = 1
+            inst.parameters['Y_WIDTH'] = 1
 
 
 class UnaryGate(PrimitiveGate, BaseModel):
