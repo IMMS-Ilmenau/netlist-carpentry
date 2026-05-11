@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from netlist_carpentry import WIRE_SEGMENT_X, run_equiv, run_eqy
+from netlist_carpentry import LOG, WIRE_SEGMENT_X, run_equiv, run_eqy
 from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.core.enums.direction import Direction as Dir
 from netlist_carpentry.core.enums.element_type import EType
@@ -658,10 +658,16 @@ def test_create_port(empty_module: Module, locked_module: Module) -> None:
         locked_module.create_port(p.name).change_connection(ws_path)
     assert len(locked_module.ports) == 1
 
-    empty_module.create_port('port8b', direction=Dir.IN, width=8, offset=4)
+    empty_module.create_port('port8b', 'In', width=8, offset=4)
     assert 'port8b' in empty_module.ports
+    assert empty_module.ports['port8b'].direction is Dir.IN
     assert empty_module.ports['port8b'].width == 8
     assert {4, 5, 6, 7, 8, 9, 10, 11} == set(empty_module.ports['port8b'].segments.keys())
+
+    warns = LOG.warns_quantity
+    inv_p = empty_module.create_port('invalid_direction', 'bad_dir')
+    assert LOG.warns_quantity == warns + 1
+    assert inv_p.direction is Dir.UNKNOWN
 
 
 def test_create_port_check_dependencies(connected_module: Module) -> None:

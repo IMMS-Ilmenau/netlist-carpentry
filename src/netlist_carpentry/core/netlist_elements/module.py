@@ -392,10 +392,17 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         port.module_or_instance = self
         return self.ports.add(port.name, port, locked=self.locked)
 
+    def _get_direction(self, direction: Union[str, Direction]) -> Direction:
+        if isinstance(direction, str):
+            if Direction.get(direction) == Direction.UNKNOWN:
+                LOG.warn(f"Direction '{direction}' is unknown. Setting direction of port to Direction.UNKNOWN.")
+            return Direction.get(direction)
+        return direction
+
     def create_port(
         self,
         name: str,
-        direction: Direction = Direction.UNKNOWN,
+        direction: Union[str, Direction] = Direction.UNKNOWN,
         width: PositiveInt = 1,
         offset: NonNegativeInt = 0,
         is_locked: bool = False,
@@ -408,7 +415,8 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Args:
             name (str): The name of the port to be created.
-            direction (Direction, optional): The direction of the port. Defaults to Direction.UNKNOWN.
+            direction (Union[str, Direction], optional): The direction of the port. May also be the name of the
+                direction as a string, e.g. "input", "InOut" or "OUT". Defaults to Direction.UNKNOWN.
             width (PositiveInt, optional): The width of the port. Defaults to 1, which means the port is 1 bit wide.
             offset (NonNegativeInt, optional): The index offset for port slices. Defaults to 0, which means the port indexing starts at 0.
             is_locked (bool, optional): Whether the port should be unchangeable after creation or not. Defaults to False.
@@ -416,9 +424,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Returns:
             Optional[Port]: The port if the port was successfully created and added, None otherwise (if a port with this name already exists).
         """
-        # first use add/create wire and then call this function
-        # this function automatically connects the ports to the wires provided in wire_connection_paths
-        p = Port(name=name, direction=direction, module_or_instance=self)
+        p = Port(name=name, direction=self._get_direction(direction), module_or_instance=self)
         self.add_port(p)
         p.create_port_segments(width, offset)
         p.change_mutability(is_now_locked=is_locked)
