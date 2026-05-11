@@ -37,7 +37,14 @@ def test_get():
     assert Direction.get('input') == Direction.IN
     assert Direction.get('output') == Direction.OUT
     assert Direction.get('inout') == Direction.IN_OUT
+    assert Direction.get('unknown') == Direction.UNKNOWN
     assert Direction.get('foo') == Direction.UNKNOWN
+    assert Direction.get('in') == Direction.IN
+    assert Direction.get('out') == Direction.OUT
+    assert Direction.get('iN ') == Direction.IN
+    assert Direction.get(' oUt') == Direction.OUT
+    assert Direction.get('invalidin') == Direction.UNKNOWN
+    assert Direction.get('outvalidout') == Direction.UNKNOWN
 
 
 if __name__ == '__main__':

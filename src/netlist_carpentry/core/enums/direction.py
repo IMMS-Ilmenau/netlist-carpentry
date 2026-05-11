@@ -49,6 +49,9 @@ class Direction(Enum):
         If the provided string does not match any existing Direction values,
         it returns the UNKNOWN Direction instead of raising an exception.
 
+        Direction will returned correctly, if the string is "in" or "input", and is case-insensitive,
+        i.e. "in" and "IN" will both return Direction.IN. Analogously for Direction.OUT.
+
         Args:
             value (str): The string value to look up in the Direction enum.
 
@@ -59,11 +62,20 @@ class Direction(Enum):
             ```python
             >>> Direction.get('input')
             <Direction.IN: 'input'>
+            >>> Direction.get('OUT')
+            <Direction.OUT: 'output'>
+            >>> Direction.get('InOut')
+            <Direction.IN_OUT: 'inout'>
             >>> Direction.get('invalid_value')
             <Direction.UNKNOWN: 'unknown'>
             ```
         """
+        value = value.strip().lower()
         try:
             return cls(value)
         except ValueError:
+            if value == 'in':
+                return cls.IN
+            if value == 'out':
+                return cls.OUT
             return cls.UNKNOWN
