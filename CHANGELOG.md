@@ -11,6 +11,8 @@
   - Simplified mixin classes `ClkMixin`, `EnMixin`, `RstMixin`, `ScanMixin`
   - Moved `ClkMixin`, `EnMixin`, `RstMixin`, `ScanMixin` to `netlist_carpentry.utils.gate_mixins`, they still accessible from its previous location, but a deprecation warning will occur
   - Fixed hierarchies of several gate classes (DFF and derivatives, DLatch)
+- Fixed `netlist_carpentry.Signal.get()` for mixed-case and direction abbreviations, e.g. "in" and "out"
+- `netlist_carpentry.Module.create_port()` now accepts port directions as (case-insensitive) strings as well, e.g. "input", "InOut", "OUT"
 - Fixed several type hints
 - Fixed outdated/missing docstrings
 
