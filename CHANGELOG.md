@@ -1,4 +1,4 @@
-# Changelog 0.4.1
+# Changelog 0.4.1 (2026-05-11)
 
 ## FIXED
 - Fixed issues arising when the optional VCD dependency (i.e. `pywellen`) is not installed, now also showing an appropriate error message
