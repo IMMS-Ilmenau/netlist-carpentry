@@ -225,7 +225,8 @@ def test_chain_optimizer_equiv_miter_out_dir() -> None:
     gold = read('tests/files/chains_orig.v', 'chains_orig')
     opt_chains(gold, gates=['§or'])
     gold.write('tests/files/gen/chains_out.v', overwrite=True)
-    assert not os.path.exists('tests/files/gen/chain_opt_equiv')
+    if os.path.exists('tests/files/gen/chain_opt_equiv'):
+        shutil.rmtree('tests/files/gen/chain_opt_equiv')
     os.mkdir('tests/files/gen/chain_opt_equiv')
     equiv_proc = run_equiv_miter(
         'tests/files/chains_orig.v',
@@ -236,13 +237,13 @@ def test_chain_optimizer_equiv_miter_out_dir() -> None:
         out_dir='tests/files/gen/chain_opt_equiv',
         cycles=None,
     )
-    assert equiv_proc.returncode == 0
-    assert equiv_proc.stdout is not None
-    assert equiv_proc.stderr == ''
-
     assert os.path.exists('tests/files/gen/chain_opt_equiv')
     assert os.path.exists('tests/files/gen/chain_opt_equiv/equiv_miter.sh')
     shutil.rmtree('tests/files/gen/chain_opt_equiv')
+
+    assert equiv_proc.returncode == 0
+    assert equiv_proc.stdout is not None
+    assert equiv_proc.stderr == ''
 
 
 if __name__ == '__main__':

@@ -155,7 +155,7 @@ class EquivalenceChecking:
         return process
 
 
-def _write_design(out_path: str, design: Union[str, List[str], Circuit], top: Optional[str], overwrite: bool = False) -> Tuple[str, str]:
+def _write_design(out_path: str, design: Union[Path, str, List[str], Circuit], top: Optional[str], overwrite: bool = False) -> Tuple[str, str]:
     from netlist_carpentry import Circuit, read
 
     if isinstance(design, list):
@@ -163,6 +163,8 @@ def _write_design(out_path: str, design: Union[str, List[str], Circuit], top: Op
     if isinstance(design, Circuit):
         design.write(out_path, overwrite=overwrite)
         top = design.top_name
+    if isinstance(design, str) or isinstance(design, Path):
+        out_path = str(design)
     return out_path, top or ''  # Returns the file path and top module name
 
 
@@ -334,22 +336,13 @@ def run_equiv(
     Returns:
         subprocess.CompletedProcess: The result of the execution plus some metadata.
     """
-    from netlist_carpentry import Circuit
 
     context = tempfile.TemporaryDirectory() if out_dir is None else nullcontext(str(Path(out_dir).resolve()))
     with context as tmp_dir:
-        if isinstance(gold_design, Circuit):
-            gold_path = os.path.join(tmp_dir, 'gold.v')
-            gold_design.write(gold_path)
-            gold_top = gold_design.top_name
-            gold_design = gold_path
-        if isinstance(gate_design, Circuit):
-            gate_path = os.path.join(tmp_dir, 'gate.v')
-            gate_design.write(gate_path)
-            gate_top = gate_design.top_name
-            gate_design = gate_path
+        gold_path, gold_top = _write_design(os.path.join(tmp_dir, 'gold.v'), gold_design, gold_top)
+        gate_path, gate_top = _write_design(os.path.join(tmp_dir, 'gate.v'), gate_design, gate_top)
         script_path = Path(f'{tmp_dir}/equiv.sh')
-        equiv_cmds = _equiv_template(gold_design, gate_design, gold_top, gate_top, no_name_matching=no_name_matching)
+        equiv_cmds = _equiv_template(gold_path, gate_path, gold_top, gate_top, no_name_matching=no_name_matching)
         with open(script_path, 'w') as f:
             f.write(EQUIV_TEMPLATE.format(equiv_cmds=equiv_cmds))
         script_path.chmod(script_path.stat().st_mode | 0o111)
@@ -431,23 +424,14 @@ def run_equiv_miter(
     Returns:
         subprocess.CompletedProcess: The result of the execution plus some metadata.
     """
-    from netlist_carpentry import Circuit
 
     context = tempfile.TemporaryDirectory() if out_dir is None else nullcontext(str(Path(out_dir).resolve()))
     with context as tmp_dir:
-        if isinstance(gold_design, Circuit):
-            gold_path = os.path.join(tmp_dir, 'gold.v')
-            gold_design.write(gold_path)
-            gold_top = gold_design.top_name
-            gold_design = gold_path
-        if isinstance(gate_design, Circuit):
-            gate_path = os.path.join(tmp_dir, 'gate.v')
-            gate_design.write(gate_path)
-            gate_top = gate_design.top_name
-            gate_design = gate_path
+        gold_path, gold_top = _write_design(os.path.join(tmp_dir, 'gold.v'), gold_design, gold_top)
+        gate_path, gate_top = _write_design(os.path.join(tmp_dir, 'gate.v'), gate_design, gate_top)
         script_path = Path(f'{tmp_dir}/equiv_miter.sh')
         with open(script_path, 'w') as f:
-            f.write(_equiv_miter_template(gold_design, gate_design, gold_top, gate_top, cycles=cycles))
-        cmds = _equiv_miter_template(gold_design, gate_design, gold_top, gate_top, cycles=cycles)
+            f.write(_equiv_miter_template(gold_path, gate_path, gold_top, gate_top, cycles=cycles))
+        cmds = _equiv_miter_template(gold_path, gate_path, gold_top, gate_top, cycles=cycles)
         script_path.chmod(script_path.stat().st_mode | 0o111)
         return sc.call(['yosys', '-p', f'"{cmds}"'], verbose=not quiet)
