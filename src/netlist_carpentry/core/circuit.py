@@ -167,6 +167,11 @@ class Circuit(BaseModel):
         return self.modules.add(module.name, module)
 
     def _add_module_instances(self, module: Module) -> None:
+        """Updates the `instances` dictionary for all instances within the given module.
+
+        Args:
+            module (Module): The module of which each instance should be updated in the `instances` dictionary.
+        """
         for instance in module.instances.values():
             self.update_instance(instance)
 
@@ -267,6 +272,15 @@ class Circuit(BaseModel):
         self.modules.remove(module)
 
     def _remove_module_instances(self, module_name: str) -> None:
+        """Removes references to the given module as well as instances of the module.
+
+        Removes all references to the module from the `instances` dictionary.
+        Also removes all instances inside the module from the `instances` dictionary,
+        since these references will cease to exist, when the module is removed.
+
+        Args:
+            module_name (str): The module for which all references should be removed.
+        """
         if module_name in self.instances:
             self.instances.pop(module_name)
         module = self[module_name]

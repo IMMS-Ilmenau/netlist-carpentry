@@ -1,6 +1,14 @@
-# Changelog 0.4.1 (2026-05-11)
+# Changelog 0.4.2
 
 ## FIXED
+- Fixed minor bug in `netlist_carpentry.Module.remove_instance()` method
+- Updated faulty/added missing docstrings
+
+# Older Versions
+
+## Changelog 0.4.1 (2026-05-11)
+
+### FIXED
 - Fixed issues arising when the optional VCD dependency (i.e. `pywellen`) is not installed, now also showing an appropriate error message
 - Fixed bug in the `netlist_carpentry.Port.loads()` method, causing a crash whenever Port and Wire (segments) have different offsets
 - Fixed issues with renaming of port or wire segments, losing previous connections (#43)
@@ -16,8 +24,6 @@
 - Fixed several type hints
 - Fixed outdated/missing docstrings
 
-
-# Older Versions
 
 ## Changelog 0.4.0 (2026-04-27)
 
