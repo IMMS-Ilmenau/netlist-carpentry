@@ -2,6 +2,7 @@
 
 ## FIXED
 - Fixed minor bug in `netlist_carpentry.Module.remove_instance()` method
+- The `netlist_carpentry.run_eqy()`, `run_equiv()` and `run_equiv_miter()` methods now support a broader array of parameter types - designs can either be `Circuit` objects or paths to Verilog designs (str, Path, or lists thereof)
 - Updated faulty/added missing docstrings
 
 # Older Versions

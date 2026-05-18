@@ -182,8 +182,8 @@ def run_eqy(
 
 @overload
 def run_eqy(
-    gold_design: List[str],
-    gate_design: List[str],
+    gold_design: Union[str, Path, List[str]],
+    gate_design: Union[str, Path, List[str]],
     gold_top: Optional[str] = None,
     gate_top: Optional[str] = None,
     *,
@@ -195,8 +195,8 @@ def run_eqy(
 
 
 def run_eqy(
-    gold_design: Union[Circuit, List[str]],
-    gate_design: Union[Circuit, List[str]],
+    gold_design: Union[Circuit, str, Path, List[str]],
+    gate_design: Union[Circuit, str, Path, List[str]],
     gold_top: Optional[str] = None,
     gate_top: Optional[str] = None,
     *,
@@ -217,8 +217,8 @@ def run_eqy(
     If the directory exists, and the parameter is False or omitted, the equivalence checking script will fail with a corresponding error message.
 
     Args:
-        gold_design (Union[Circuit, List[str]]): A Circuit object or a list of paths to the gold Verilog files.
-        gate_design (Union[Circuit, List[str]]): A Circuit object or a list of paths to the gate Verilog files.
+        gold_design (Union[Circuit, str, Path, List[str]]): The circuit object, or the file path(s) to the gold Verilog file(s).
+        gate_design (Union[Circuit, str, Path, List[str]]): The circuit object, or the file path(s) to the gate Verilog file(s).
         gold_top (Optional[str]): The top module name for the gold design. If None, module is auto-selected.
         gate_top (Optional[str]): The top module name for the gate design. If None, module is auto-selected.
         script_path (Optional[str]): The path (including the desired file name) to the directory where the .eqy script will be saved.
@@ -292,8 +292,8 @@ def run_equiv(
 
 @overload
 def run_equiv(
-    gold_design: str,
-    gate_design: str,
+    gold_design: Union[str, Path, List[str]],
+    gate_design: Union[str, Path, List[str]],
     gold_top: str,
     gate_top: str,
     *,
@@ -304,8 +304,8 @@ def run_equiv(
 
 
 def run_equiv(
-    gold_design: Union[Circuit, str],
-    gate_design: Union[Circuit, str],
+    gold_design: Union[Circuit, str, Path, List[str]],
+    gate_design: Union[Circuit, str, Path, List[str]],
     gold_top: str = '',
     gate_top: str = '',
     *,
@@ -320,8 +320,8 @@ def run_equiv(
     In the scope of this framework, the gate design refers to the modified or optimized version of the original design.
 
     Args:
-        gold_design (Union[Circuit, str]): The circuit object, or the file path to the gold design.
-        gate_design (Union[Circuit, str]): The circuit object, or the file path to the gate design.
+        gold_design (Union[Circuit, str, Path, List[str]]): The circuit object, or the file path(s) to the gold design.
+        gate_design (Union[Circuit, str, Path, List[str]]): The circuit object, or the file path(s) to the gate design.
         gold_top (str): The top module name for the gold design.
         gate_top (str): The top module name for the gate design.
         quiet (bool, optional): If True, pipes all Yosys output into the subprocess.CompletedProcess object.
@@ -386,8 +386,8 @@ def _equiv_miter_template(gold: str, gate: str, gold_top: Optional[str], gate_to
 
 
 def run_equiv_miter(
-    gold_design: Union[Circuit, str],
-    gate_design: Union[Circuit, str],
+    gold_design: Union[Circuit, str, Path, List[str]],
+    gate_design: Union[Circuit, str, Path, List[str]],
     gold_top: str = '',
     gate_top: str = '',
     *,
@@ -405,8 +405,8 @@ def run_equiv_miter(
     In the scope of this framework, the gate design refers to the modified or optimized version of the original design.
 
     Args:
-        gold_design (Union[Circuit, str]): The circuit object, or the file path to the gold design.
-        gate_design (Union[Circuit, str]): The circuit object, or the file path to the gate design.
+        gold_design (Union[Circuit, str, Path, List[str]]): The circuit object, or the file path(s) to the gold design.
+        gate_design (Union[Circuit, str, Path, List[str]]): The circuit object, or the file path(s) to the gate design.
         gold_top (str): The top module name for the gold design.
         gate_top (str): The top module name for the gate design.
         quiet (bool, optional): If True, pipes all Yosys output into the subprocess.CompletedProcess object.
