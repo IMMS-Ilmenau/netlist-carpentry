@@ -338,6 +338,19 @@ def test_pos_gate(simple_module: Module) -> None:
         7: Signal.HIGH,
     }
 
+    g.ports['A'][3].set_signal(Signal.UNDEFINED)  # x111 -> x ==> whole signal array becomes undefined
+    g.evaluate()
+    assert g.output_port.signal_array == {
+        0: Signal.UNDEFINED,
+        1: Signal.UNDEFINED,
+        2: Signal.UNDEFINED,
+        3: Signal.UNDEFINED,
+        4: Signal.UNDEFINED,
+        5: Signal.UNDEFINED,
+        6: Signal.UNDEFINED,
+        7: Signal.UNDEFINED,
+    }
+
 
 def test_neg_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import NegGate
@@ -372,6 +385,16 @@ def test_neg_gate(simple_module: Module) -> None:
     g.modify_connection('Y', WireSegmentPath(raw='a.carry.0'), index=4)
     g.evaluate()
     assert g.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW, 4: Signal.HIGH}
+
+    g.ports['A'][3].set_signal(Signal.UNDEFINED)  # x111 -> x ==> whole signal array becomes undefined
+    g.evaluate()
+    assert g.output_port.signal_array == {
+        0: Signal.UNDEFINED,
+        1: Signal.UNDEFINED,
+        2: Signal.UNDEFINED,
+        3: Signal.UNDEFINED,
+        4: Signal.UNDEFINED,
+    }
 
 
 def _test_signal_confr_n(gate: UnaryGate, sin: Signal, sout_prev: Signal, sout_new: Signal) -> None:
@@ -1485,6 +1508,13 @@ def test_mux_structure(simple_module: Module) -> None:
         'D7': '{wmuxD_7[3:2], wmuxD_7[0]}',
     }
 
+    m.y_width = 16
+    m.bit_width = 32
+    assert m.y_width == 16
+    assert m.parameters.WIDTH == 16
+    assert m.bit_width == 32
+    assert m.parameters.BIT_WIDTH == 32
+
 
 def test_mux_split(simple_module: Module) -> None:
     m = Multiplexer(name='mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
@@ -1632,6 +1662,13 @@ def test_demux_structure(simple_module: Module) -> None:
         'Y6': '{wmuxY_6[3:2], wmuxY_6[0]}',
         'Y7': '{wmuxY_7[3:2], wmuxY_7[0]}',
     }
+
+    d.y_width = 16
+    d.bit_width = 32
+    assert d.y_width == 16
+    assert d.parameters.WIDTH == 16
+    assert d.bit_width == 32
+    assert d.parameters.BIT_WIDTH == 32
 
 
 def test_demux_split(simple_module: Module) -> None:
@@ -2247,6 +2284,13 @@ def test_dff_behaviour(simple_module: Module) -> None:
     assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
     assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+
+    ff.output_port.create_port_segments(1, 4)
+    ff.input_port.create_port_segments(1, 4)
+    assert len(ff._curr_out) == 4
+    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW, 4: Signal.UNDEFINED}
+    _clk(ff)
+    assert len(ff._curr_out) == 5
 
 
 def test_dff_to_scan(simple_module: Module) -> None:
