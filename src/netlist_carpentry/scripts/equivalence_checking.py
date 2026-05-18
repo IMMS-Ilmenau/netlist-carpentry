@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 from contextlib import nullcontext
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Union, overload
+from typing import TYPE_CHECKING, List, Optional, Tuple, Union, overload
 
 from pydantic import PositiveInt
 
@@ -155,6 +155,17 @@ class EquivalenceChecking:
         return process
 
 
+def _write_design(out_path: str, design: Union[str, List[str], Circuit], top: Optional[str], overwrite: bool = False) -> Tuple[str, str]:
+    from netlist_carpentry import Circuit, read
+
+    if isinstance(design, list):
+        design = read(design, top or '')
+    if isinstance(design, Circuit):
+        design.write(out_path, overwrite=overwrite)
+        top = design.top_name
+    return out_path, top or ''  # Returns the file path and top module name
+
+
 @overload
 def run_eqy(
     gold_design: Circuit,
@@ -219,25 +230,16 @@ def run_eqy(
     Returns:
         subprocess.CompletedProcess: The result of the execution plus some metadata.
     """
-    from netlist_carpentry import Circuit
 
     with tempfile.TemporaryDirectory() as vtmp_dir:
-        if isinstance(gold_design, Circuit):
-            gold_path = os.path.join(vtmp_dir, 'gold.v')
-            gold_design.write(gold_path)
-            gold_top = gold_design.top_name
-            gold_design = [gold_path]
-        if isinstance(gate_design, Circuit):
-            gate_path = os.path.join(vtmp_dir, 'gate.v')
-            gate_design.write(gate_path)
-            gate_top = gate_design.top_name
-            gate_design = [gate_path]
+        gold_path, gold_top = _write_design(os.path.join(vtmp_dir, 'gold.v'), gold_design, gold_top)
+        gate_path, gate_top = _write_design(os.path.join(vtmp_dir, 'gate.v'), gate_design, gate_top)
         context = tempfile.TemporaryDirectory() if script_path is None else nullcontext(str(Path(script_path).parent))
         if script_path is not None:
             Path(script_path).parent.mkdir(parents=True, exist_ok=True)
         with context as script_dir:
             script_path = str(Path(script_dir) / 'eqy.eqy') if script_path is None else script_path
-            eqy = EquivalenceChecking(gold_design, gold_top, gate_design, gate_top, script_path)
+            eqy = EquivalenceChecking([gold_path], gold_top, [gate_path], gate_top, script_path)
             return eqy.run_eqy(output_path, overwrite, quiet)
 
 

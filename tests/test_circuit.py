@@ -739,10 +739,8 @@ def test_prove_equivalence(connected_circuit: Circuit) -> None:
     os.remove(eqy_path)
     assert not eqy_path.exists()
 
-    process = connected_circuit.prove_equivalence([vpath], Path('tests/files/gen/eqy_out'), gold_top_module='nonexisting_module', quiet=True)
-    err = 'ERROR: Reading sources failed'
-    assert process.returncode == 1
-    assert err in process.stderr
+    with pytest.raises(RuntimeError):
+        connected_circuit.prove_equivalence([vpath], Path('tests/files/gen/eqy_out'), gold_top_module='nonexisting_module', quiet=True)
 
 
 @pytest.mark.skipif(os.environ.get('EQY_MISSING') == 'true', reason='EQY missing in CI')
