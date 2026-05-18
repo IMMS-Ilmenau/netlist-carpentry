@@ -319,6 +319,8 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             inst = self.instances[instance_name]
             if self.has_circuit and inst.path in self.circuit.instances[inst.instance_type]:
                 self.circuit.instances[inst.instance_type].remove(inst.path)
+                if not self.circuit.instances[inst.instance_type]:
+                    self.circuit.instances.pop(inst.instance_type)
             for p in inst.ports.values():
                 for _, ps in p:
                     self.disconnect(ps)

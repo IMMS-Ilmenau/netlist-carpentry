@@ -216,8 +216,19 @@ def test_remove_module(empty_circuit: Circuit) -> None:
     empty_circuit.modules['m3'] = Module(name='m3')
     empty_circuit.modules['m3'].create_instance(m2, 'm2_inst')
     empty_circuit.instances['m2'] = [InstancePath(raw='m3.m2_inst')]
+    assert 'm3' in empty_circuit
+    assert InstancePath(raw='m3.m2_inst') in empty_circuit.instances['m2']
 
     empty_circuit.remove_module('m3')
+    assert 'm3' not in empty_circuit
+    assert InstancePath(raw='m3.m2_inst') not in empty_circuit.instances['m2']
+
+    empty_circuit.modules['m3'] = Module(name='m3')
+    empty_circuit.modules['m3'].create_instance(m2, 'm2_inst')
+    empty_circuit.instances.pop('m2')
+    empty_circuit.remove_module('m3')
+    assert 'm3' not in empty_circuit
+    assert 'm2' not in empty_circuit.instances
 
 
 def test_get_module(empty_circuit: Circuit) -> None:
@@ -462,16 +473,20 @@ def test_update_instance(connected_circuit: Circuit) -> None:
     assert '§and' in connected_circuit.instances
     assert connected_circuit.instances['§and'] == [inst.path]
 
-    connected_circuit.update_instance(inst, '§and')
+    connected_circuit.update_instance(inst.path, '§and')
     assert '§and' not in connected_circuit.instances
     assert 'new_and' in connected_circuit.instances
     assert connected_circuit.instances['new_and'] == [inst.path]
 
+    and_inst2_path = inst.path.model_copy().replace('and_inst', 'and_inst2')
+    connected_circuit.instances['new_and'].append(and_inst2_path)
     inst.instance_type = 'new_and2'
+    assert connected_circuit.instances['new_and'] == [inst.path, and_inst2_path]
     connected_circuit.update_instance(inst, 'new_and')
     assert '§and' not in connected_circuit.instances
-    assert 'new_and' not in connected_circuit.instances
+    assert 'new_and' in connected_circuit.instances
     assert 'new_and2' in connected_circuit.instances
+    assert connected_circuit.instances['new_and'] == [and_inst2_path]
     assert connected_circuit.instances['new_and2'] == [inst.path]
 
 
@@ -598,20 +613,34 @@ def test_flatten() -> None:
     m21_inst = m2.instances['m21']
     m21_conn = m21_inst.connections
     dff_circuit.flatten(skip_modules=['M22'])
+    assert 'M1' not in dff_circuit.instances
+    assert 'M2' not in dff_circuit.instances
+    assert 'M21' not in dff_circuit.instances
+    assert 'M22' in dff_circuit.instances  # Still present, since skipped
 
     flat = Path('tests/files/gen/circuit_flat.v')
     dff_circuit.write(flat, overwrite=True)
-    proc1 = run_equiv(orig, flat, 'Top', 'Top')
-    proc2 = run_eqy([orig], [flat], 'Top', 'Top', overwrite=True)
-    if proc1.returncode != 0 and proc2.returncode != 0:
-        pytest.xfail('EQY and equiv cannot prove equivalence, but there also seems to be a bug...')
-
     assert len(m2.submodules) == 1
     assert f'm21_{dff.name}' in m2.instances
     dff_m2 = m2.instances[f'm21_{dff.name}']
     assert dff_m2.ports['D'][0].raw_ws_path == m21_conn['A'][0].raw
     assert dff_m2.ports['Q'][0].raw_ws_path == m21_conn['Y'][0].raw
     assert dff_m2.ports['CLK'][0].raw_ws_path == m21_conn['CLK'][0].raw
+
+    proc1 = run_equiv(orig, flat, 'Top', 'Top')
+    proc2 = run_eqy([orig], [flat], 'Top', 'Top', overwrite=True)
+    if proc1.returncode != 0 and proc2.returncode != 0:
+        pytest.xfail('EQY and equiv cannot prove equivalence, but there also seems to be a bug...')
+
+
+def test_flatten_no_skip() -> None:
+    orig = Path('tests/files/dff_circuit_only_pos.v')
+    dff_circuit = read(orig, top='Top')
+    dff_circuit.flatten()
+    assert 'M1' not in dff_circuit.instances
+    assert 'M2' not in dff_circuit.instances
+    assert 'M21' not in dff_circuit.instances
+    assert 'M22' not in dff_circuit.instances
 
 
 def test_create_blackbox_modules(connected_circuit: Circuit) -> None:
@@ -621,6 +650,26 @@ def test_create_blackbox_modules(connected_circuit: Circuit) -> None:
     assert 'foo' not in connected_circuit
     connected_circuit.create_blackbox_modules()
     assert 'foo' in connected_circuit
+
+
+def test_create_blackbox_modules_with_ports(connected_circuit: Circuit) -> None:
+    m = Module(name='foo')
+    m.create_port('A')
+    m.create_port('B')
+    m.create_port('C')
+    m.create_port('Q')
+    m.create_port('Y')
+    connected_circuit.first.create_instance(m, 'foo_inst')
+    connected_circuit.modules.pop('foo')
+
+    assert 'foo' not in connected_circuit
+    connected_circuit.create_blackbox_modules()
+    assert 'foo' in connected_circuit
+    assert connected_circuit['foo'].ports['A'].direction is Direction.IN
+    assert connected_circuit['foo'].ports['B'].direction is Direction.IN
+    assert connected_circuit['foo'].ports['C'].direction is Direction.IN
+    assert connected_circuit['foo'].ports['Q'].direction is Direction.OUT
+    assert connected_circuit['foo'].ports['Y'].direction is Direction.OUT
 
 
 def test_connected_circuit(connected_circuit: Circuit) -> None:
@@ -683,9 +732,12 @@ def test_write(connected_circuit: Circuit) -> None:
 def test_prove_equivalence(connected_circuit: Circuit) -> None:
     vpath = Path('tests/files/gen/connected_circuit.v')
     connected_circuit.write(vpath, True)
-    process = connected_circuit.prove_equivalence([vpath], Path('tests/files/gen/eqy_out'))
-
+    eqy_path = Path('tests/files/gen/eqy_script.eqy')
+    process = connected_circuit.prove_equivalence([vpath], Path('tests/files/gen/eqy_out'), eqy_script_path=eqy_path)
+    assert eqy_path.exists()
     assert process.returncode == 0
+    os.remove(eqy_path)
+    assert not eqy_path.exists()
 
     process = connected_circuit.prove_equivalence([vpath], Path('tests/files/gen/eqy_out'), gold_top_module='nonexisting_module', quiet=True)
     err = 'ERROR: Reading sources failed'
