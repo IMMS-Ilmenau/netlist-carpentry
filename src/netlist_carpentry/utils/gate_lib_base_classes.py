@@ -15,7 +15,7 @@ from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
 from netlist_carpentry import CFG, LOG, Direction, Instance, Module, Port, Signal
-from netlist_carpentry.core.exceptions import EvaluationError, WidthMismatchError
+from netlist_carpentry.core.exceptions import EvaluationError, ObjectNotFoundError, UnsupportedOperationError, WidthMismatchError
 from netlist_carpentry.core.netlist_elements.port import ANY_PORT
 from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2OBJ, WIRE_SEGMENT_X, WireSegment
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
@@ -158,33 +158,43 @@ class PrimitiveGate(Instance, BaseModel):
             )
         return self.parameters
 
-    def p2v(self, port: ANY_PORT, exclude_indices: Optional[List[int]] = None) -> str:
+    def p2v(self, port: ANY_PORT, exclude_indices: Optional[List[int]] = None, include_indices: Optional[List[int]] = None) -> str:
         """
         Converts a Port object to its corresponding Verilog structure by using the connected wire segments.
 
         This method takes the connected wire segments of a Port object and converts them to their corresponding
-        Verilog signal structure (p2ws2v -> Port to WireSegment to Verilog signal syntax).
-        The method requires that the currently selected module matches the module of the Port object,
-        which is derived from the design path of the Port object.
+        Verilog signal structure (p2v -> Port to Verilog signal syntax).
         For each segment of the port, it checks whether a corresponding connected wire segment exists in the current module.
         If the port is set to a constant, the corresponding constant wire segment placeholder is used instead.
-        Port segments can be excluded from the conversion by providing a list of indices,
+        Port segments can be excluded from the conversion by providing a list of indices to the `exclude_indices` parameter,
         indicating which segments should be excluded from the conversion (e.g. segments that are known to be unconnected).
+        Vice versa, only a certain subset of the port's segments may be converted to Verilog syntax, if `include_indices` is a
+        given list of port indices. All indices not present in the list will be excluded from the conversion.
 
         Args:
             port (Port): The Port object to convert.
-            exclude_indices (List[int], optional): A list of indices to exclude from the conversion. Defaults to an empty list.
+            exclude_indices (List[int], optional): A list of indices to exclude from the conversion. Defaults to None.
+            include_indices (List[int], optional): A list of indices (i.e. port slices) to include only for the conversion. Defaults to None.
 
         Returns:
-            str: The Verilog signal structure as a string.
+            str: The Verilog signal structure as a string, e.g. `some_wire[3:0]` or `{w, 2'b01}`.
 
         Raises:
-            AttributeError: If the currently selected module does not match the module of the port.
+            ObjectNotFoundError: If the wire connected to a certain port segment could not be found.
+            UnsupportedOperationError: If both `exclude_indices` and `include_indices` are specified.
+                Only one of both may be given when calling this method.
         """
         from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
 
+        if exclude_indices is not None and include_indices is not None:
+            raise UnsupportedOperationError('Only one of `exclude_indices` and `include_indices` may be specified!')
+
         if exclude_indices is None:
             exclude_indices = []
+        if include_indices is not None:
+            inc_set = set(include_indices)
+            offset = port.offset or 0
+            exclude_indices = [idx for idx in range(offset, port.width + offset) if idx not in inc_set]
         curr_module: Module = port.module
         wsegs: List[WireSegment] = []
         for idx, ps in reversed(port.segments.items()):
@@ -194,7 +204,7 @@ class PrimitiveGate(Instance, BaseModel):
                     if ws is not None:
                         wsegs.append(ws)
                     else:
-                        raise ValueError(f'No wire found for path {ps.ws_path}!')
+                        raise ObjectNotFoundError(f'No wire found for path {ps.ws_path}!')
                 else:
                     wsegs.append(CONST_MAP_VAL2OBJ.get(ps.raw_ws_path, WIRE_SEGMENT_X))
         return P2V.simplify_wire_segments(curr_module, wsegs)

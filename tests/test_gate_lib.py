@@ -5,11 +5,11 @@ from typing import Dict
 import pytest
 from utils import save_results
 
-from netlist_carpentry import WIRE_SEGMENT_X
+from netlist_carpentry import WIRE_SEGMENT_X, Port
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.enums.signal import Signal
-from netlist_carpentry.core.exceptions import EvaluationError
+from netlist_carpentry.core.exceptions import EvaluationError, UnsupportedOperationError
 from netlist_carpentry.core.netlist_elements.element_path import PortPath, WireSegmentPath
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
@@ -38,7 +38,11 @@ from netlist_carpentry.utils.log import LOG
 
 @pytest.fixture
 def primitive_gate() -> Instance:
-    return PrimitiveGate(name='primitive_gate_inst', instance_type='primitive_gate', module=None)
+    m = Module(name='m')
+    m.create_wire('w', width=4)
+    p = PrimitiveGate(name='primitive_gate_inst', instance_type='primitive_gate')
+    m.add_instance(p)
+    return p
 
 
 @pytest.fixture
@@ -111,6 +115,29 @@ def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
         assert primitive_gate.a_width == 4
         assert primitive_gate.parameters.Y_WIDTH == 8
         assert primitive_gate.parameters.A_WIDTH == 4
+
+
+def test_primitive_gate_p2v(primitive_gate: PrimitiveGate) -> None:
+    p = Port(name='A', direction=Direction.IN, module_or_instance=primitive_gate)
+    p.create_port_segments(8, 4)
+    primitive_gate.ports['A'] = p
+    p[4].tie_signal('0')
+    p[5].tie_signal('1')
+    p[6].tie_signal('0')
+    p[7].tie_signal('1')
+    m = primitive_gate.module
+    m.connect(m.wires['w'][0], p[8])
+    m.connect(m.wires['w'][1], p[9])
+    m.connect(m.wires['w'][2], p[10])
+    m.connect(m.wires['w'][3], p[11])
+    v_a = primitive_gate.p2v(primitive_gate.ports['A'])
+    assert v_a == "{w, 4'b1010}"
+    v_a = primitive_gate.p2v(primitive_gate.ports['A'], exclude_indices=[4, 5, 6, 7])
+    assert v_a == 'w'
+    v_a = primitive_gate.p2v(primitive_gate.ports['A'], include_indices=[4, 5, 6, 7])
+    assert v_a == "4'b1010"
+    with pytest.raises(UnsupportedOperationError):
+        primitive_gate.p2v(primitive_gate.ports['A'], exclude_indices=[4, 5, 6, 7], include_indices=[4, 5, 6, 7])
 
 
 def test_unary_gate(unary_gate: UnaryGate) -> None:
