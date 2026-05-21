@@ -51,7 +51,7 @@ class PrimitiveGate(Instance, BaseModel):
             DeprecationWarning,
             stacklevel=2,
         )
-        self._try_sync_parameters()
+        self._try_update_parameters()
         return int(self.parameters.Y_WIDTH) if hasattr(self.parameters, 'Y_WIDTH') else 1  # type: ignore[misc]
 
     @property
@@ -62,7 +62,7 @@ class PrimitiveGate(Instance, BaseModel):
             DeprecationWarning,
             stacklevel=2,
         )
-        self._try_sync_parameters()
+        self._try_update_parameters()
         return int(self.parameters.A_WIDTH) if hasattr(self.parameters, 'A_WIDTH') else self.y_width  # type: ignore[misc]
 
     @property
@@ -73,7 +73,7 @@ class PrimitiveGate(Instance, BaseModel):
             DeprecationWarning,
             stacklevel=2,
         )
-        self._try_sync_parameters()
+        self._try_update_parameters()
         return int(self.parameters.B_WIDTH) if hasattr(self.parameters, 'B_WIDTH') else self.y_width  # type: ignore[misc]
 
     @property
@@ -141,21 +141,23 @@ class PrimitiveGate(Instance, BaseModel):
         """
         return {}
 
-    def _try_sync_parameters(self) -> None:
+    def _try_update_parameters(self) -> None:
         try:
-            self.sync_parameters(False)
+            self.update_parameters()
         except KeyError:  # Happens during initialization phase, where ports do not have a width yet
             pass
 
-    def sync_parameters(self, warn: bool = True) -> Optional[Parameters]:
-        if warn:
-            warnings.warn(
-                f'The return value {self.__class__.__name__}.sync_parameters() will be `None` starting from version 1.0.0. '
-                + f'To retrieve the parameters, please use {self.__class__.__name__}.parameters after calling {self.__class__.__name__}.sync_parameters()! '
-                + f'You can silence this warning with `{self.__class__.__name__}.sync_parameters(warn=False)`.',
-                FutureWarning,
-                stacklevel=2,
-            )
+    def update_parameters(self) -> None:
+        pass
+
+    def sync_parameters(self, warn: bool = True) -> Parameters:
+        warnings.warn(
+            f'`{self.__class__.__name__}.sync_parameters()` is deprecated and will be removed in version 1.0.0. '
+            + f'Use `{self.__class__.__name__}.update_parameters()` instead, and retrieve parameters via the `{self.__class__.__name__}.parameters` property.',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.update_parameters()
         return self.parameters
 
     def p2v(self, port: ANY_PORT, exclude_indices: Optional[List[int]] = None, include_indices: Optional[List[int]] = None) -> str:
@@ -328,13 +330,13 @@ class UnaryGate(PrimitiveGate, BaseModel):
     @property
     def y_width(self) -> PositiveInt:
         """Width of the gate, based on a certain port's width, depending on the actual gate."""
-        self._try_sync_parameters()
+        self._try_update_parameters()
         return self.parameters.Y_WIDTH or 1
 
     @property
     def a_width(self) -> PositiveInt:
         """Width of the gate's `A` port."""
-        self._try_sync_parameters()
+        self._try_update_parameters()
         return self.parameters.A_WIDTH or self.y_width
 
     @property
@@ -373,12 +375,11 @@ class UnaryGate(PrimitiveGate, BaseModel):
             return self.verilog_template.format(out=self.verilog_net_map['Y'], in1=self._check_signal_signed(self.verilog_net_map['A']))
         return ''
 
-    def sync_parameters(self, warn: bool = True) -> Optional[UnaryParams]:
-        super().sync_parameters(warn)
+    def update_parameters(self) -> None:
+        super().update_parameters()
         self.parameters.A_WIDTH = self.ports['A'].width
         self.parameters.A_SIGNED = self.ports['A'].signed
         self.parameters.Y_WIDTH = self.data_width
-        return self.parameters
 
     def signal_in(self, idx: NonNegativeInt = 0) -> Signal:
         """
@@ -492,13 +493,13 @@ class BinaryGate(PrimitiveGate, BaseModel):
     @property
     def y_width(self) -> PositiveInt:
         """Width of the gate, based on a certain port's width, depending on the actual gate."""
-        self._try_sync_parameters()
+        self._try_update_parameters()
         return self.parameters.Y_WIDTH or 1
 
     @property
     def a_width(self) -> PositiveInt:
         """Width of the gate's `A` port."""
-        self._try_sync_parameters()
+        self._try_update_parameters()
         return self.parameters.A_WIDTH or self.y_width
 
     @property
@@ -509,7 +510,7 @@ class BinaryGate(PrimitiveGate, BaseModel):
     @property
     def b_width(self) -> PositiveInt:
         """Width of the gate's `B` port."""
-        self._try_sync_parameters()
+        self._try_update_parameters()
         return self.parameters.B_WIDTH or self.y_width
 
     @property
@@ -546,14 +547,13 @@ class BinaryGate(PrimitiveGate, BaseModel):
             return self.verilog_template.format(out=out, in1=in1, in2=in2)
         return ''
 
-    def sync_parameters(self, warn: bool = True) -> Optional[BinaryParams]:
-        super().sync_parameters(warn)
+    def update_parameters(self) -> None:
+        super().update_parameters()
         self.parameters.A_WIDTH = self.ports['A'].width
         self.parameters.A_SIGNED = self.ports['A'].signed
         self.parameters.B_WIDTH = self.ports['B'].width
         self.parameters.B_SIGNED = self.ports['B'].signed
         self.parameters.Y_WIDTH = self.data_width
-        return self.parameters
 
     def _check_signal_signed(self, a: str, b: str) -> Tuple[str, str]:
         if self.a_signed:
@@ -671,14 +671,13 @@ class ArithmeticGate(BinaryGate, BaseModel):
         in1, in2 = self._check_signal_signed(self.verilog_net_map['A'], self.verilog_net_map['B'])
         return self.verilog_template.format(out=out, in1=in1, in2=in2)
 
-    def sync_parameters(self, warn: bool = True) -> Optional[BinaryParams]:
-        super().sync_parameters(warn)
+    def update_parameters(self) -> None:
+        super().update_parameters()
         self.parameters.A_WIDTH = self.ports['A'].width
         self.parameters.A_SIGNED = self.ports['A'].signed
         self.parameters.B_WIDTH = self.ports['B'].width
         self.parameters.B_SIGNED = self.ports['B'].signed
         self.parameters.Y_WIDTH = self.data_width
-        return self.parameters
 
     def inputs_int(self) -> Tuple[int, int]:
         if self.input_ports[0].has_undefined_signals or self.input_ports[1].has_undefined_signals:
@@ -791,10 +790,9 @@ class StorageGate(PrimitiveGate, BaseModel):
         wire = self.p2v(port) if self.p2v(port) != "1'bx" else ''
         return ('posedge ' if polarity == Signal.HIGH else 'negedge ') + wire if wire else ''
 
-    def sync_parameters(self, warn: bool = True) -> Optional[Parameters]:
-        super().sync_parameters(warn)
+    def update_parameters(self) -> None:
+        super().update_parameters()
         self.parameters.WIDTH = self.data_width
-        return self.parameters
 
     def _split(self) -> Dict[NonNegativeInt, Self]:
         new_insts: Dict[NonNegativeInt, Self] = {}

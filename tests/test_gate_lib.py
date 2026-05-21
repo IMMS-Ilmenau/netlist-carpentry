@@ -105,16 +105,37 @@ def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
     with pytest.warns(DeprecationWarning, match='is deprecated and will be removed in v1.0.0'):
         assert primitive_gate.y_width == 1
         assert primitive_gate.a_width == 1
+        assert primitive_gate.b_width == 1
 
         primitive_gate.parameters.Y_WIDTH = 8
         assert primitive_gate.y_width == 8
         assert primitive_gate.a_width == 8
+        assert primitive_gate.b_width == 8
+        assert primitive_gate.parameters.Y_WIDTH == 8
+        assert 'A_WIDTH' not in primitive_gate.parameters
+        assert 'B_WIDTH' not in primitive_gate.parameters
 
         primitive_gate.parameters.A_WIDTH = 4
         assert primitive_gate.y_width == 8
         assert primitive_gate.a_width == 4
+        assert primitive_gate.b_width == 8
         assert primitive_gate.parameters.Y_WIDTH == 8
         assert primitive_gate.parameters.A_WIDTH == 4
+        assert 'B_WIDTH' not in primitive_gate.parameters
+
+        primitive_gate.parameters.B_WIDTH = 1
+        assert primitive_gate.y_width == 8
+        assert primitive_gate.a_width == 4
+        assert primitive_gate.b_width == 1
+        assert primitive_gate.parameters.Y_WIDTH == 8
+        assert primitive_gate.parameters.A_WIDTH == 4
+        assert primitive_gate.parameters.B_WIDTH == 1
+
+
+def test_primitive_gate_sync_parameters(primitive_gate: PrimitiveGate) -> None:
+    with pytest.warns(DeprecationWarning, match='is deprecated and will be removed in version 1.0.0.'):
+        params = primitive_gate.sync_parameters()
+        assert params == primitive_gate.parameters
 
 
 def test_primitive_gate_p2v(primitive_gate: PrimitiveGate) -> None:
@@ -185,7 +206,7 @@ def test_unary_gate(unary_gate: UnaryGate) -> None:
     assert unary_gate.verilog == ''
     assert unary_gate.signal_in(0) is Signal.FLOATING
     assert unary_gate.signal_out(0) is Signal.UNDEFINED
-    assert unary_gate.sync_parameters(warn=False) == {'A_SIGNED': False, 'A_WIDTH': 1, 'Y_WIDTH': 1}
+    unary_gate.update_parameters()
     assert unary_gate.parameters == {'A_SIGNED': False, 'A_WIDTH': 1, 'Y_WIDTH': 1}
 
     unary_gate.ports['Y'].create_port_segments(3, 1)
@@ -215,7 +236,7 @@ def test_unary_gate_8bit(simple_module: Module) -> None:
     assert g.input_port.width == 8
     assert list(range(8)) == list(g.output_port.segments.keys())
     assert list(range(8)) == list(g.input_port.segments.keys())
-    assert g.sync_parameters(warn=False) == {'A_SIGNED': False, 'A_WIDTH': 8, 'Y_WIDTH': 8}
+    g.update_parameters()
     assert g.parameters == {'A_SIGNED': False, 'A_WIDTH': 8, 'Y_WIDTH': 8}
 
     g = UnaryGate(name='unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8, 'A_WIDTH': 4}, module=simple_module)
@@ -225,7 +246,7 @@ def test_unary_gate_8bit(simple_module: Module) -> None:
     assert g.input_port.width == 4
     assert list(range(8)) == list(g.output_port.segments.keys())
     assert list(range(4)) == list(g.input_port.segments.keys())
-    assert g.sync_parameters(warn=False) == {'A_SIGNED': False, 'A_WIDTH': 4, 'Y_WIDTH': 8}
+    g.update_parameters()
     assert g.parameters == {'A_SIGNED': False, 'A_WIDTH': 4, 'Y_WIDTH': 8}
 
 
@@ -494,7 +515,7 @@ def test_reducer(reduce_gate: ReduceGate) -> None:
     assert all(reduce_gate.signal_in(i) is Signal.FLOATING for i in reduce_gate.ports['A'].segments)
     assert reduce_gate.signal_out() is Signal.UNDEFINED
     reduce_gate.ports['A'].parameters['signed'] = 1
-    assert reduce_gate.sync_parameters(warn=False) == {'A_WIDTH': 4, 'A_SIGNED': True, 'Y_WIDTH': 1}
+    reduce_gate.update_parameters()
     assert reduce_gate.parameters == {'A_WIDTH': 4, 'A_SIGNED': True, 'Y_WIDTH': 1}
     assert not reduce_gate.splittable
 
@@ -720,7 +741,7 @@ def test_binary_gate(binary_gate: BinaryGate) -> None:
     assert binary_gate.signals_in(0) == (Signal.FLOATING, Signal.FLOATING)
     assert binary_gate.signal_out(0) is Signal.UNDEFINED
     binary_gate.ports['B'].parameters['signed'] = '1'
-    assert binary_gate.sync_parameters(warn=False) == {'A_WIDTH': 1, 'A_SIGNED': False, 'B_SIGNED': True, 'B_WIDTH': 1, 'Y_WIDTH': 1}
+    binary_gate.update_parameters()
     assert binary_gate.parameters == {'A_WIDTH': 1, 'A_SIGNED': False, 'B_SIGNED': True, 'B_WIDTH': 1, 'Y_WIDTH': 1}
     assert binary_gate.splittable
 
@@ -1139,7 +1160,7 @@ def test_shift_signed_gate(simple_module: Module) -> None:
 
     g.ports['A'].parameters['signed'] = '0'
     g.ports['B'].parameters['signed'] = '1'
-    assert g.sync_parameters(warn=False) == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 4}
+    g.update_parameters()
     assert g.parameters == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 4}
 
 
@@ -1844,7 +1865,7 @@ def test_adder_structure(simple_module: Module) -> None:
 
     a.ports['A'].parameters['signed'] = '0'
     a.ports['B'].parameters['signed'] = '1'
-    assert a.sync_parameters(warn=False) == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 5}
+    a.update_parameters()
     assert a.parameters == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 5}
     assert not a.splittable
 

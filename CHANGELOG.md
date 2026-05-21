@@ -10,6 +10,7 @@
   - Providing an iterable of integers will now set the signal values of all corresponding port segments to the given signal
   - For invalid indices (i.e. indices without a matching port segment), an IndexError is raised
   - For tied ports or port segments, a `SignalAssignmentError` is raised
+- Fixed FutureWarning in `PrimitiveGate.sync_parameters()` (function will be removed in 1.0.0, use newly introduced `PrimitiveGate.update_parameters()`, which does the same, but without a return value), by making it a DeprecationWarning instead, to prevent technical debt in the future
 - Updated faulty/added missing docstrings
 
 # Older Versions

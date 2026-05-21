@@ -34,7 +34,7 @@ class GateProtocol(Protocol):
     @property
     def verilog_context_map(self) -> SafeFormatDict: ...
     def model_post_init(self, __context: Optional[Dict[str, object]]) -> None: ...
-    def sync_parameters(self, warn: bool = True) -> Optional[Parameters]: ...
+    def update_parameters(self) -> None: ...
     def connect(
         self,
         port_name: str,
@@ -149,10 +149,9 @@ class ClkMixin(BaseModel):
         sigs.update({'CLK': clk})
         return sigs
 
-    def sync_parameters(self: ClockMixinProtocol, warn: bool = True) -> Optional[Parameters]:
-        super().sync_parameters(warn)
+    def update_parameters(self: ClockMixinProtocol) -> None:
+        super().update_parameters()
         self.parameters.CLK_POLARITY = self.clk_polarity
-        return self.parameters
 
     def set_clk(self: ClockMixinProtocol, new_signal: SignalOrLogicLevel) -> None:
         """
@@ -213,8 +212,8 @@ class EnMixin(BaseModel):
         context_map.update(en=self._verilog_en)
         return context_map
 
-    def sync_parameters(self: EnableMixinProtocol, warn: bool = True) -> Optional[Parameters]:
-        super().sync_parameters(warn)
+    def update_parameters(self: EnableMixinProtocol) -> Optional[Parameters]:
+        super().update_parameters()
         self.parameters.EN_POLARITY = self.en_polarity
         return self.parameters
 
@@ -320,8 +319,8 @@ class RstMixin(BaseModel):
         context_map.update(header=self._verilog_header, is_rst=self._verilog_rst_net, rst_out=rst_out)
         return context_map
 
-    def sync_parameters(self: ResetMixinProtocol, warn: bool = True) -> Optional[Parameters]:
-        super().sync_parameters(warn)
+    def update_parameters(self: ResetMixinProtocol) -> Optional[Parameters]:
+        super().update_parameters()
         self.parameters.ARST_POLARITY = self.rst_polarity
         self.parameters.ARST_VALUE = self.rst_val_int
         return self.parameters

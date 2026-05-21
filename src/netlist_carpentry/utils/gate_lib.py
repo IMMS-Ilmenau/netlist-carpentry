@@ -28,7 +28,7 @@ from netlist_carpentry.utils.gate_lib_base_classes import (
     StorageGate,
     UnaryGate,
 )
-from netlist_carpentry.utils.gate_lib_dataclasses import DFFParams, DLatchParams, MuxParams, Parameters
+from netlist_carpentry.utils.gate_lib_dataclasses import DFFParams, DLatchParams, MuxParams
 from netlist_carpentry.utils.gate_mixins import ClkMixin, EnMixin, RstMixin, ScanMixin
 from netlist_carpentry.utils.safe_format_dict import SafeFormatDict
 
@@ -1117,11 +1117,10 @@ class Multiplexer(PrimitiveGate, BaseModel):
         val_true = self.p2v(self.ports['D1'], exclude_indices)
         return f'assign\t{out_signals}\t= {sel} ? {val_true} : {val_false};'
 
-    def sync_parameters(self, warn: bool = True) -> Optional[Parameters]:
-        super().sync_parameters(warn)
+    def update_parameters(self) -> None:
+        super().update_parameters()
         self.parameters.WIDTH = self.y_width
         self.parameters.BIT_WIDTH = self.bit_width
-        return self.parameters
 
     def is_d_port(self, port: Port[Instance]) -> bool:
         """
@@ -1140,7 +1139,7 @@ class Multiplexer(PrimitiveGate, BaseModel):
         connections = self.connections
         super_module = self.parent
         super_module.remove_instance(self.name)
-        self.sync_parameters(False)
+        self.update_parameters()
         for idx in range(self.data_width):
             self.parameters.WIDTH = 1
             inst: Self = super_module.add_instance(self.__class__(name=f'{self.name}_{idx}', parameters=self.parameters))
@@ -1334,11 +1333,10 @@ class Demultiplexer(PrimitiveGate, BaseModel):
             cases += f"\t\t{self.bit_width}'b{format(i, f'0{self.bit_width}b')} : {out_signals} <= {in_signals};\n"
         return self.verilog_template.format(sel=self.p2v(self.ports['S']), cases=cases[:-1])
 
-    def sync_parameters(self, warn: bool = True) -> Optional[Parameters]:
-        super().sync_parameters(warn)
+    def update_parameters(self) -> None:
+        super().update_parameters()
         self.parameters.WIDTH = self.y_width
         self.parameters.BIT_WIDTH = self.bit_width
-        return self.parameters
 
     def is_y_port(self, port: Port[Instance]) -> bool:
         """
@@ -1382,7 +1380,7 @@ class Demultiplexer(PrimitiveGate, BaseModel):
         connections = self.connections
         super_module = self.parent
         super_module.remove_instance(self.name)
-        self.sync_parameters(False)
+        self.update_parameters()
         for idx in range(self.data_width):
             self.parameters.WIDTH = 1
             inst: Self = super_module.add_instance(self.__class__(name=f'{self.name}_{idx}', parameters=self.parameters))
@@ -1560,7 +1558,7 @@ class DFF(ClkMixin, StorageGate, BaseModel):
 
         No connections are copied however, and the instance initially does not belong to any module.
         """
-        self.sync_parameters(False)
+        self.update_parameters()
         return self.scan_ff_equivalent(name=self.name + '_scan', parameters=self.parameters)
 
     def evaluate(self) -> None:
