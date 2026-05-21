@@ -9,7 +9,7 @@ from netlist_carpentry import WIRE_SEGMENT_X, Port
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.enums.signal import Signal
-from netlist_carpentry.core.exceptions import EvaluationError, UnsupportedOperationError
+from netlist_carpentry.core.exceptions import EvaluationError, SignalAssignmentError, UnsupportedOperationError
 from netlist_carpentry.core.netlist_elements.element_path import PortPath, WireSegmentPath
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
@@ -140,6 +140,33 @@ def test_primitive_gate_p2v(primitive_gate: PrimitiveGate) -> None:
         primitive_gate.p2v(primitive_gate.ports['A'], exclude_indices=[4, 5, 6, 7], include_indices=[4, 5, 6, 7])
 
 
+def test_primitive_gate_set(primitive_gate: PrimitiveGate) -> None:
+    p = Port(name='A', direction=Direction.IN, module_or_instance=primitive_gate)
+    p.create_port_segments(8, 4)
+    primitive_gate.ports['A'] = p
+    p.tie_signal(0, 4)
+    p.tie_signal(0, 5)
+    p.tie_signal(0, 6)
+    p.tie_signal(0, 7)
+    assert primitive_gate.ports['A'].signal_array == {idx: Signal.LOW if idx < 8 else Signal.FLOATING for idx in range(4, 12)}
+    primitive_gate.module.connect(primitive_gate.module.wires['w'][0], p[8])
+    primitive_gate.module.connect(primitive_gate.module.wires['w'][1], p[9])
+    primitive_gate.module.connect(primitive_gate.module.wires['w'][2], p[10])
+    primitive_gate.module.connect(primitive_gate.module.wires['w'][3], p[11])
+    assert primitive_gate.ports['A'].signal_array == {idx: Signal.LOW if idx < 8 else Signal.UNDEFINED for idx in range(4, 12)}
+
+    with pytest.raises(IndexError):
+        primitive_gate.set('A', 1)
+
+    with pytest.raises(SignalAssignmentError):
+        primitive_gate.set('A', 1, [4])
+
+    primitive_gate.set('A', 0, 8)
+    assert primitive_gate.ports['A'].signal_array == {idx: Signal.LOW if idx <= 8 else Signal.UNDEFINED for idx in range(4, 12)}
+    primitive_gate.set('A', 1, [9, 10, 11])
+    assert primitive_gate.ports['A'].signal_array == {idx: Signal.LOW if idx <= 8 else Signal.HIGH for idx in range(4, 12)}
+
+
 def test_unary_gate(unary_gate: UnaryGate) -> None:
     assert unary_gate.name == 'unary_gate_inst'
     assert unary_gate.type is EType.INSTANCE
@@ -245,16 +272,18 @@ def _test_signal_conf1(gate: UnaryGate, sin: Signal, sout_prev: Signal, sout_new
 def _test_signal_conf1_n(gate: UnaryGate, sin: Signal, sout_prev: Signal, sout_new: Signal) -> None:
     for i in range(gate.y_width):
         if i == 1:
-            assert gate.signal_in(i) is Signal.HIGH
-            gate.input_port.set_signal(sin, index=i)
-            assert gate.signal_in(i) is Signal.HIGH
-            gate.evaluate()
+            if not gate.input_port[i].is_tied:
+                assert gate.signal_in(i) is Signal.HIGH
+                gate.input_port.set_signal(sin, index=i)
+                assert gate.signal_in(i) is Signal.HIGH
+                gate.evaluate()
         elif i == 2:
-            assert gate.signal_out(i) is Signal.UNDEFINED
-            gate.input_port.set_signal(sin, index=i)
-            assert gate.signal_in(i) is Signal.FLOATING
-            gate.evaluate()
-            assert gate.signal_out(i) is Signal.UNDEFINED
+            if not gate.input_port[i].is_tied:
+                assert gate.signal_out(i) is Signal.UNDEFINED
+                gate.input_port.set_signal(sin, index=i)
+                assert gate.signal_in(i) is Signal.FLOATING
+                gate.evaluate()
+                assert gate.signal_out(i) is Signal.UNDEFINED
         else:
             _test_signal_conf1(gate, sin, sout_prev, sout_new, i)
 
@@ -427,13 +456,14 @@ def test_neg_gate(simple_module: Module) -> None:
 def _test_signal_confr_n(gate: UnaryGate, sin: Signal, sout_prev: Signal, sout_new: Signal) -> None:
     assert gate.signal_out() == sout_prev
     for i in range(gate.a_width):
-        gate.input_port.set_signal(sin, index=i)
-        if i == 1:
-            assert gate.signal_in(i) == Signal.HIGH
-        elif i == 2:
-            assert gate.signal_in(i) == Signal.FLOATING
-        else:
-            assert gate.signal_in(i) == sin
+        if not gate.input_port[i].is_tied:
+            gate.input_port.set_signal(sin, index=i)
+            if i == 1:
+                assert gate.signal_in(i) == Signal.HIGH
+            elif i == 2:
+                assert gate.signal_in(i) == Signal.FLOATING
+            else:
+                assert gate.signal_in(i) == sin
     assert gate.signal_out() == sout_prev
     gate.evaluate()
     assert gate.signal_out() == Signal.UNDEFINED or sout_new
@@ -489,8 +519,6 @@ def test_reduce_and(simple_module: Module) -> None:
     _test_signal_confr_n(r, Signal.LOW, Signal.HIGH, Signal.LOW)
 
     r.input_port.set_signal(Signal.LOW, index=0)
-    r.input_port.set_signal(Signal.HIGH, index=1)
-    r.input_port.set_signal(Signal.LOW, index=2)
     r.input_port.set_signal(Signal.HIGH, index=3)
     r.evaluate()
     assert r.signal_out() == Signal.UNDEFINED
@@ -531,13 +559,11 @@ def test_reduce_or(simple_module: Module) -> None:
     _test_signal_confr_n(r, Signal.LOW, Signal.HIGH, Signal.LOW)
 
     r.input_port.set_signal(Signal.LOW, index=0)
-    r.input_port.set_signal(Signal.HIGH, index=1)
-    r.input_port.set_signal(Signal.LOW, index=2)
     r.input_port.set_signal(Signal.HIGH, index=3)
     r.evaluate()
     assert r.signal_out() == Signal.HIGH
 
-    r.input_port.set_signal(Signal.FLOATING, index=1)
+    r.input_port.tie_signal(Signal.FLOATING, index=1)
     r.evaluate()
     assert r.signal_out() == Signal.HIGH
 
@@ -568,13 +594,11 @@ def test_reduce_bool(simple_module: Module) -> None:
     _test_signal_confr_n(r, Signal.LOW, Signal.HIGH, Signal.LOW)
 
     r.input_port.set_signal(Signal.LOW, index=0)
-    r.input_port.set_signal(Signal.HIGH, index=1)
-    r.input_port.set_signal(Signal.LOW, index=2)
     r.input_port.set_signal(Signal.HIGH, index=3)
     r.evaluate()
     assert r.signal_out() == Signal.HIGH
 
-    r.input_port.set_signal(Signal.FLOATING, index=1)
+    r.input_port.tie_signal(Signal.FLOATING, index=1)
     r.evaluate()
     assert r.signal_out() == Signal.HIGH
 
@@ -603,8 +627,6 @@ def test_reduce_xor(simple_module: Module) -> None:
     _test_signal_confr_n(r, Signal.LOW, Signal.LOW, Signal.LOW)
 
     r.input_port.set_signal(Signal.LOW, index=0)
-    r.input_port.set_signal(Signal.HIGH, index=1)
-    r.input_port.set_signal(Signal.HIGH, index=2)
     r.input_port.set_signal(Signal.HIGH, index=3)
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -635,8 +657,6 @@ def test_reduce_xnor(simple_module: Module) -> None:
     _test_signal_confr_n(r, Signal.LOW, Signal.HIGH, Signal.HIGH)
 
     r.input_port.set_signal(Signal.LOW, index=0)
-    r.input_port.set_signal(Signal.HIGH, index=1)
-    r.input_port.set_signal(Signal.HIGH, index=2)
     r.input_port.set_signal(Signal.HIGH, index=3)
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
     r.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -667,8 +687,6 @@ def test_logic_not(simple_module: Module) -> None:
     _test_signal_confr_n(ln, Signal.LOW, Signal.LOW, Signal.HIGH)
 
     ln.input_port.set_signal(Signal.LOW, index=0)
-    ln.input_port.set_signal(Signal.LOW, index=1)
-    ln.input_port.set_signal(Signal.LOW, index=2)
     ln.input_port.set_signal(Signal.LOW, index=3)
     ln.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
     ln.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
@@ -782,14 +800,13 @@ def test_binary_gate_eval(binary_gate: BinaryGate) -> None:
 def _test_signal_conf2(gate: BinaryGate, sin1: Signal, sin2: Signal, sout_prev: Signal, sout_new: Signal, idx: int = 0) -> None:
     if idx == 1:
         assert gate.signals_in(idx)[0] == Signal.HIGH
-        gate.input_ports[0].set_signal(sin1, index=idx)
+        # Ignore because tied: gate.input_ports[0].set_signal(sin1, index=idx)
         gate.input_ports[1].set_signal(sin2, index=idx)
         assert gate.signals_in(idx) == (Signal.HIGH, sin2)
     elif idx == 2:
         assert gate.signals_in(idx) == (Signal.FLOATING, Signal.FLOATING)
-        gate.input_ports[0].set_signal(sin1, index=idx)
-        gate.input_ports[1].set_signal(sin2, index=idx)
-        assert gate.signals_in(idx) == (Signal.FLOATING, Signal.FLOATING)
+        # Ignore because tied: gate.input_ports[0].set_signal(sin1, index=idx)
+        # Ignore because tied: gate.input_ports[1].set_signal(sin2, index=idx)
     else:
         assert gate.signal_out(idx) == sout_prev
         gate.input_ports[0].set_signal(sin1, index=idx)
@@ -1264,14 +1281,16 @@ def test_comparison_gate(simple_module: Module) -> None:
 
 def _test_signal_conf2_arith(gate: BinaryGate, sins1: Dict[int, Signal], sins2: Dict[int, Signal], sout: Signal) -> None:
     for i, s in sins1.items():
-        gate.input_ports[0].set_signal(s, i)
-        if i == 1:
-            assert gate.input_ports[0][i].signal == Signal.HIGH
-        else:
-            assert gate.input_ports[0][i].signal == s
+        if not gate.input_ports[0][i].is_tied:
+            gate.input_ports[0].set_signal(s, i)
+            if i == 1:
+                assert gate.input_ports[0][i].signal == Signal.HIGH
+            else:
+                assert gate.input_ports[0][i].signal == s
     for i, s in sins2.items():
-        gate.input_ports[1].set_signal(s, i)
-        assert gate.input_ports[1][i].signal == s
+        if not gate.input_ports[1][i].is_tied:
+            gate.input_ports[1].set_signal(s, i)
+            assert gate.input_ports[1][i].signal == s
     gate.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
     gate.input_ports[0].set_signal(sins1[1], 1)
     gate.evaluate()
@@ -3020,10 +3039,6 @@ def test_dlatch_behavior(simple_module: Module) -> None:
     dl.tie_port('D', index=1, sig_value='1')
     dl.modify_connection('D', WireSegmentPath(raw='a.wireA1.2'), index=2)
     dl.modify_connection('D', WireSegmentPath(raw='Z'), index=3)
-    dl.input_port.set_signal(Signal.LOW, 0)
-    dl.input_port.set_signal(Signal.HIGH, 1)
-    dl.input_port.set_signal(Signal.UNDEFINED, 2)
-    dl.input_port.set_signal(Signal.FLOATING, 3)
     dl.evaluate()
     assert dl.input_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.UNDEFINED, 3: Signal.FLOATING}
     assert dl.en_port.signal == Signal.FLOATING

@@ -13,6 +13,7 @@ from netlist_carpentry.core.exceptions import (
     InvalidSignalError,
     ObjectLockedError,
     ParentNotFoundError,
+    SignalAssignmentError,
 )
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.core.netlist_elements.instance import Instance
@@ -367,6 +368,11 @@ def test_set_signal(port_segment: PortSegment) -> None:
 
     port_segment.set_signal(signal='1')
     assert port_segment.signal is Signal.HIGH
+
+    m = Module(name='a')
+    port_segment = m.create_port(name='p', direction=Direction.OUT)[0]
+    with pytest.raises(SignalAssignmentError):
+        port_segment.set_signal(signal='1')
 
 
 def test_driver() -> None:

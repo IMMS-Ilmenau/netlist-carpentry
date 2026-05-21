@@ -9,7 +9,7 @@ See the gate_lib.py module for further information.
 """
 
 import warnings
-from typing import Dict, Iterable, List, Literal, Optional, Tuple
+from typing import Dict, Iterable, List, Literal, Optional, Tuple, Union
 
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
@@ -226,15 +226,29 @@ class PrimitiveGate(Instance, BaseModel):
             self.ports[port_name].parameters['signed'] = getattr(self.parameters, param_name, False)  # type:ignore
         return bool(getattr(self.parameters, param_name, False))  # type:ignore
 
-    def set(self, port_name: str, new_signal: SignalOrLogicLevel) -> None:
+    def set(self, port_name: str, new_signal: SignalOrLogicLevel, idx: Union[int, List[int]] = 0) -> None:
         """
         Sets the signal on a port.
 
         Args:
             port_name (str): The name of the port to set the signal on.
             new_signal (Signal): The new signal value.
+            idx (Union[int, List[int]], optional): The index (or indices) to apply the given signal to.
+                Can either be an integer (single index to set) or an iterable of integers (e.g. a list of indices).
+                For every integer of the iterable the signal value of the corresponding port index is set to the given `new_signal`.
+                Defaults to 0.
+
+        Example:
+            >>> # This sets the value of bit 0 of port A to HIGH
+            >>> instance.set("A", 1, 0)
+            >>>
+            >>> # This sets the value of bits 1, 3 and 5 of port A to LOW, leaving the other bits as they already are.
+            >>> instance.set("A", 0, [1, 3, 5])
         """
-        self.ports[port_name].set_signal(new_signal)
+        if isinstance(idx, int):
+            idx = [idx]
+        for i in idx:
+            self.ports[port_name].set_signal(new_signal, i)
 
     def evaluate(self) -> None:
         """

@@ -16,6 +16,7 @@ from netlist_carpentry.core.exceptions import (
     InvalidSignalError,
     ObjectLockedError,
     ParentNotFoundError,
+    SignalAssignmentError,
 )
 from netlist_carpentry.core.netlist_elements.element_path import PortSegmentPath, WireSegmentPath
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
@@ -408,14 +409,19 @@ class PortSegment(_Segment, BaseModel):
             >>> port_seg.signal
             Signal.HIGH
             ```
+
+        Raises:
+            SignalAssignmentError: If this port segment is tied to a constant value (e.g. 0 or 1, but x/z also count as constants in this context).
+            To change the signal value of a tied port segment, use the `tie_signal()` method instead.
         """
         if not isinstance(signal, Signal):
             signal = Signal.get(signal)
-        prev_signal = self.signal
         if self.is_tied and self.is_load:
-            LOG.warn(f'Cannot set signal on port segment {self.raw_path}: Port Segment is tied to {self.signal}!')
-        elif signal != prev_signal:
-            self._signal = signal
+            raise SignalAssignmentError(
+                f'Cannot set signal on port segment {self.raw_path}: Port Segment is tied to {self.signal}! '
+                + 'To change the signal value of a tied port segment, use the `tie_signal()` method instead.'
+            )
+        self._signal = signal
 
     def driver(self) -> Optional[PortSegment]:
         """Returns the driver of this port segment if it has one, otherwise None.
