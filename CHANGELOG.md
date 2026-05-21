@@ -2,8 +2,14 @@
 
 ## FIXED
 - Fixed minor bug in `netlist_carpentry.Module.remove_instance()` method
+- Fixed silent-fail of `netlist_carpentry.PortSegment.set_signal()` for tied ports - now the method explicitly raises a `SignalAssignmentError`, if an attempt is made to change the signal value of a tied port segment (previously just nothing did happen, but now the run will explicitly fail)
 - The `netlist_carpentry.run_eqy()`, `run_equiv()` and `run_equiv_miter()` methods now support a broader array of parameter types - designs can either be `Circuit` objects or paths to Verilog designs (str, Path, or lists thereof)
 - `PrimitiveGate.p2v()` method now also accepts an `include_indices` parameter to only transform certain slices of a port to Verilog (as a mirror to the `exclude_indices` parameter)
+- `PrimitiveGate.set()` method now also accepts an `idx` parameter to set the signal values of one or multiple indices of a port
+  - Providing a single integer will now set the signal value of the corresponding port segment to the given signal
+  - Providing an iterable of integers will now set the signal values of all corresponding port segments to the given signal
+  - For invalid indices (i.e. indices without a matching port segment), an IndexError is raised
+  - For tied ports or port segments, a `SignalAssignmentError` is raised
 - Updated faulty/added missing docstrings
 
 # Older Versions
