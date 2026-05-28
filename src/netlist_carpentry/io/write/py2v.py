@@ -143,7 +143,7 @@ class P2VTransformer:
         if instance.is_primitive:
             return self._instance_primitive2v(instance)
         ports_str = self._instance_ports2v(module, instance)
-        inst_base = f'{instance.instance_type} {instance.name}({ports_str});'
+        inst_base = f'{instance.instance_type} {instance._verilog_parameters()}{instance.name}({ports_str});'
         return '\n' + ''.join('\t\t' + line + '\n' for line in inst_base.splitlines())
 
     def _instance_primitive2v(self, instance: Instance) -> str:
