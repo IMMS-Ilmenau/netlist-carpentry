@@ -13,6 +13,11 @@
   - For tied ports or port segments, a `SignalAssignmentError` is raised
 - Fixed FutureWarning in `PrimitiveGate.sync_parameters()` (function will be removed in 1.0.0, use newly introduced `PrimitiveGate.update_parameters()`, which does the same, but without a return value), by making it a DeprecationWarning instead, to prevent technical debt in the future
 - Updated faulty/added missing docstrings
+- Fixed `bool(netlist_carpentry.Signal)`
+  - `bool(Signal.LOW)` is now `False`
+  - `bool(Signal.HIGH)` is now `True`
+  - `bool(Signal.UNDEFINED)` and `bool(Signal.FLOATING)` both now raise a `SignalError`, which now extends `ValueError`
+- Fixed some evaluation bugs for reduction gates
 
 # Older Versions
 
