@@ -1,14 +1,15 @@
 # mypy: disable-error-code="safe-super"
-from typing import Dict, Iterable, List, Optional, Protocol, Type, runtime_checkable
+from typing import Dict, Iterable, List, Optional, Protocol, Type, Union, runtime_checkable
 
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 
 from netlist_carpentry import Direction, Instance, Port, Signal
+from netlist_carpentry.core.exceptions import WidthMismatchError
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.core.netlist_elements.port import ANY_PORT
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
 from netlist_carpentry.utils.custom_dict import CustomDict
-from netlist_carpentry.utils.gate_lib_dataclasses import ClockParams, DFFParams, EnableParams, Parameters, ResetParams
+from netlist_carpentry.utils.gate_lib_dataclasses import ClockParams, DFFParams, EnableParams, LoadParams, Parameters, ResetParams, SRParams
 from netlist_carpentry.utils.safe_format_dict import SafeFormatDict
 
 
@@ -43,10 +44,10 @@ class GateProtocol(Protocol):
         index: NonNegativeInt = 0,
         width: PositiveInt = 1,
     ) -> None: ...
-    def p2v(self, port: ANY_PORT, exclude_indices: Optional[List[int]] = None) -> str: ...
-    def _v_header(self, port: Port[Instance], polarity: Signal) -> str: ...
+    def p2v(self, port: ANY_PORT, exclude_indices: Optional[List[int]] = None, include_indices: Optional[List[int]] = None) -> str: ...
+    def _v_header(self, port: Port[Instance], polarity: Signal, idx: int = 0) -> str: ...
     def _storage_assigns(self, sig_value: str = '') -> str: ...
-    def set(self, port_name: str, new_signal: SignalOrLogicLevel) -> None: ...
+    def set(self, port_name: str, new_signal: SignalOrLogicLevel, idx: Union[int, List[int]] = 0) -> None: ...
     def evaluate(self) -> None: ...
     def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]: ...
     def _set_output(self, new_signals: Dict[int, Signal]) -> None: ...
@@ -96,6 +97,50 @@ class ResetMixinProtocol(GateProtocol, Protocol):
     def _verilog_rst_sig_val(self) -> str: ...
     @property
     def _verilog_header(self) -> str: ...
+    def _split_sync_params(self, slices: Iterable['ResetMixinProtocol']) -> None: ...
+
+
+@runtime_checkable
+class LoadMixinProtocol(GateProtocol, Protocol):
+    @property
+    def parameters(self) -> LoadParams: ...
+    @property
+    def al_port(self) -> Port[Instance]: ...
+    @property
+    def ad_port(self) -> Port[Instance]: ...
+    @property
+    def load_polarity(self) -> Signal: ...
+    @property
+    def load_val(self) -> Dict[int, Signal]: ...
+    @property
+    def load_val_int(self) -> Optional[int]: ...
+    @property
+    def _verilog_load(self) -> str: ...
+    @property
+    def _verilog_load_net(self) -> str: ...
+    @property
+    def _verilog_load_sig_val(self) -> str: ...
+    @property
+    def _verilog_clk(self) -> str: ...
+    @property
+    def _verilog_header(self) -> str: ...
+
+
+@runtime_checkable
+class SRMixinProtocol(GateProtocol, Protocol):
+    @property
+    def parameters(self) -> SRParams: ...
+    @property
+    def clr_port(self) -> Port[Instance]: ...
+    @property
+    def clr_polarity(self) -> Signal: ...
+    @property
+    def set_port(self) -> Port[Instance]: ...
+    @property
+    def set_polarity(self) -> Signal: ...
+    def _verilog_clr_net(self, idx: int) -> str: ...
+    def _verilog_set_net(self, idx: int) -> str: ...
+    def _verilog_header_sr(self, idx: int) -> str: ...
     def _split_sync_params(self, slices: Iterable['ResetMixinProtocol']) -> None: ...
 
 
@@ -231,29 +276,31 @@ class EnMixin(BaseModel):
         self.connect('EN', None, direction=Direction.IN)
 
     def _calc_output(self: EnableMixinProtocol, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        if self.input_port[idx].signal.is_defined and self.en_signal.is_defined:
+        if self.en_signal.is_undefined or (self.en_signal is self.en_polarity and self.input_port[idx].signal.is_undefined):
+            return {idx: Signal.UNDEFINED}
+        if self.en_signal is self.en_polarity:
             return {idx: self.input_port[idx].signal if self.en_signal is self.en_polarity else self.output_port[idx].signal}
-        return {idx: Signal.UNDEFINED}
+        return {idx: self.output_port[idx].signal}
 
 
 class RstMixin(BaseModel):
     @property
     def rst_polarity(self: ResetMixinProtocol) -> Signal:
         """Which reset level resets the flip-flop. Default is Signal.HIGH: the flipflop is in reset, if the reset signal is HIGH."""
-        return self.parameters.ARST_POLARITY if self.parameters.ARST_POLARITY is not None else Signal.HIGH
+        return self.parameters.RST_POLARITY if self.parameters.RST_POLARITY is not None else Signal.HIGH
 
     @rst_polarity.setter
     def rst_polarity(self: ResetMixinProtocol, new_signal: Signal) -> None:
-        self.parameters.ARST_POLARITY = new_signal
+        self.parameters.RST_POLARITY = new_signal
 
     @property
     def rst_val_int(self: ResetMixinProtocol) -> int:
         """Reset value of the flip-flop as integer. Default is 0."""
-        return self.parameters.ARST_VALUE or 0
+        return self.parameters.RST_VALUE or 0
 
     @rst_val_int.setter
     def rst_val_int(self: ResetMixinProtocol, new_rst_val_int: int) -> None:
-        self.parameters.ARST_VALUE = new_rst_val_int
+        self.parameters.RST_VALUE = new_rst_val_int
 
     @property
     def rst_port(self: ResetMixinProtocol) -> Port[Instance]:
@@ -321,8 +368,8 @@ class RstMixin(BaseModel):
 
     def update_parameters(self: ResetMixinProtocol) -> Optional[Parameters]:
         super().update_parameters()
-        self.parameters.ARST_POLARITY = self.rst_polarity
-        self.parameters.ARST_VALUE = self.rst_val_int
+        self.parameters.RST_POLARITY = self.rst_polarity
+        self.parameters.RST_VALUE = self.rst_val_int
         return self.parameters
 
     def set_rst(self: ResetMixinProtocol, new_signal: SignalOrLogicLevel) -> None:
@@ -344,8 +391,261 @@ class RstMixin(BaseModel):
         super()._split_sync_params(slices)
         idx = 0
         for slice in slices:
-            slice.parameters.ARST_VALUE = int(self.rst_val[idx])
+            slice.parameters.RST_VALUE = int(self.rst_val[idx])
             idx += 1
+
+
+class LoadMixin(BaseModel):
+    @property
+    def load_polarity(self: LoadMixinProtocol) -> Signal:
+        """Which load level loads the load value into flip-flop. Default is Signal.HIGH: the flipflop will load, if the load signal is HIGH."""
+        return self.parameters.LOAD_POLARITY if self.parameters.LOAD_POLARITY is not None else Signal.HIGH
+
+    @load_polarity.setter
+    def load_polarity(self: LoadMixinProtocol, new_signal: Signal) -> None:
+        self.parameters.LOAD_POLARITY = new_signal
+
+    @property
+    def al_port(self: LoadMixinProtocol) -> Port[Instance]:
+        """The asynchronous load enable port of the gate, i.e. the port that toggles whether to load data into the flip-flop."""
+        return self.ports['AL']
+
+    @property
+    def ad_port(self: LoadMixinProtocol) -> Port[Instance]:
+        """The asynchronous data load port of the gate, i.e. the port that holds the data to load into the flip-flop."""
+        return self.ports['AD']
+
+    @property
+    def load_val(self: LoadMixinProtocol) -> Dict[int, Signal]:
+        """The value of the flipflop during and after reset, retrieved from the load data port."""
+        return self.ad_port.signal_array
+
+    @property
+    def load_val_int(self: LoadMixinProtocol) -> Optional[int]:
+        """The value of the flipflop during and after reset as an integer, retrieved from the load data port."""
+        return self.ad_port.signal_int
+
+    @property
+    def in_load(self: LoadMixinProtocol) -> bool:
+        """True if the gate is currently in "load-value" mode, False otherwise."""
+        return self.al_port.signal is self.load_polarity
+
+    def model_post_init(self: LoadMixinProtocol, __context: Optional[Dict[str, object]]) -> None:
+        super().model_post_init(__context)
+        self.connect('AL', None, direction=Direction.IN)
+        self.connect('AD', None, direction=Direction.IN, width=self.width)
+
+    @property
+    def verilog_net_map(self: LoadMixinProtocol) -> Dict[str, str]:
+        al = self.p2v(self.al_port)
+        ad = self.p2v(self.ad_port)
+        sigs = super().verilog_net_map
+        sigs.update({'AL': al, 'AD': ad})
+        return sigs
+
+    @property
+    def _verilog_load(self: LoadMixinProtocol) -> str:
+        """
+        The verilog representation of the load sensitivity list entry.
+
+        Has the form `posedge load_en_net_name` or `negedge load_en_net_name`, depending on the load polarity.
+        """
+        return self._v_header(self.al_port, self.load_polarity)
+
+    @property
+    def _verilog_load_net(self: LoadMixinProtocol) -> str:
+        """
+        The verilog representation of the reset net.
+
+        Has the form `load_net_name` or `~load_net_name`, depending on the reset polarity.
+        """
+        load_net = self.p2v(self.al_port) if self.p2v(self.al_port) != "1'bx" else ''
+        return load_net if self.load_polarity == Signal.HIGH else f'~{load_net}'
+
+    @property
+    def _verilog_load_sig_val(self: LoadMixinProtocol) -> str:
+        return f"{self.output_port.width}'b{f'{Signal.dict_to_bin(self.load_val)}'.zfill(self.output_port.width)}"
+
+    @property
+    def _verilog_header(self: LoadMixinProtocol) -> str:
+        return self._verilog_load
+
+    @property
+    def verilog_context_map(self: LoadMixinProtocol) -> SafeFormatDict:
+        ad = super()._storage_assigns(sig_value=self.p2v(self.ad_port))
+        context_map = super().verilog_context_map
+        header = f'{self._verilog_clk} or {self._verilog_header}'
+        context_map.update(header=header, is_al=self._verilog_load_net, ad=ad)
+        return context_map
+
+    @property
+    def verilog_template(self: LoadMixinProtocol) -> str:
+        return super().verilog_template.replace('{set_out}', 'if ({is_al}) begin\n\t\t{ad}\n\tend else begin\n\t\t{set_out}\n\tend')
+
+    def update_parameters(self: LoadMixinProtocol) -> None:
+        super().update_parameters()
+        self.parameters.LOAD_POLARITY = self.load_polarity
+
+    def set_al(self: LoadMixinProtocol, new_signal: SignalOrLogicLevel) -> None:
+        """
+        Sets the asynchronous load enable signal.
+
+        Args:
+            new_signal (Signal): The new asynchronous load enable signal value.
+        """
+        self.set(self.al_port.name, new_signal)
+        self.evaluate()
+
+    def _calc_output(self: LoadMixinProtocol, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        if self.al_port.signal is self.load_polarity:
+            return {idx: self.load_val[idx]}
+        return super()._calc_output(idx)
+
+
+class SRMixin(BaseModel):
+    @property
+    def clr_polarity(self: SRMixinProtocol) -> Signal:
+        """Which clear level clears the flip-flop. Default is Signal.HIGH: the flipflop goes to 0, if the clear signal is HIGH."""
+        return self.parameters.CLR_POLARITY if self.parameters.CLR_POLARITY is not None else Signal.HIGH
+
+    @clr_polarity.setter
+    def clr_polarity(self: SRMixinProtocol, new_signal: Signal) -> None:
+        self.parameters.CLR_POLARITY = new_signal
+
+    @property
+    def clr_port(self: SRMixinProtocol) -> Port[Instance]:
+        """The clear port of the gate."""
+        return self.ports['CLR']
+
+    @property
+    def set_polarity(self: SRMixinProtocol) -> Signal:
+        """Which set level sets the flip-flop. Default is Signal.HIGH: the flipflop goes to 1, if the set signal is HIGH."""
+        return self.parameters.SET_POLARITY if self.parameters.SET_POLARITY is not None else Signal.HIGH
+
+    @set_polarity.setter
+    def set_polarity(self: SRMixinProtocol, new_signal: Signal) -> None:
+        self.parameters.SET_POLARITY = new_signal
+
+    @property
+    def set_port(self: SRMixinProtocol) -> Port[Instance]:
+        """The set port of the gate."""
+        return self.ports['SET']
+
+    def model_post_init(self: SRMixinProtocol, __context: Optional[Dict[str, object]]) -> None:
+        super().model_post_init(__context)
+        self.connect('CLR', None, direction=Direction.IN, width=self.width)
+        self.connect('SET', None, direction=Direction.IN, width=self.width)
+
+    @property
+    def verilog_net_map(self: SRMixinProtocol) -> Dict[str, str]:
+        clr_v = self.p2v(self.clr_port)
+        set_v = self.p2v(self.set_port)
+        sigs = super().verilog_net_map
+        sigs.update({'CLR': clr_v, 'SET': set_v})
+        return sigs
+
+    def _verilog_clr_net(self: SRMixinProtocol, idx: int) -> str:
+        """
+        The verilog representation of the clear net.
+
+        Has the form `clr_net_name` or `~clr_net_name`, depending on the clear polarity.
+        """
+        clr_net = self.p2v(self.clr_port, include_indices=[idx])
+        clr_net = clr_net if clr_net != "1'bx" else ''
+        return clr_net if self.clr_polarity == Signal.HIGH else f'~{clr_net}'
+
+    def _verilog_set_net(self: SRMixinProtocol, idx: int) -> str:
+        """
+        The verilog representation of the set net.
+
+        Has the form `set_net_name` or `~set_net_name`, depending on the set polarity.
+        """
+        set_net = self.p2v(self.set_port, include_indices=[idx])
+        set_net = set_net if set_net != "1'bx" else ''
+        return set_net if self.set_polarity == Signal.HIGH else f'~{set_net}'
+
+    def _verilog_header_sr(self: SRMixinProtocol, idx: int) -> str:
+        return self._v_header(self.clr_port, self.clr_polarity, idx) + ' or ' + self._v_header(self.set_port, self.set_polarity, idx)
+
+    @property
+    def verilog_context_map(self: SRMixinProtocol) -> SafeFormatDict:
+        context_map = super().verilog_context_map
+        if set(self.clr_port.segments.keys()) != set(self.set_port.segments.keys()):
+            raise WidthMismatchError('CLR and SET port differ in width and/or offset!')
+        self.update_parameters()
+        for idx in self.clr_port.segments:
+            context_map[f'header{idx}'] = self._verilog_header_sr(idx)
+            context_map[f'is_clr{idx}'] = self._verilog_clr_net(idx)
+            context_map[f'is_set{idx}'] = self._verilog_set_net(idx)
+            in1 = self.p2v(self.input_port, include_indices=[idx])
+            out = self.p2v(self.output_port, include_indices=[idx])
+            context_map[f'clr_out{idx}'] = f"{out}\t<=\t1'b0;"
+            context_map[f'set_out{idx}'] = f"{out}\t<=\t1'b1;"
+            context_map[f'd_out{idx}'] = f'{out}\t<=\t{in1};'
+            if 'EN' in self.ports and 'EN_POLARITY' in self.parameters and isinstance(self.parameters['EN_POLARITY'], Signal):
+                en = self.p2v(self.ports['EN'], include_indices=[idx])
+                en_pol = '~' if self.parameters['EN_POLARITY'] is Signal.LOW else ''
+                context_map[f'en{idx}'] = en_pol + en
+        return context_map
+
+    @property
+    def verilog(self: SRMixinProtocol) -> str:
+        context_map = self.verilog_context_map
+        sr_instances = []
+        for idx in self.clr_port.segments:
+            header = context_map[f'header{idx}']
+            is_clr = context_map[f'is_clr{idx}']
+            is_set = context_map[f'is_set{idx}']
+            clr_out = context_map[f'clr_out{idx}']
+            set_out = context_map[f'set_out{idx}']
+            d_out = context_map[f'd_out{idx}']
+            if f'en{idx}' in context_map:
+                en = context_map[f'en{idx}']
+                v = self.verilog_template.format(header=header, is_clr=is_clr, is_set=is_set, clr_out=clr_out, set_out=set_out, d_out=d_out, en=en)
+            else:
+                v = self.verilog_template.format(header=header, is_clr=is_clr, is_set=is_set, clr_out=clr_out, set_out=set_out, d_out=d_out)
+            sr_instances.append(v)
+        return '\n'.join(sr_instances)
+
+    def update_parameters(self: SRMixinProtocol) -> None:
+        super().update_parameters()
+        self.parameters.CLR_POLARITY = self.clr_polarity
+        self.parameters.SET_POLARITY = self.set_polarity
+
+    def set_clr(self: SRMixinProtocol, new_signal: SignalOrLogicLevel, idx: Union[int, List[int]]) -> None:
+        """
+        Sets the clear signal.
+
+        Args:
+            new_signal (Signal): The new clear signal value.
+            idx (Union[int, List[int]], optional): The index (or indices) to apply the given signal to.
+                Can either be an integer (single index to set) or an iterable of integers (e.g. a list of indices).
+                For every integer of the iterable the signal value of the corresponding port index is set to the given `new_signal`.
+                Defaults to 0.
+        """
+        self.set(self.clr_port.name, new_signal, idx)
+        self.evaluate()
+
+    def set_set(self: SRMixinProtocol, new_signal: SignalOrLogicLevel, idx: Union[int, List[int]]) -> None:
+        """
+        Sets the set signal.
+
+        Args:
+            new_signal (Signal): The new set signal value.
+            idx (Union[int, List[int]], optional): The index (or indices) to apply the given signal to.
+                Can either be an integer (single index to set) or an iterable of integers (e.g. a list of indices).
+                For every integer of the iterable the signal value of the corresponding port index is set to the given `new_signal`.
+                Defaults to 0.
+        """
+        self.set(self.set_port.name, new_signal, idx)
+        self.evaluate()
+
+    def _calc_output(self: SRMixinProtocol, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        if self.clr_port[idx].signal is self.clr_polarity:
+            return {idx: Signal.LOW}
+        if self.set_port[idx].signal is self.set_polarity:
+            return {idx: Signal.HIGH}
+        return super()._calc_output(idx)
 
 
 class ScanMixin(BaseModel):

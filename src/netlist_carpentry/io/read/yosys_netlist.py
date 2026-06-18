@@ -6,7 +6,7 @@ import os
 import re
 from pathlib import Path
 from time import time
-from typing import Dict, List, Optional, Set, Union, overload
+from typing import Callable, Dict, List, Optional, Set, Union, overload
 
 from tqdm import tqdm
 
@@ -25,8 +25,8 @@ from netlist_carpentry.io.read.yosys_netlist_types import (
     YosysModule,
     YosysPortDirections,
 )
-from netlist_carpentry.utils.gate_lib import ADFF, DFF, get
-from netlist_carpentry.utils.gate_mixins import EnableMixinProtocol
+from netlist_carpentry.utils.gate_lib import DFF, get
+from netlist_carpentry.utils.gate_mixins import EnableMixinProtocol, RstMixin, SRMixin
 
 
 class YosysNetlistReader(AbstractReader):
@@ -410,9 +410,12 @@ class YosysNetlistReader(AbstractReader):
             self._prepare_mux_dict(inst_type, inst_data)
 
     def _prepare_dff_dict(self, ff_type: str, ff_dict: YosysCell) -> None:
-        if 'a' in ff_type:  # FF with asyncronous reset
+        if 'adff' in ff_type:  # FF with asyncronous reset
             ff_dict['port_directions']['RST'] = ff_dict['port_directions'].pop('ARST')
             ff_dict['connections']['RST'] = ff_dict['connections'].pop('ARST')
+        if 'sdff' in ff_type:  # FF with syncronous reset
+            ff_dict['port_directions']['RST'] = ff_dict['port_directions'].pop('SRST')
+            ff_dict['connections']['RST'] = ff_dict['connections'].pop('SRST')
 
     def _prepare_mux_dict(self, mux_type: str, mux_data: YosysCell) -> None:
         mux_data['port_directions']['D0'] = mux_data['port_directions'].pop('A')
@@ -422,20 +425,32 @@ class YosysNetlistReader(AbstractReader):
 
     def _instance_post_processing(self, inst: Instance, inst_data: YosysCell) -> None:
         if isinstance(inst, DFF):
-            if 'CLK_POLARITY' in inst_data['parameters']:
-                clk_pol = self._try_get_int(inst_data['parameters']['CLK_POLARITY'])
-                inst.clk_polarity = Signal.get(clk_pol)
-        if isinstance(inst, ADFF):
-            if 'ARST_VALUE' in inst_data['parameters']:
-                rst_val = self._try_get_int(inst_data['parameters']['ARST_VALUE'])
-                inst.rst_val_int = int(rst_val)  # This should always be 1 or 0 -- if not, the exception is helpful :D
-            if 'ARST_POLARITY' in inst_data['parameters']:
-                rst_pol = self._try_get_int(inst_data['parameters']['ARST_POLARITY'])
-                inst.rst_polarity = Signal.get(rst_pol)
+            self._instance_param_fix(inst, inst_data, 'CLK_POLARITY', 'CLK_POLARITY', Signal.get)
+        if isinstance(inst, RstMixin):
+            self._instance_param_fix(inst, inst_data, 'ARST_VALUE', 'RST_VALUE', int, delete_old=True)
+            self._instance_param_fix(inst, inst_data, 'ARST_POLARITY', 'RST_POLARITY', Signal.get, delete_old=True)
+            self._instance_param_fix(inst, inst_data, 'SRST_VALUE', 'RST_VALUE', int, delete_old=True)
+            self._instance_param_fix(inst, inst_data, 'SRST_POLARITY', 'RST_POLARITY', Signal.get, delete_old=True)
+        if isinstance(inst, SRMixin):
+            self._instance_param_fix(inst, inst_data, 'CLR_POLARITY', 'CLR_POLARITY', Signal.get)
+            self._instance_param_fix(inst, inst_data, 'SET_POLARITY', 'SET_POLARITY', Signal.get)
         if isinstance(inst, EnableMixinProtocol):
-            if 'EN_POLARITY' in inst_data['parameters']:
-                en_pol = self._try_get_int(inst_data['parameters']['EN_POLARITY'])
-                inst.en_polarity = Signal.get(en_pol)
+            self._instance_param_fix(inst, inst_data, 'EN_POLARITY', 'EN_POLARITY', Signal.get)
+
+    def _instance_param_fix(
+        self,
+        inst: Instance,
+        inst_data: YosysCell,
+        old_param_key: str,
+        new_param_key: str,
+        value_fnc: Callable[[Union[str, int]], object],
+        delete_old: bool = False,
+    ) -> None:
+        if old_param_key in inst_data['parameters']:
+            rst_pol = self._try_get_int(inst_data['parameters'][old_param_key])
+            setattr(inst.parameters, new_param_key, value_fnc(rst_pol))
+            if delete_old and hasattr(inst.parameters, old_param_key):
+                delattr(inst.parameters, old_param_key)
 
 
 TYPE_REPLACEMENT_MAP = {

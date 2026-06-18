@@ -786,8 +786,8 @@ class StorageGate(PrimitiveGate, BaseModel):
         in1 = sig_value if sig_value != '' else self.verilog_net_map['D']
         return f'{out}\t<=\t{in1};' if out != "1'bx" else ''
 
-    def _v_header(self, port: Port[Instance], polarity: Signal) -> str:
-        wire = self.p2v(port) if self.p2v(port) != "1'bx" else ''
+    def _v_header(self, port: Port[Instance], polarity: Signal, idx: int = 0) -> str:
+        wire = self.p2v(port, include_indices=[idx]) if self.p2v(port, include_indices=[idx]) != "1'bx" else ''
         return ('posedge ' if polarity == Signal.HIGH else 'negedge ') + wire if wire else ''
 
     def update_parameters(self) -> None:

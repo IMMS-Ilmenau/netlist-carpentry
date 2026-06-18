@@ -255,6 +255,17 @@ def nand_gate(
     return _bin_gate(g.NandGate, module, inst_name, A, B, Y, params)
 
 
+def bitwise_case_equality_gate(
+    module: M,
+    inst_name: Optional[str] = None,
+    A: Optional[PORT] = None,
+    B: Optional[PORT] = None,
+    Y: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.BitwiseCaseEquality:
+    return _bin_gate(g.BitwiseCaseEquality, module, inst_name, A, B, Y, params)
+
+
 def _shift_gate(
     gate: Type[GATE],
     module: M,
@@ -312,6 +323,28 @@ def shift_right(
     params: Optional[Dict[str, object]] = None,
 ) -> g.ShiftRight:
     return _shift_gate(g.ShiftRight, module, inst_name, A, B, Y, params)
+
+
+def arithmetic_shift_left(
+    module: M,
+    inst_name: Optional[str] = None,
+    A: Optional[PORT] = None,
+    B: Optional[PORT] = None,
+    Y: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.ArithmeticShiftLeft:
+    return _shift_gate(g.ArithmeticShiftLeft, module, inst_name, A, B, Y, params)
+
+
+def arithmetic_shift_right(
+    module: M,
+    inst_name: Optional[str] = None,
+    A: Optional[PORT] = None,
+    B: Optional[PORT] = None,
+    Y: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.ArithmeticShiftRight:
+    return _shift_gate(g.ArithmeticShiftRight, module, inst_name, A, B, Y, params)
 
 
 def _binNto1_gate(
@@ -396,6 +429,17 @@ def equal(
     return _binNto1_gate(g.Equal, module, inst_name, A, B, Y, params)
 
 
+def case_equal(
+    module: M,
+    inst_name: Optional[str] = None,
+    A: Optional[PORT] = None,
+    B: Optional[PORT] = None,
+    Y: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.CaseEqual:
+    return _binNto1_gate(g.CaseEqual, module, inst_name, A, B, Y, params)
+
+
 def not_equal(
     module: M,
     inst_name: Optional[str] = None,
@@ -405,6 +449,17 @@ def not_equal(
     params: Optional[Dict[str, object]] = None,
 ) -> g.NotEqual:
     return _binNto1_gate(g.NotEqual, module, inst_name, A, B, Y, params)
+
+
+def case_not_equal(
+    module: M,
+    inst_name: Optional[str] = None,
+    A: Optional[PORT] = None,
+    B: Optional[PORT] = None,
+    Y: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.CaseNotEqual:
+    return _binNto1_gate(g.CaseNotEqual, module, inst_name, A, B, Y, params)
 
 
 def greater_than(
@@ -547,6 +602,39 @@ def multiplier(
     return _arith_gate(g.Multiplier, module, inst_name, A, B, Y, params)
 
 
+def divider(
+    module: M,
+    inst_name: Optional[str] = None,
+    A: Optional[PORT] = None,
+    B: Optional[PORT] = None,
+    Y: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.Divider:
+    return _arith_gate(g.Divider, module, inst_name, A, B, Y, params)
+
+
+def modulo(
+    module: M,
+    inst_name: Optional[str] = None,
+    A: Optional[PORT] = None,
+    B: Optional[PORT] = None,
+    Y: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.Modulo:
+    return _arith_gate(g.Modulo, module, inst_name, A, B, Y, params)
+
+
+def exponentiator(
+    module: M,
+    inst_name: Optional[str] = None,
+    A: Optional[PORT] = None,
+    B: Optional[PORT] = None,
+    Y: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.Exponentiator:
+    return _arith_gate(g.Exponentiator, module, inst_name, A, B, Y, params)
+
+
 def _dff(
     gate: Type[GATE],
     module: M,
@@ -620,6 +708,77 @@ def adffe(
     params: Optional[Dict[str, object]] = None,
 ) -> g.ADFFE:
     return _dff(g.ADFFE, module, inst_name, D, [('CLK', CLK), ('RST', RST), ('EN', EN)], Q, params)
+
+
+def sdff(
+    module: M,
+    inst_name: Optional[str] = None,
+    D: Optional[PORT] = None,
+    CLK: Optional[PORT] = None,
+    RST: Optional[PORT] = None,
+    Q: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.SDFF:
+    return _dff(g.SDFF, module, inst_name, D, [('CLK', CLK), ('RST', RST)], Q, params)
+
+
+def sdffce(
+    module: M,
+    inst_name: Optional[str] = None,
+    D: Optional[PORT] = None,
+    CLK: Optional[PORT] = None,
+    RST: Optional[PORT] = None,
+    EN: Optional[PORT] = None,
+    Q: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.SDFFCE:
+    return _dff(g.SDFFCE, module, inst_name, D, [('CLK', CLK), ('RST', RST), ('EN', EN)], Q, params)
+
+
+def sdffe(
+    module: M,
+    inst_name: Optional[str] = None,
+    D: Optional[PORT] = None,
+    CLK: Optional[PORT] = None,
+    RST: Optional[PORT] = None,
+    EN: Optional[PORT] = None,
+    Q: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.SDFFE:
+    return _dff(g.SDFFE, module, inst_name, D, [('CLK', CLK), ('RST', RST), ('EN', EN)], Q, params)
+
+
+def aldff(
+    module: M,
+    inst_name: Optional[str] = None,
+    D: Optional[PORT] = None,
+    CLK: Optional[PORT] = None,
+    AL: Optional[PORT] = None,
+    AD: Optional[PORT] = None,
+    Q: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.ALDFF:
+    aldff = _dff(g.ALDFF, module, inst_name, D, [('CLK', CLK), ('AL', AL)], Q, params)
+    if AD is not None:
+        module.connect(AD, aldff.ports['AD'])
+    return aldff
+
+
+def aldffe(
+    module: M,
+    inst_name: Optional[str] = None,
+    D: Optional[PORT] = None,
+    CLK: Optional[PORT] = None,
+    AL: Optional[PORT] = None,
+    AD: Optional[PORT] = None,
+    EN: Optional[PORT] = None,
+    Q: Optional[PORT] = None,
+    params: Optional[Dict[str, object]] = None,
+) -> g.ALDFFE:
+    aldff = _dff(g.ALDFFE, module, inst_name, D, [('CLK', CLK), ('AL', AL), ('EN', EN)], Q, params)
+    if AD is not None:
+        module.connect(AD, aldff.ports['AD'])
+    return aldff
 
 
 def _scan_dff(

@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.netlist_elements.module import Module
@@ -7,7 +8,7 @@ from netlist_carpentry.core.netlist_elements.module import Module
 sys.path.append('.')
 import pytest
 
-from netlist_carpentry import CFG, LOG, read
+from netlist_carpentry import CFG, LOG, read, run_equiv
 from netlist_carpentry.io.write.py2v import P2VTransformer
 from netlist_carpentry.utils.log import Log, initialize_logging
 from tests.utils import save_results
@@ -89,6 +90,15 @@ def test_wire2port() -> None:
     found = P2VTransformer().module2v(m)
     target = 'module m\n\t(\n\t\tinput\twire\t\t\tin,\n\t\toutput\twire\t\t\tout\n\t);\n\t// Wire Definitions\n\t\twire\t\t_ncgen_0_;\n\n\t// Port<->Wire Connections\n\t\tassign _ncgen_0_\t= in;\n\t\tassign out\t= _ncgen_0_;\n\nendmodule'
     assert found == target
+
+
+def test_rw_dff_types() -> None:
+    c = read(Path('tests/files/dff_types.v'))
+    c.write(Path('tests/files/gen/dff_types_out.v'), overwrite=True)
+
+    proc = run_equiv('tests/files/dff_types.v', 'tests/files/gen/dff_types_out.v', 'dff_types', 'dff_types', quiet=True)
+    assert proc.returncode == 0
+    assert proc.stderr == ''
 
 
 if __name__ == '__main__':

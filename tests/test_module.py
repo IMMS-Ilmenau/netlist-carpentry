@@ -1589,13 +1589,13 @@ def test_split_instance(dff_module: Module) -> None:
 
 def test_split_instance_rst_val(dff_circuit_simple: Circuit) -> None:
     adffe = dff_circuit_simple.get_from_path(dff_circuit_simple.instances['§adffe'][0])
-    adffe.parameters.ARST_VALUE = 85  # '01010101'
+    adffe.parameters.RST_VALUE = 85  # '01010101'
     slices = adffe.split()
     for idx, dslice in slices.items():
         if idx % 2:  # Odd indices (backwards, since LSB-first in dictionary)
-            assert dslice.parameters.ARST_VALUE == 0
+            assert dslice.parameters.RST_VALUE == 0
         else:  # Even
-            assert dslice.parameters.ARST_VALUE == 1
+            assert dslice.parameters.RST_VALUE == 1
 
 
 def test_split_all(dff_module: Module) -> None:

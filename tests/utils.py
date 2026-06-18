@@ -200,7 +200,7 @@ def connected_module() -> Module:
     m.add_instance(OrGate(name='or_inst', module=m))
     m.add_instance(XorGate(name='xor_inst', module=m))
     m.add_instance(NotGate(name='not_inst', module=m))
-    m.add_instance(ADFFE(name='dff_inst', parameters={'ARST_POLARITY': Signal.LOW}, module=m))
+    m.add_instance(ADFFE(name='dff_inst', parameters={'RST_POLARITY': Signal.LOW}, module=m))
 
     m.connect(m.wires['in1'][0], m.instances['and_inst'].ports['A'][0])
     m.connect(m.wires['in2'][0], m.instances['and_inst'].ports['B'][0])

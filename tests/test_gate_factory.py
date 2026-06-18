@@ -229,6 +229,12 @@ def test_nand_gate(module: Module) -> None:
     assert g.name == '_NandGate_0_'
 
 
+def test_bweqx_gate(module: Module) -> None:
+    g = factory.bitwise_case_equality_gate(module)
+    assert isinstance(g, lib.BitwiseCaseEquality)
+    assert g.name == '_BitwiseCaseEquality_0_'
+
+
 def test_shift_gate(module: Module) -> None:
     module.create_port('P4', direction=Direction.OUT)
     with pytest.raises(WidthMismatchError):
@@ -289,6 +295,18 @@ def test_shift_right(module: Module) -> None:
     g = factory.shift_right(module)
     assert isinstance(g, lib.ShiftRight)
     assert g.name == '_ShiftRight_0_'
+
+
+def test_arithmetic_shift_left(module: Module) -> None:
+    g = factory.arithmetic_shift_left(module)
+    assert isinstance(g, lib.ArithmeticShiftLeft)
+    assert g.name == '_ArithmeticShiftLeft_0_'
+
+
+def test_arithmetic_shift_right(module: Module) -> None:
+    g = factory.arithmetic_shift_right(module)
+    assert isinstance(g, lib.ArithmeticShiftRight)
+    assert g.name == '_ArithmeticShiftRight_0_'
 
 
 def test_binNto1_gate(module: Module) -> None:
@@ -358,10 +376,22 @@ def test_equal(module: Module) -> None:
     assert g.name == '_Equal_0_'
 
 
+def test_case_equal(module: Module) -> None:
+    g = factory.case_equal(module)
+    assert isinstance(g, lib.CaseEqual)
+    assert g.name == '_CaseEqual_0_'
+
+
 def test_not_equal(module: Module) -> None:
     g = factory.not_equal(module)
     assert isinstance(g, lib.NotEqual)
     assert g.name == '_NotEqual_0_'
+
+
+def test_case_not_equal(module: Module) -> None:
+    g = factory.case_not_equal(module)
+    assert isinstance(g, lib.CaseNotEqual)
+    assert g.name == '_CaseNotEqual_0_'
 
 
 def test_greater_than(module: Module) -> None:
@@ -544,6 +574,24 @@ def test_multiplier(module: Module) -> None:
     assert g.name == '_Multiplier_0_'
 
 
+def test_divider(module: Module) -> None:
+    g = factory.divider(module)
+    assert isinstance(g, lib.Divider)
+    assert g.name == '_Divider_0_'
+
+
+def test_modulo(module: Module) -> None:
+    g = factory.modulo(module)
+    assert isinstance(g, lib.Modulo)
+    assert g.name == '_Modulo_0_'
+
+
+def test_exponentiator(module: Module) -> None:
+    g = factory.exponentiator(module)
+    assert isinstance(g, lib.Exponentiator)
+    assert g.name == '_Exponentiator_0_'
+
+
 def test_dff_gate(module: Module) -> None:
     module.create_port('P4', direction=Direction.OUT)
     with pytest.raises(WidthMismatchError):
@@ -717,6 +765,272 @@ def test_adffe_gate(module: Module) -> None:
     assert g.ports['EN'].width == 1
     assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1._ncgen_1_'
     assert g.ports['EN'].connected_wires == module.ports['P6'].connected_wires
+    assert g.ports['Q'].is_connected
+    assert g.ports['Q'].width == 4
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
+
+
+def test_sdff_gate(module: Module) -> None:
+    module.create_port('P4', direction=Direction.OUT)
+    with pytest.raises(WidthMismatchError):
+        factory.sdff(module, D=module.ports['P1'], Q=module.ports['P4'])
+    with pytest.raises(WidthMismatchError):
+        factory.sdff(module, RST=module.ports['P1'])
+    module.create_port('P5', direction=Direction.IN, width=4)
+    with pytest.raises(MultipleDriverError):
+        factory.sdff(module, D=module.ports['P1'], Q=module.ports['P5'], params={})
+
+    module.instances.clear()
+    module._inst_gen_i = 0
+    g = factory.sdff(module)
+    assert isinstance(g, lib.DFF)
+    assert g.name == '_SDFF_0_'
+    assert g.width == 1
+    assert len(g.ports) == 4
+    assert g.ports['D'].is_unconnected
+    assert g.ports['CLK'].is_unconnected
+    assert g.ports['RST'].is_unconnected
+    assert g.ports['Q'].is_unconnected
+
+    module.create_port('P6', direction=Direction.IN)
+    module.create_port('P7', direction=Direction.IN)
+    g = factory.sdff(module, D=module.ports['P1'], CLK=module.ports['P6'], RST=module.ports['P7'], Q=module.ports['P3'], params={})
+    assert g.name == '_SDFF_1_'
+    assert g.width == 4
+    assert g.ports['D'].is_connected
+    assert g.ports['D'].width == 4
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
+    assert g.ports['CLK'].is_connected
+    assert g.ports['CLK'].width == 1
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
+    assert g.ports['RST'].is_connected
+    assert g.ports['RST'].width == 1
+    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert g.ports['RST'].connected_wires == module.ports['P7'].connected_wires
+    assert g.ports['Q'].is_connected
+    assert g.ports['Q'].width == 4
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
+
+
+def test_sdffce_gate(module: Module) -> None:
+    module.create_port('P4', direction=Direction.OUT)
+    with pytest.raises(WidthMismatchError):
+        factory.sdffce(module, D=module.ports['P1'], Q=module.ports['P4'])
+    with pytest.raises(WidthMismatchError):
+        factory.sdffce(module, RST=module.ports['P1'])
+    module.create_port('P5', direction=Direction.IN, width=4)
+    with pytest.raises(MultipleDriverError):
+        factory.sdffce(module, D=module.ports['P1'], Q=module.ports['P5'], params={})
+
+    module.instances.clear()
+    module._inst_gen_i = 0
+    g = factory.sdffce(module)
+    assert isinstance(g, lib.DFF)
+    assert g.name == '_SDFFCE_0_'
+    assert g.width == 1
+    assert len(g.ports) == 5
+    assert g.ports['D'].is_unconnected
+    assert g.ports['CLK'].is_unconnected
+    assert g.ports['RST'].is_unconnected
+    assert g.ports['EN'].is_unconnected
+    assert g.ports['Q'].is_unconnected
+
+    module.create_port('P6', direction=Direction.IN)
+    module.create_port('P7', direction=Direction.IN)
+    g = factory.sdffce(
+        module, D=module.ports['P1'], CLK=module.ports['P6'], RST=module.ports['P7'], EN=module.ports['P6'], Q=module.ports['P3'], params={}
+    )
+    assert g.name == '_SDFFCE_1_'
+    assert g.width == 4
+    assert g.ports['D'].is_connected
+    assert g.ports['D'].width == 4
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
+    assert g.ports['CLK'].is_connected
+    assert g.ports['CLK'].width == 1
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
+    assert g.ports['RST'].is_connected
+    assert g.ports['RST'].width == 1
+    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert g.ports['RST'].connected_wires == module.ports['P7'].connected_wires
+    assert g.ports['EN'].is_connected
+    assert g.ports['EN'].width == 1
+    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert g.ports['EN'].connected_wires == module.ports['P6'].connected_wires
+    assert g.ports['Q'].is_connected
+    assert g.ports['Q'].width == 4
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
+
+
+def test_sdffe_gate(module: Module) -> None:
+    module.create_port('P4', direction=Direction.OUT)
+    with pytest.raises(WidthMismatchError):
+        factory.sdffe(module, D=module.ports['P1'], Q=module.ports['P4'])
+    with pytest.raises(WidthMismatchError):
+        factory.sdffe(module, RST=module.ports['P1'])
+    module.create_port('P5', direction=Direction.IN, width=4)
+    with pytest.raises(MultipleDriverError):
+        factory.sdffe(module, D=module.ports['P1'], Q=module.ports['P5'], params={})
+
+    module.instances.clear()
+    module._inst_gen_i = 0
+    g = factory.sdffe(module)
+    assert isinstance(g, lib.DFF)
+    assert g.name == '_SDFFE_0_'
+    assert g.width == 1
+    assert len(g.ports) == 5
+    assert g.ports['D'].is_unconnected
+    assert g.ports['CLK'].is_unconnected
+    assert g.ports['RST'].is_unconnected
+    assert g.ports['EN'].is_unconnected
+    assert g.ports['Q'].is_unconnected
+
+    module.create_port('P6', direction=Direction.IN)
+    module.create_port('P7', direction=Direction.IN)
+    g = factory.sdffe(
+        module, D=module.ports['P1'], CLK=module.ports['P6'], RST=module.ports['P7'], EN=module.ports['P6'], Q=module.ports['P3'], params={}
+    )
+    assert g.name == '_SDFFE_1_'
+    assert g.width == 4
+    assert g.ports['D'].is_connected
+    assert g.ports['D'].width == 4
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
+    assert g.ports['CLK'].is_connected
+    assert g.ports['CLK'].width == 1
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
+    assert g.ports['RST'].is_connected
+    assert g.ports['RST'].width == 1
+    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert g.ports['RST'].connected_wires == module.ports['P7'].connected_wires
+    assert g.ports['EN'].is_connected
+    assert g.ports['EN'].width == 1
+    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert g.ports['EN'].connected_wires == module.ports['P6'].connected_wires
+    assert g.ports['Q'].is_connected
+    assert g.ports['Q'].width == 4
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
+
+
+def test_aldff_gate(module: Module) -> None:
+    module.create_port('P4', direction=Direction.OUT)
+    with pytest.raises(WidthMismatchError):
+        factory.aldff(module, D=module.ports['P1'], Q=module.ports['P4'])
+    with pytest.raises(WidthMismatchError):
+        factory.aldff(module, AL=module.ports['P1'])
+    module.create_port('P5', direction=Direction.IN, width=4)
+    with pytest.raises(MultipleDriverError):
+        factory.aldff(module, D=module.ports['P1'], Q=module.ports['P5'], params={})
+
+    module.instances.clear()
+    module._inst_gen_i = 0
+    g = factory.aldff(module)
+    assert isinstance(g, lib.DFF)
+    assert g.name == '_ALDFF_0_'
+    assert g.width == 1
+    assert len(g.ports) == 5
+    assert g.ports['D'].is_unconnected
+    assert g.ports['CLK'].is_unconnected
+    assert g.ports['AL'].is_unconnected
+    assert g.ports['AD'].is_unconnected
+    assert g.ports['Q'].is_unconnected
+
+    module.create_port('P6', direction=Direction.IN)
+    module.create_port('P7', direction=Direction.IN, width=4)
+    g = factory.aldff(
+        module, D=module.ports['P1'], CLK=module.ports['P6'], AD=module.ports['P7'], AL=module.ports['P6'], Q=module.ports['P3'], params={}
+    )
+    assert g.name == '_ALDFF_1_'
+    assert g.width == 4
+    assert g.ports['D'].is_connected
+    assert g.ports['D'].width == 4
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
+    assert g.ports['CLK'].is_connected
+    assert g.ports['CLK'].width == 1
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
+    assert g.ports['AD'].is_connected
+    assert g.ports['AD'].width == 4
+    assert next(iter(g.ports['AD'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert g.ports['AD'].connected_wires == module.ports['P7'].connected_wires
+    assert g.ports['AL'].is_connected
+    assert g.ports['AL'].width == 1
+    assert next(iter(g.ports['AL'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert g.ports['AL'].connected_wires == module.ports['P6'].connected_wires
+    assert g.ports['Q'].is_connected
+    assert g.ports['Q'].width == 4
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
+
+
+def test_aldffe_gate(module: Module) -> None:
+    module.create_port('P4', direction=Direction.OUT)
+    with pytest.raises(WidthMismatchError):
+        factory.aldffe(module, D=module.ports['P1'], Q=module.ports['P4'])
+    with pytest.raises(WidthMismatchError):
+        factory.aldffe(module, AL=module.ports['P1'])
+    module.create_port('P5', direction=Direction.IN, width=4)
+    with pytest.raises(MultipleDriverError):
+        factory.aldffe(module, D=module.ports['P1'], Q=module.ports['P5'], params={})
+
+    module.instances.clear()
+    module._inst_gen_i = 0
+    g = factory.aldffe(module)
+    assert isinstance(g, lib.DFF)
+    assert g.name == '_ALDFFE_0_'
+    assert g.width == 1
+    assert len(g.ports) == 6
+    assert g.ports['D'].is_unconnected
+    assert g.ports['CLK'].is_unconnected
+    assert g.ports['AL'].is_unconnected
+    assert g.ports['AD'].is_unconnected
+    assert g.ports['EN'].is_unconnected
+    assert g.ports['Q'].is_unconnected
+
+    module.create_port('P6', direction=Direction.IN)
+    module.create_port('P7', direction=Direction.IN, width=4)
+    module.create_port('P8', direction=Direction.IN)
+    g = factory.aldffe(
+        module,
+        D=module.ports['P1'],
+        CLK=module.ports['P6'],
+        AD=module.ports['P7'],
+        AL=module.ports['P6'],
+        EN=module.ports['P8'],
+        Q=module.ports['P3'],
+        params={},
+    )
+    assert g.name == '_ALDFFE_1_'
+    assert g.width == 4
+    assert g.ports['D'].is_connected
+    assert g.ports['D'].width == 4
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
+    assert g.ports['CLK'].is_connected
+    assert g.ports['CLK'].width == 1
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
+    assert g.ports['AD'].is_connected
+    assert g.ports['AD'].width == 4
+    assert next(iter(g.ports['AD'].connected_wires)).raw == 'test_module1._ncgen_4_'
+    assert g.ports['AD'].connected_wires == module.ports['P7'].connected_wires
+    assert g.ports['AL'].is_connected
+    assert g.ports['AL'].width == 1
+    assert next(iter(g.ports['AL'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert g.ports['AL'].connected_wires == module.ports['P6'].connected_wires
+    assert g.ports['EN'].is_connected
+    assert g.ports['EN'].width == 1
+    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert g.ports['EN'].connected_wires == module.ports['P8'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
     assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_3_'

@@ -29,7 +29,7 @@ class Parameters(BaseModel):
     model_config = ConfigDict(extra='allow')
 
     def __getitem__(self, key: str) -> object:
-        if getattr(self, key, None) is not None:  # type: ignore
+        if key in self:
             return getattr(self, key, None)  # type: ignore
         raise KeyError(f'No parameter {key} found!')
 
@@ -38,6 +38,9 @@ class Parameters(BaseModel):
 
     def __len__(self) -> NonNegativeInt:
         return len(self.as_dict())
+
+    def __contains__(self, key: str) -> bool:
+        return getattr(self, key, None) is not None  # type: ignore
 
     def __eq__(self, value: object) -> bool:
         if isinstance(value, Parameters):
@@ -84,8 +87,17 @@ class EnableParamsMixin:
 
 
 class ResetParamsMixin:
-    ARST_POLARITY: Optional[Signal] = None
-    ARST_VALUE: Optional[int] = None
+    RST_POLARITY: Optional[Signal] = None
+    RST_VALUE: Optional[int] = None
+
+
+class LoadParamsMixin:
+    LOAD_POLARITY: Optional[Signal] = None
+
+
+class SRParamsMixin:
+    CLR_POLARITY: Optional[Signal] = None
+    SET_POLARITY: Optional[Signal] = None
 
 
 class ClockParams(ClockParamsMixin, GateParams):
@@ -97,6 +109,14 @@ class EnableParams(EnableParamsMixin, GateParams):
 
 
 class ResetParams(ResetParamsMixin, GateParams):
+    pass
+
+
+class LoadParams(LoadParamsMixin, GateParams):
+    pass
+
+
+class SRParams(SRParamsMixin, GateParams):
     pass
 
 
@@ -131,7 +151,7 @@ class MuxParams(GateParams):
     BIT_WIDTH: Optional[PositiveInt] = None
 
 
-class DFFParams(ClockParams, EnableParams, ResetParams):
+class DFFParams(ClockParams, EnableParams, ResetParams, LoadParams, SRParams):
     """Common parameters for DFFs and derived classes."""
 
     WIDTH: Optional[PositiveInt] = None

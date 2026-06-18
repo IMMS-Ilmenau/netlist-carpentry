@@ -18,6 +18,7 @@ from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
 from netlist_carpentry import CFG, Direction, Instance, Port, Signal
+from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
 from netlist_carpentry.utils.gate_lib_base_classes import (
     ArithmeticGate,
     BinaryGate,
@@ -29,7 +30,7 @@ from netlist_carpentry.utils.gate_lib_base_classes import (
     UnaryGate,
 )
 from netlist_carpentry.utils.gate_lib_dataclasses import DFFParams, DLatchParams, MuxParams
-from netlist_carpentry.utils.gate_mixins import ClkMixin, EnMixin, RstMixin, ScanMixin
+from netlist_carpentry.utils.gate_mixins import ClkMixin, EnMixin, LoadMixin, RstMixin, ScanMixin, SRMixin
 from netlist_carpentry.utils.safe_format_dict import SafeFormatDict
 
 _gate_lib_map: Dict[str, Type[PrimitiveGate]] = {}
@@ -532,6 +533,35 @@ class NandGate(BinaryGate, BaseModel):
         return {idx: Signal.LOW}
 
 
+class BitwiseCaseEquality(BinaryGate, BaseModel):
+    """
+    A BITWISE CASE EQUALITY gate.
+
+    A BITWISE CASE EQUALITY gate is a gate that compares the input vectors bit by bit and
+    produces a HIGH output signal for a certain bit only if both its input signals are HIGH.
+    Otherwise, it produces a LOW output signal.
+
+    Attributes:
+        name (str): The name of the gate instance.
+        instance_type (str): The type of the gate.
+    """
+
+    instance_type: str = f'{CFG.id_internal}bweqx'
+
+    @property
+    def verilog_template(self) -> str:
+        return 'assign\t{out} = {in1} === {in2};'
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        """
+        Calculates the gate's output signal.
+
+        For a BITWISE CASE EQUALITY gate, the output signal is HIGH for a certain bit only if both its input signals are HIGH.
+        """
+        s1, s2 = self.signals_in(idx)
+        return {idx: Signal.HIGH if s1 is s2 else Signal.LOW}
+
+
 class ShiftSigned(ShiftGate, BaseModel):
     """
     A signed SHIFT gate.
@@ -588,7 +618,7 @@ class ShiftLeft(ShiftGate, BaseModel):
 
         For a SHIFT-LEFT gate, returns its left input shifted left by the number on the right side.
         """
-        val_a = Signal.dict_to_int(self.ports['A'].signal_array, msb_first=self.ports['A'].msb_first)
+        val_a = Signal.dict_to_int(self.ports['A'].signal_array, msb_first=self.ports['A'].msb_first, signed=self.ports['A'].signed)
         val_b = Signal.dict_to_int(self.ports['B'].signal_array, msb_first=self.ports['B'].msb_first)
         out_val = val_a << val_b
         return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
@@ -617,7 +647,66 @@ class ShiftRight(ShiftGate, BaseModel):
 
         For a SHIFT-RIGHT gate, returns its left input shifted right by the number on the right side.
         """
-        val_a = Signal.dict_to_int(self.ports['A'].signal_array, msb_first=self.ports['A'].msb_first)
+        val_a = Signal.dict_to_int(self.ports['A'].signal_array, msb_first=self.ports['A'].msb_first, signed=self.ports['A'].signed)
+        val_b = Signal.dict_to_int(self.ports['B'].signal_array, msb_first=self.ports['B'].msb_first)
+        mask = (1 << self.y_width) - 1
+        out_val = (mask & val_a) >> val_b  # Masks the shifting process, otherwise it would be an arithmetic shift, and not a logical shift
+        return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
+
+
+class ArithmeticShiftLeft(ShiftGate, BaseModel):
+    """
+    An ARITHMETIC SHIFT-LEFT gate.
+
+    An ARITHMETIC SHIFT-LEFT gate is a gate that returns its left input shifted left by the number on the right side.
+
+    Attributes:
+        name (str): The name of the gate instance.
+        instance_type (str): The type of the gate.
+    """
+
+    instance_type: str = f'{CFG.id_internal}sshl'
+
+    @property
+    def verilog_template(self) -> str:
+        return 'assign\t{out} = {in1} <<< {in2};'
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        """
+        Calculates the gate's output signal.
+
+        For a SHIFT-LEFT gate, returns its left input shifted left by the number on the right side.
+        """
+        val_a = Signal.dict_to_int(self.ports['A'].signal_array, msb_first=self.ports['A'].msb_first, signed=self.ports['A'].signed)
+        val_b = Signal.dict_to_int(self.ports['B'].signal_array, msb_first=self.ports['B'].msb_first)
+        out_val = val_a << val_b
+        return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
+
+
+class ArithmeticShiftRight(ShiftGate, BaseModel):
+    """
+    An ARITHMETIC SHIFT-RIGHT gate.
+
+    An ARITHMETIC SHIFT-RIGHT gate is a gate that returns its left input shifted right by the number on the right side.
+
+    Attributes:
+        name (str): The name of the gate instance.
+        instance_type (str): The type of the gate.
+    """
+
+    instance_type: str = f'{CFG.id_internal}sshr'
+
+    @property
+    def verilog_template(self) -> str:
+        return 'assign\t{out} = {in1} >>> {in2};'
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        """
+        Calculates the gate's output signal.
+
+        For a SHIFT-RIGHT gate, returns its left input shifted right by the number on the right side.
+        """
+        val_a = Signal.dict_to_int(self.ports['A'].signal_array, msb_first=self.ports['A'].msb_first, signed=self.ports['A'].signed)
         val_b = Signal.dict_to_int(self.ports['B'].signal_array, msb_first=self.ports['B'].msb_first)
         out_val = val_a >> val_b
         return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
@@ -822,7 +911,7 @@ class Equal(BinaryNto1Gate, BaseModel):
     An EQUAL gate.
 
     An EQUAL gate is a gate that produces a HIGH output signal only if both input signals have the same value.
-    Otherwise, it produces a LOW output signal.
+    Otherwise, it produces a LOW output signal. Produces UNDEFINED, if one of the input signals is `x` or `z`.
 
     Attributes:
         name (str): The name of the gate instance.
@@ -840,6 +929,7 @@ class Equal(BinaryNto1Gate, BaseModel):
         Calculates the gate's output signal.
 
         For an EQUAL gate, the output signal is HIGH only if both input signals have the same value.
+        The output is UNDEFINED, if one of the inputs is undefined.
         """
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
@@ -848,12 +938,44 @@ class Equal(BinaryNto1Gate, BaseModel):
         return {idx: Signal.UNDEFINED}
 
 
+class CaseEqual(BinaryNto1Gate, BaseModel):
+    """
+    A CASE-EQUAL gate.
+
+    A CASE-EQUAL gate is a gate that produces a HIGH output signal only if both input signals have the same value.
+    Otherwise, it produces a LOW output signal.
+
+    Unlike the normal equality comparison (Equal gate, §eq) that can give `x` as output, this gate produces an exact equality comparison.
+    It will strictly give `0` or `1` as output, even if input includes `x` or `z` values, implementing the Verilog `===` operator.
+
+    Attributes:
+        name (str): The name of the gate instance.
+        instance_type (str): The type of the gate.
+    """
+
+    instance_type: str = f'{CFG.id_internal}eqx'
+
+    @property
+    def verilog_template(self) -> str:
+        return 'assign\t{out} = {in1} === {in2};'
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        """
+        Calculates the gate's output signal.
+
+        For a CASE-EQUAL gate, the output signal is HIGH only if both input signals have the same value, otherwise LOW.
+        """
+        sigs_eq = self.input_ports[0].signal_array == self.input_ports[1].signal_array
+        sign_eq = self.input_ports[0].signed == self.input_ports[1].signed
+        return {idx: Signal.HIGH if sigs_eq and sign_eq else Signal.LOW}
+
+
 class NotEqual(BinaryNto1Gate, BaseModel):
     """
     A NOT-EQUAL gate.
 
     A NOT-EQUAL gate is a gate that produces a HIGH output signal only if both input signals have different values.
-    Otherwise (if both are equal), it produces a LOW output signal.
+    Otherwise (if both are equal), it produces a LOW output signal. Produces UNDEFINED, if one of the input signals is `x` or `z`.
 
     Attributes:
         name (str): The name of the gate instance.
@@ -871,12 +993,45 @@ class NotEqual(BinaryNto1Gate, BaseModel):
         Calculates the gate's output signal.
 
         For a NOT-EQUAL gate, the output signal is HIGH only if both input signals have different values.
+        The output is UNDEFINED, if one of the inputs is undefined.
         """
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
         if all(s.is_defined for s in sin1.values()) and all(s.is_defined for s in sin2.values()):
             return {idx: Signal.HIGH if Signal.dict_to_int(sin1) != Signal.dict_to_int(sin2) else Signal.LOW}
         return {idx: Signal.UNDEFINED}
+
+
+class CaseNotEqual(BinaryNto1Gate, BaseModel):
+    """
+    A CASE-NOT-EQUAL gate.
+
+    A CASE-NOT-EQUAL gate is a gate that produces a HIGH output signal only if both input signals have different values.
+    Otherwise (if both are equal), it produces a LOW output signal.
+
+    Unlike the normal inequality comparison (NotEqual gate, §ne) that can give `x` as output, this gate produces an exact inequality comparison.
+    It will strictly give `0` or `1` as output, even if input includes `x` or `z` values, implementing the Verilog `!==` operator.
+
+    Attributes:
+        name (str): The name of the gate instance.
+        instance_type (str): The type of the gate.
+    """
+
+    instance_type: str = f'{CFG.id_internal}nex'
+
+    @property
+    def verilog_template(self) -> str:
+        return 'assign\t{out} = {in1} !== {in2};'
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        """
+        Calculates the gate's output signal.
+
+        For a CASE-NOT-EQUAL gate, the output signal is HIGH only if both input signals have different values, otherwise LOW.
+        """
+        sigs_eq = self.input_ports[0].signal_array == self.input_ports[1].signal_array
+        sign_eq = self.input_ports[0].signed == self.input_ports[1].signed
+        return {idx: Signal.LOW if sigs_eq and sign_eq else Signal.HIGH}
 
 
 class GreaterThan(BinaryNto1Gate, BaseModel):
@@ -1496,6 +1651,53 @@ class Modulo(ArithmeticGate, BaseModel):
         return Signal.from_int(sig1_int % sig2_int, fixed_width=self.output_port.width)
 
 
+class Exponentiator(ArithmeticGate, BaseModel):
+    instance_type: str = f'{CFG.id_internal}pow'
+
+    @property
+    def verilog_template(self) -> str:
+        return 'assign\t{out} = {in1} ** {in2};'
+
+    def _verilog_pow(self) -> Optional[int]:
+        base, expo = self.inputs_int()
+        mask = (1 << self.y_width) - 1
+        b_val = base & mask
+        e_val = expo & mask
+        if expo < 0:
+            if base == 0:
+                return None  # Division by Zero
+            elif base == 1:  # 1**something is 1
+                result = 1
+            elif base == -1:  # -1**something is 1 or -1, alternating for odd and even
+                result = -1 if (e_val % 2) else 1  # 1 for even e_val, -1 for odd e_val
+            else:
+                result = 0  # Truncation for fractions, truncate to 0
+        else:  # Default case for positive e_val
+            # pow calculates massive exponents efficiently and applies the hardware
+            # wrap-around (modulo 2^N) automatically
+            result = pow(b_val, e_val, 1 << self.y_width)
+
+        self.output_port.set_signed(self.ports['A'].signed)
+        if self.ports['A'].signed:  # Make the calculated number negative if it has a leading 1
+            return result if result < (1 << self.y_width - 1) else result - (1 << self.y_width)
+        return result
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        """
+        Calculates the gate's output signal.
+
+        For a POW gate, the output signal is the first input signal to the power of the second input signal.
+
+        **Edge case:**
+        0**0 is defined as 1, following IEEE 754-2008
+        (https://en.wikipedia.org/wiki/Zero_to_the_power_of_zero#IEEE_floating-point_standard).
+        """
+        pow_sig = self._verilog_pow()
+        if pow_sig is not None:
+            return Signal.from_int(pow_sig, fixed_width=self.output_port.width)
+        return {i: Signal.UNDEFINED for i, _ in self.output_port}
+
+
 class DFF(ClkMixin, StorageGate, BaseModel):
     """
     A D flip-flop (DFF) is a clocked gate that stores a value on its input port and outputs it on its output port.
@@ -1612,7 +1814,9 @@ class DFF(ClkMixin, StorageGate, BaseModel):
         return {idx: self.input_port[idx].signal if self.input_port[idx].signal.is_defined else Signal.UNDEFINED}
 
 
-class ADFF(RstMixin, DFF):
+class ADFF(RstMixin, DFF):  # type: ignore[misc]
+    """Asynchronously resettable DFF."""
+
     instance_type: str = f'{CFG.id_internal}adff'
 
     @property
@@ -1625,11 +1829,15 @@ class ADFF(RstMixin, DFF):
         return should_update_super or should_update_rst
 
 
-class DFFE(EnMixin, DFF):
+class DFFE(EnMixin, DFF):  # type: ignore[misc]
+    """DFF with enable port."""
+
     instance_type: str = f'{CFG.id_internal}dffe'
 
 
-class ADFFE(DFFE, ADFF):
+class ADFFE(DFFE, ADFF):  # type: ignore[misc]
+    """Asynchronously resettable DFF with enable port."""
+
     instance_type: str = f'{CFG.id_internal}adffe'
 
     @property
@@ -1640,6 +1848,151 @@ class ADFFE(DFFE, ADFF):
         if self.rst_port.signal is self.rst_polarity:
             return {idx: self.rst_val[idx]}
         return super()._calc_output(idx)
+
+
+class SDFF(RstMixin, DFF):  # type: ignore[misc]
+    """Synchronously resettable DFF."""
+
+    instance_type: str = f'{CFG.id_internal}sdff'
+
+    @property
+    def _verilog_header(self) -> str:
+        return self._verilog_clk
+
+    @property
+    def verilog_template(self) -> str:
+        return 'always @({header}) begin\n\tif ({is_rst}) begin\n\t\t{rst_out}\n\tend else begin\n\t\t{set_out}\n\tend\nend'
+
+    def set_rst(self, new_signal: SignalOrLogicLevel) -> None:
+        self.set(self.rst_port.name, new_signal)
+
+
+class SDFFCE(EnMixin, SDFF):  # type: ignore[misc]
+    """Synchronously resettable DFF with enable port, where the enable signal takes precedence over the reset signal."""
+
+    instance_type: str = f'{CFG.id_internal}sdffce'
+
+    @property
+    def verilog_template(self) -> str:
+        return 'always @({header}) begin\n\tif ({en}) begin\n\t\tif ({is_rst}) begin\n\t\t\t{rst_out}\n\t\tend else begin\n\t\t\t{set_out}\n\t\tend\n\tend\nend'
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        if self.en_port.signal is self.en_polarity:
+            if self.rst_port.signal is self.rst_polarity:
+                return {idx: self.rst_val[idx]}
+            return super()._calc_output(idx)
+        return {idx: self.output_port.signal_array[idx]}
+
+
+class SDFFE(EnMixin, SDFF):  # type: ignore[misc]
+    """Synchronously resettable DFF with enable port, where the reset signal takes precedence over the enable signal."""
+
+    instance_type: str = f'{CFG.id_internal}sdffe'
+
+    @property
+    def verilog_template(self) -> str:
+        return 'always @({header}) begin\n\tif ({is_rst}) begin\n\t\t{rst_out}\n\tend else if ({en}) begin\n\t\t{set_out}\n\tend\nend'
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        if self.rst_port.signal is self.rst_polarity:
+            return {idx: self.rst_val[idx]}
+        if self.en_port.signal is self.en_polarity:
+            return super()._calc_output(idx)
+        return {idx: self.output_port.signal_array[idx]}
+
+
+class ALDFF(LoadMixin, DFF):  # type: ignore[misc]
+    """Asynchronously load DFF, with a load-enable (AL) and load-data (AD) port."""
+
+    instance_type: str = f'{CFG.id_internal}aldff'
+
+    def _ff_should_update(self) -> bool:
+        should_update_rst = ('AL' not in self.prev_signals or self.al_port.signal != self.prev_signals['AL'][0]) and self.in_load
+        should_update_super = super()._ff_should_update() and not self.in_load
+        return should_update_super or should_update_rst
+
+
+class ALDFFE(EnMixin, ALDFF):  # type: ignore[misc]
+    """Asynchronously load DFF, with a load-enable (AL) and load-data (AD) port and an additional enable port for the default case."""
+
+    instance_type: str = f'{CFG.id_internal}aldffe'
+
+    @property
+    def verilog_template(self) -> str:
+        return 'always @({header}) begin\n\tif ({is_al}) begin\n\t\t{ad}\n\tend else if ({en}) begin\n\t\t{set_out}\n\tend\nend'
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        if self.al_port.signal is self.load_polarity:
+            return {idx: self.load_val[idx]}
+        if self.en_port.signal is self.en_polarity:
+            return super()._calc_output(idx)
+        return {idx: self.output_port[idx].signal}
+
+
+class DFFSR(SRMixin, DFF):  # type: ignore[misc]
+    instance_type: str = f'{CFG.id_internal}dffsr'
+
+    _prev_signals_sr: Dict[str, Dict[int, Signal]] = {}
+
+    @property
+    def verilog_template(self) -> str:
+        return 'always @({header}) begin\n\tif ({is_clr}) begin\n\t\t{clr_out}\n\tend else if ({is_set}) begin\n\t\t{set_out}\n\tend else begin\n\t\t{d_out}\n\tend\nend'
+
+    def _verilog_header_sr(self, idx: int) -> str:
+        return self._v_header(self.clk_port, self.clk_polarity) + ' or ' + super()._verilog_header_sr(idx)
+
+    def _evaluate(self) -> None:
+        for i in range(self.data_width):
+            if self._ff_should_update(i):
+                new_signals = self._calc_output(idx=i)
+                self._set_output(new_signals=new_signals)
+        self._prev_signals_sr = self.signals
+
+    def _ff_should_update(self, idx: int = 0) -> bool:
+        self.prev_signals = self._prev_signals_sr
+        should_update_super = super()._ff_should_update()
+        clr_active = self.clr_port[idx].signal is self.clr_polarity
+        set_active = self.set_port[idx].signal is self.set_polarity
+        should_update_clr = ('CLR' not in self._prev_signals_sr or self.clr_port[idx].signal != self._prev_signals_sr['CLR'][idx]) and clr_active
+        should_update_set = ('SET' not in self._prev_signals_sr or self.set_port[idx].signal != self._prev_signals_sr['SET'][idx]) and set_active
+        return should_update_super or should_update_clr or should_update_set
+
+
+class DFFSRE(EnMixin, DFFSR):  # type: ignore[misc]
+    instance_type: str = f'{CFG.id_internal}dffsre'
+
+    @property
+    def verilog_template(self) -> str:
+        return 'always @({header}) begin\n\tif ({is_clr}) begin\n\t\t{clr_out}\n\tend else if ({is_set}) begin\n\t\t{set_out}\n\tend else if ({en}) begin\n\t\t{d_out}\n\tend\nend'
+
+    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+        super().model_post_init(__context)
+        if self.width > 1:  # EnMixin initializes EN port as 1 bit wide, so we have to extend it manually here if required
+            self.connect('EN', None, direction=Direction.IN, width=self.width - 1, index=1)
+
+    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+        if self.clr_port[idx].signal is self.clr_polarity:
+            return {idx: Signal.LOW}
+        if self.set_port[idx].signal is self.set_polarity:
+            return {idx: Signal.HIGH}
+        if self.en_port[idx].signal.is_undefined or (self.en_port[idx].signal is self.en_polarity and self.input_port[idx].signal.is_undefined):
+            return {idx: Signal.UNDEFINED}
+        if self.en_port[idx].signal is self.en_polarity:
+            return {idx: self.input_port[idx].signal}
+        return {idx: self.output_port[idx].signal}
+
+    def set_en(self, new_signal: SignalOrLogicLevel, idx: Union[int, List[int]] = 0) -> None:
+        """
+        Sets the enable signal.
+
+        Args:
+            new_signal (Signal): The new enable signal value.
+            idx (Union[int, List[int]], optional): The index (or indices) to apply the given signal to.
+                Can either be an integer (single index to set) or an iterable of integers (e.g. a list of indices).
+                For every integer of the iterable the signal value of the corresponding port index is set to the given `new_signal`.
+                Defaults to 0.
+        """
+        self.set('EN', new_signal, idx)
 
 
 class ScanDFF(ScanMixin, DFF):  # type: ignore[misc] # MRO is fine. Silence, MyPy!

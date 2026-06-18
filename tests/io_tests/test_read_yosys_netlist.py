@@ -173,8 +173,8 @@ def test_adder_netlist_transform_to_circuit(simple_reader: YNR) -> None:
     dff = adder.instances_by_types['§adff'][0]
     assert isinstance(dff, DFF)
     assert len(dff.parameters) == 4
-    assert dff.parameters.ARST_POLARITY == Signal.HIGH
-    assert dff.parameters.ARST_VALUE == 0
+    assert dff.parameters.RST_POLARITY == Signal.HIGH
+    assert dff.parameters.RST_VALUE == 0
     assert dff.parameters.CLK_POLARITY == Signal.HIGH
     assert dff.parameters.WIDTH == 9
 
@@ -381,8 +381,8 @@ def test_build_instances(simple_reader: YNR) -> None:
 
     assert isinstance(adff, ADFF)
     assert len(adff.parameters) == 4
-    assert adff.parameters.ARST_POLARITY == Signal.HIGH
-    assert adff.parameters.ARST_VALUE == 0
+    assert adff.parameters.RST_POLARITY == Signal.HIGH
+    assert adff.parameters.RST_VALUE == 0
     assert adff.parameters.CLK_POLARITY == Signal.HIGH
     assert adff.parameters.WIDTH == 9
     assert len(adff.ports) == 4  # 4 Ports from dict
@@ -448,9 +448,14 @@ def test_prepare_dict(simple_reader: YNR) -> None:
 
     assert dff_dict == {'port_directions': {'RST': 'input'}, 'connections': {'RST': [2]}}
 
-    dff_dict = {'port_directions': {'ARST': 'input'}, 'connections': {'ARST': [2]}}
+    dff_dict = {'port_directions': {'ARST': 'input', 'SRST': 'input'}, 'connections': {'ARST': [2], 'SRST': [2]}}
     simple_reader._prepare_dff_dict('§dffe', dff_dict)
-    assert dff_dict == {'port_directions': {'ARST': 'input'}, 'connections': {'ARST': [2]}}
+    assert dff_dict == {'port_directions': {'ARST': 'input', 'SRST': 'input'}, 'connections': {'ARST': [2], 'SRST': [2]}}
+
+    dff_dict = {'port_directions': {'SRST': 'input'}, 'connections': {'SRST': [2]}}
+    simple_reader._prepare_dff_dict('§sdff', dff_dict)
+
+    assert dff_dict == {'port_directions': {'RST': 'input'}, 'connections': {'RST': [2]}}
 
 
 def test_prepare_dict_mux(simple_reader: YNR) -> None:

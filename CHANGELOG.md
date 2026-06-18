@@ -1,6 +1,36 @@
-# Changelog 0.4.2 (2026-06-18)
+# Changelog 0.5.0
+
+## ADDED
+- Implemented missing Yosys cell abstractions, including
+  - `SDFF` (synchronously resettable DFF),
+  - `SDFFCE` (synchronously resettable DFF with enable, where the enable takes precedence over the reset),
+  - `SDFFE` (synchronously resettable DFF with enable, where the reset takes precedence over the enable),
+  - `ALDFF` (asynchronous load DFF),
+  - `ALDFFE`(asynchronous load DFF with extra enable in the default use case),
+  - `DFFSR` (DFF with set and clear/reset ports),
+  - `DFFSRE` (DFF with set, clear/reset and enable ports),
+  - `SSHL` (arithmetic left-shift),
+  - `SSHR` (arithmetic right-shift),
+  - `EQX` (case equality),
+  - `NEX` (case inequality)
+  - `POW` (exponentiator, "A to the power of B")
+- Implemented factory methods for the mentioned Yosys cells
+- Implemented factory methods for `DIV` (divider) and `MOD` (modulo) cells
+- Added lots of docstrings
 
 ## FIXED
+- Fixed bug in signal evaluation process for DFFs with Enable, that arose whenever the Enable signal is undefined
+
+## CHANGED
+- `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.ARST_POLARITY` → `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.RST_POLARITY`
+- `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.ARST_VALUE` → `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.RST_VALUE`
+
+
+# Older Versions
+
+## Changelog 0.4.2 (2026-06-18)
+
+### FIXED
 - Fixed minor bug in `netlist_carpentry.Module.remove_instance()` method
 - Fixed missing instance parameters in Verilog output for submodule or blackbox instances
 - Fixed silent-fail of `netlist_carpentry.PortSegment.set_signal()` for tied ports - now the method explicitly raises a `SignalAssignmentError`, if an attempt is made to change the signal value of a tied port segment (previously just nothing did happen, but now the run will explicitly fail)
@@ -24,7 +54,7 @@
 - Implemented missing `Signal.__invert__()` (for `~netlist_carpentry.Signal`) for inversion of a signal; `Signal.invert()` still exists but now shows a `DeprecationWarning` along with a hint
 - Fixed some evaluation bugs for reduction gates
 
-# Older Versions
+
 
 ## Changelog 0.4.1 (2026-05-11)
 
