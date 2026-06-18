@@ -41,6 +41,9 @@ class Direction(Enum):
     def __str__(self) -> str:
         return self.value
 
+    def __repr__(self) -> str:
+        return f'Direction.{self.name}'
+
     @classmethod
     def get(cls, value: str) -> 'Direction':
         """

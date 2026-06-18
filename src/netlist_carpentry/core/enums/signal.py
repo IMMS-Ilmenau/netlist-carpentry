@@ -111,8 +111,6 @@ class Signal(Enum):
         raise SignalError(f'bool({self!r}) is not defined!')
 
     def __and__(self, other: 'Signal') -> 'Signal':
-        from .signal import Signal
-
         if not isinstance(other, Signal):
             return NotImplemented
         if self is Signal.LOW or other is Signal.LOW:
@@ -122,8 +120,6 @@ class Signal(Enum):
         return Signal.HIGH  # Last case: 1 AND 1 is 1
 
     def __or__(self, other: 'Signal') -> 'Signal':
-        from .signal import Signal
-
         if not isinstance(other, Signal):
             return NotImplemented
         if self is Signal.HIGH or other is Signal.HIGH:
@@ -133,8 +129,6 @@ class Signal(Enum):
         return Signal.LOW  # Last case: 0 AND 0 is 0
 
     def __xor__(self, other: 'Signal') -> 'Signal':
-        from .signal import Signal
-
         if not isinstance(other, Signal):
             return NotImplemented
         if self.is_undefined or other.is_undefined:

@@ -33,6 +33,13 @@ def test_str():
     assert str(Direction.UNKNOWN) == 'unknown'
 
 
+def test_repr():
+    assert repr(Direction.IN) == 'Direction.IN'
+    assert repr(Direction.OUT) == 'Direction.OUT'
+    assert repr(Direction.IN_OUT) == 'Direction.IN_OUT'
+    assert repr(Direction.UNKNOWN) == 'Direction.UNKNOWN'
+
+
 def test_get():
     assert Direction.get('input') == Direction.IN
     assert Direction.get('output') == Direction.OUT
