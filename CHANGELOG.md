@@ -1,4 +1,4 @@
-# Changelog 0.4.2
+# Changelog 0.4.2 (2026-06-18)
 
 ## FIXED
 - Fixed minor bug in `netlist_carpentry.Module.remove_instance()` method
@@ -17,11 +17,11 @@
   - `bool(Signal.LOW)` is now `False`
   - `bool(Signal.HIGH)` is now `True`
   - `bool(Signal.UNDEFINED)` and `bool(Signal.FLOATING)` both now raise a `SignalError`, which now extends `ValueError`
-- Implemented `Signal.__and__()` (for `netlist_carpentry.Signal & netlist_carpentry.Signal`) for logical AND checks between signals
-- Implemented `Signal.__or__()` (for `netlist_carpentry.Signal | netlist_carpentry.Signal`) for logical OR checks between signals
-- Implemented `Signal.__xor__()` (for `netlist_carpentry.Signal ^ netlist_carpentry.Signal`) for logical XOR checks between signals
-- Implemented `Signal.__int__()` (for `int(netlist_carpentry.Signal)`) for casting a `Signal` to an `int`
-- Implemented `Signal.__invert__()` (for `~netlist_carpentry.Signal`) for inversion of a signal; `Signal.invert()` still exists but now shows a `DeprecationWarning` along with a hint
+- Implemented missing `Signal.__and__()` (for `netlist_carpentry.Signal & netlist_carpentry.Signal`) for logical AND checks between signals
+- Implemented missing `Signal.__or__()` (for `netlist_carpentry.Signal | netlist_carpentry.Signal`) for logical OR checks between signals
+- Implemented missing `Signal.__xor__()` (for `netlist_carpentry.Signal ^ netlist_carpentry.Signal`) for logical XOR checks between signals
+- Implemented missing `Signal.__int__()` (for `int(netlist_carpentry.Signal)`) for casting a `Signal` to an `int`
+- Implemented missing `Signal.__invert__()` (for `~netlist_carpentry.Signal`) for inversion of a signal; `Signal.invert()` still exists but now shows a `DeprecationWarning` along with a hint
 - Fixed some evaluation bugs for reduction gates
 
 # Older Versions
