@@ -161,7 +161,7 @@ class PortSegment(_Segment, BaseModel):
     @property
     def signal_int(self) -> Optional[int]:
         """The signal of this port segment as an integer (0 or 1), if it is defined, otherwise None."""
-        return int(self.signal.value) if self.signal.is_defined else None
+        return int(self.signal) if self.signal.is_defined else None
 
     @property
     def is_connected(self) -> bool:

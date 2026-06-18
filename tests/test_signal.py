@@ -54,10 +54,21 @@ def test_is_undefined() -> None:
 
 
 def test_invert() -> None:
-    assert Signal.LOW.invert() is Signal.HIGH
-    assert Signal.HIGH.invert() is Signal.LOW
-    assert Signal.FLOATING.invert() is Signal.UNDEFINED
-    assert Signal.UNDEFINED.invert() is Signal.UNDEFINED
+    with pytest.warns(DeprecationWarning, match=r'Signal.LOW.invert\(\) is deprecated .* v1.0.0. Use ~Signal.LOW'):
+        assert Signal.LOW.invert() is Signal.HIGH
+    with pytest.warns(DeprecationWarning, match=r'Signal.HIGH.invert\(\) is deprecated .* v1.0.0. Use ~Signal.HIGH'):
+        assert Signal.HIGH.invert() is Signal.LOW
+    with pytest.warns(DeprecationWarning, match=r'Signal.FLOATING.invert\(\) is deprecated .* v1.0.0. Use ~Signal.FLOATING'):
+        assert Signal.FLOATING.invert() is Signal.UNDEFINED
+    with pytest.warns(DeprecationWarning, match=r'Signal.UNDEFINED.invert\(\) is deprecated .* v1.0.0. Use ~Signal.UNDEFINED'):
+        assert Signal.UNDEFINED.invert() is Signal.UNDEFINED
+
+
+def test_invert_dunder() -> None:
+    assert ~Signal.LOW is Signal.HIGH
+    assert ~Signal.HIGH is Signal.LOW
+    assert ~Signal.FLOATING is Signal.UNDEFINED
+    assert ~Signal.UNDEFINED is Signal.UNDEFINED
 
 
 def test_bool() -> None:
@@ -67,6 +78,99 @@ def test_bool() -> None:
         bool(Signal.FLOATING)
     with pytest.raises(SignalError):
         bool(Signal.UNDEFINED)
+
+
+def test_and() -> None:
+    assert (Signal.LOW & Signal.LOW) is Signal.LOW
+    assert (Signal.LOW & Signal.HIGH) is Signal.LOW
+    assert (Signal.LOW & Signal.UNDEFINED) is Signal.LOW
+    assert (Signal.LOW & Signal.FLOATING) is Signal.LOW
+    assert (Signal.HIGH & Signal.LOW) is Signal.LOW
+    assert (Signal.HIGH & Signal.HIGH) is Signal.HIGH
+    assert (Signal.HIGH & Signal.UNDEFINED) is Signal.UNDEFINED
+    assert (Signal.HIGH & Signal.FLOATING) is Signal.UNDEFINED
+    assert (Signal.UNDEFINED & Signal.LOW) is Signal.LOW
+    assert (Signal.UNDEFINED & Signal.HIGH) is Signal.UNDEFINED
+    assert (Signal.UNDEFINED & Signal.UNDEFINED) is Signal.UNDEFINED
+    assert (Signal.UNDEFINED & Signal.FLOATING) is Signal.UNDEFINED
+    assert (Signal.FLOATING & Signal.LOW) is Signal.LOW
+    assert (Signal.FLOATING & Signal.HIGH) is Signal.UNDEFINED
+    assert (Signal.FLOATING & Signal.UNDEFINED) is Signal.UNDEFINED
+    assert (Signal.FLOATING & Signal.FLOATING) is Signal.UNDEFINED
+
+    with pytest.raises(TypeError):
+        False & Signal.LOW
+    with pytest.raises(TypeError):
+        Signal.LOW & False
+    with pytest.raises(TypeError):
+        Signal.LOW & '0'
+    with pytest.raises(TypeError):
+        Signal.LOW & 0
+
+
+def test_or() -> None:
+    assert (Signal.LOW | Signal.LOW) is Signal.LOW
+    assert (Signal.LOW | Signal.HIGH) is Signal.HIGH
+    assert (Signal.LOW | Signal.UNDEFINED) is Signal.UNDEFINED
+    assert (Signal.LOW | Signal.FLOATING) is Signal.UNDEFINED
+    assert (Signal.HIGH | Signal.LOW) is Signal.HIGH
+    assert (Signal.HIGH | Signal.HIGH) is Signal.HIGH
+    assert (Signal.HIGH | Signal.UNDEFINED) is Signal.HIGH
+    assert (Signal.HIGH | Signal.FLOATING) is Signal.HIGH
+    assert (Signal.UNDEFINED | Signal.LOW) is Signal.UNDEFINED
+    assert (Signal.UNDEFINED | Signal.HIGH) is Signal.HIGH
+    assert (Signal.UNDEFINED | Signal.UNDEFINED) is Signal.UNDEFINED
+    assert (Signal.UNDEFINED | Signal.FLOATING) is Signal.UNDEFINED
+    assert (Signal.FLOATING | Signal.LOW) is Signal.UNDEFINED
+    assert (Signal.FLOATING | Signal.HIGH) is Signal.HIGH
+    assert (Signal.FLOATING | Signal.UNDEFINED) is Signal.UNDEFINED
+    assert (Signal.FLOATING | Signal.FLOATING) is Signal.UNDEFINED
+
+    with pytest.raises(TypeError):
+        False | Signal.HIGH
+    with pytest.raises(TypeError):
+        Signal.HIGH | False
+    with pytest.raises(TypeError):
+        Signal.HIGH | '0'
+    with pytest.raises(TypeError):
+        Signal.HIGH | 0
+
+
+def test_xor() -> None:
+    assert (Signal.LOW ^ Signal.LOW) is Signal.LOW
+    assert (Signal.LOW ^ Signal.HIGH) is Signal.HIGH
+    assert (Signal.LOW ^ Signal.UNDEFINED) is Signal.UNDEFINED
+    assert (Signal.LOW ^ Signal.FLOATING) is Signal.UNDEFINED
+    assert (Signal.HIGH ^ Signal.LOW) is Signal.HIGH
+    assert (Signal.HIGH ^ Signal.HIGH) is Signal.LOW
+    assert (Signal.HIGH ^ Signal.UNDEFINED) is Signal.UNDEFINED
+    assert (Signal.HIGH ^ Signal.FLOATING) is Signal.UNDEFINED
+    assert (Signal.UNDEFINED ^ Signal.LOW) is Signal.UNDEFINED
+    assert (Signal.UNDEFINED ^ Signal.HIGH) is Signal.UNDEFINED
+    assert (Signal.UNDEFINED ^ Signal.UNDEFINED) is Signal.UNDEFINED
+    assert (Signal.UNDEFINED ^ Signal.FLOATING) is Signal.UNDEFINED
+    assert (Signal.FLOATING ^ Signal.LOW) is Signal.UNDEFINED
+    assert (Signal.FLOATING ^ Signal.HIGH) is Signal.UNDEFINED
+    assert (Signal.FLOATING ^ Signal.UNDEFINED) is Signal.UNDEFINED
+    assert (Signal.FLOATING ^ Signal.FLOATING) is Signal.UNDEFINED
+
+    with pytest.raises(TypeError):
+        False ^ Signal.HIGH
+    with pytest.raises(TypeError):
+        Signal.HIGH ^ False
+    with pytest.raises(TypeError):
+        Signal.HIGH ^ '0'
+    with pytest.raises(TypeError):
+        Signal.HIGH ^ 0
+
+
+def test_int() -> None:
+    assert int(Signal.LOW) == 0
+    assert int(Signal.HIGH) == 1
+    with pytest.raises(SignalError):
+        int(Signal.FLOATING)
+    with pytest.raises(SignalError):
+        int(Signal.UNDEFINED)
 
 
 def test_str() -> None:

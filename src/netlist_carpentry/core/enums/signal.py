@@ -1,5 +1,6 @@
 """An enumeration representing possible states of a digital signal (0, 1, x, z)."""
 
+import warnings
 from enum import Enum
 from typing import Dict, List, Literal, Optional, Union
 
@@ -92,16 +93,59 @@ class Signal(Enum):
         Returns:
             Signal: The inverted signal if the signal is defined, otherwise Signal.UNDEFINED.
         """
-        from netlist_carpentry import Signal
+        warnings.warn(
+            f'Signal.{self.name}.invert() is deprecated and will be removed in v1.0.0. Use ~Signal.{self.name} instead!',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return ~self
 
+    def __invert__(self) -> 'Signal':
         if self.is_defined:
-            return Signal.HIGH if self is Signal.LOW else Signal.LOW
-        return Signal.UNDEFINED
+            return type(self).LOW if self else type(self).HIGH
+        return type(self).UNDEFINED
 
     def __bool__(self) -> bool:
         if self.is_defined:
             return self is Signal.HIGH
         raise SignalError(f'bool({self!r}) is not defined!')
+
+    def __and__(self, other: 'Signal') -> 'Signal':
+        from .signal import Signal
+
+        if not isinstance(other, Signal):
+            return NotImplemented
+        if self is Signal.LOW or other is Signal.LOW:
+            return Signal.LOW  # 0 AND anything is 0
+        if self.is_undefined or other.is_undefined:
+            return Signal.UNDEFINED  # X AND anything (except 0) is X
+        return Signal.HIGH  # Last case: 1 AND 1 is 1
+
+    def __or__(self, other: 'Signal') -> 'Signal':
+        from .signal import Signal
+
+        if not isinstance(other, Signal):
+            return NotImplemented
+        if self is Signal.HIGH or other is Signal.HIGH:
+            return Signal.HIGH  # 1 AND anything is 1
+        if self.is_undefined or other.is_undefined:
+            return Signal.UNDEFINED  # X AND anything (except 1) is X
+        return Signal.LOW  # Last case: 0 AND 0 is 0
+
+    def __xor__(self, other: 'Signal') -> 'Signal':
+        from .signal import Signal
+
+        if not isinstance(other, Signal):
+            return NotImplemented
+        if self.is_undefined or other.is_undefined:
+            return Signal.UNDEFINED  # X XOR anything is X
+        return Signal.get(self != other)
+
+    def __int__(self) -> int:
+        try:
+            return int(self.value)
+        except ValueError:
+            raise SignalError(f"Cannot cast 'Signal.{self.name}' to int: Value is {self.value!r}!")
 
     def __str__(self) -> str:
         return str(self.value)

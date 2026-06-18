@@ -344,7 +344,7 @@ class RstMixin(BaseModel):
         super()._split_sync_params(slices)
         idx = 0
         for slice in slices:
-            slice.parameters.ARST_VALUE = int(self.rst_val[idx].value)
+            slice.parameters.ARST_VALUE = int(self.rst_val[idx])
             idx += 1
 
 
