@@ -142,10 +142,9 @@ class Signal(Enum):
         return Signal.get(self != other)
 
     def __int__(self) -> int:
-        try:
+        if self.is_defined:
             return int(self.value)
-        except ValueError:
-            raise SignalError(f"Cannot cast 'Signal.{self.name}' to int: Value is {self.value!r}!")
+        raise SignalError(f"Cannot cast 'Signal.{self.name}' to int: Value is {self.value!r}!")
 
     def __str__(self) -> str:
         return str(self.value)
