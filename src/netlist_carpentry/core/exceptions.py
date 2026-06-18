@@ -95,7 +95,7 @@ class SplittingUnsupportedError(UnsupportedOperationError):
     pass
 
 
-class SignalError(Exception):
+class SignalError(ValueError):
     """Base class for all exceptions related to signal issues."""
 
     pass

@@ -181,9 +181,11 @@ class ReduceAnd(ReduceGate, BaseModel):
         For a reduction AND gate, the output signal is HIGH if and only if all input signals are HIGH.
         If any input signal is LOW or undefined, the output signal will be LOW or undefined, respectively.
         """
-        if all(self.signal_in(i).is_defined for i in self.input_port.segments):
-            return {idx: Signal.HIGH if all(self.signal_in(i) == Signal.HIGH for i in self.input_port.segments) else Signal.LOW}
-        return {idx: Signal.UNDEFINED}
+        if any(self.signal_in(i) is Signal.LOW for i in self.input_port.segments):
+            return {idx: Signal.LOW}
+        if any(self.signal_in(i).is_undefined for i in self.input_port.segments):
+            return {idx: Signal.UNDEFINED}
+        return {idx: Signal.HIGH}
 
 
 class ReduceOr(ReduceGate, BaseModel):
@@ -212,9 +214,11 @@ class ReduceOr(ReduceGate, BaseModel):
         If all input signals are LOW or undefined, the output signal will be LOW or undefined, respectively.
         """
         # In verilog corresponds to: '|wire_vector' (OR reduction)
-        if any(self.signal_in(i) == Signal.HIGH for i in self.input_port.segments):
+        if any(self.signal_in(i) is Signal.HIGH for i in self.input_port.segments):
             return {idx: Signal.HIGH}
-        return {idx: Signal.UNDEFINED if any(self.signal_in(i).is_undefined for i in self.input_port.segments) else Signal.LOW}
+        if any(self.signal_in(i).is_undefined for i in self.input_port.segments):
+            return {idx: Signal.UNDEFINED}
+        return {idx: Signal.LOW}
 
 
 class ReduceBool(ReduceGate, BaseModel):
@@ -246,7 +250,9 @@ class ReduceBool(ReduceGate, BaseModel):
         # In verilog corresponds to: '!(!wire_vector)' (double negation, which has a similar effect like an OR reduction)
         if any(self.signal_in(i) == Signal.HIGH for i in self.input_port.segments):
             return {idx: Signal.HIGH}
-        return {idx: Signal.UNDEFINED if any(self.signal_in(i).is_undefined for i in self.input_port.segments) else Signal.LOW}
+        if any(self.signal_in(i).is_undefined for i in self.input_port.segments):
+            return {idx: Signal.UNDEFINED}
+        return {idx: Signal.LOW}
 
 
 class ReduceXor(ReduceGate, BaseModel):
@@ -274,9 +280,9 @@ class ReduceXor(ReduceGate, BaseModel):
         For a reduction XOR gate, the output signal is HIGH if an odd number of input signals are HIGH.
         If an even number of input signals are HIGH or any input signal is undefined, the output signal will be LOW or undefined, respectively.
         """
-        if all(self.signal_in(i).is_defined for i in self.input_port.segments):
-            return {idx: Signal.HIGH if self.input_port.count_signals(Signal.HIGH) % 2 == 1 else Signal.LOW}
-        return {idx: Signal.UNDEFINED}
+        if any(self.signal_in(i).is_undefined for i in self.input_port.segments):
+            return {idx: Signal.UNDEFINED}
+        return {idx: Signal.HIGH if self.input_port.count_signals(Signal.HIGH) % 2 == 1 else Signal.LOW}
 
 
 class ReduceXnor(ReduceGate, BaseModel):
@@ -304,9 +310,9 @@ class ReduceXnor(ReduceGate, BaseModel):
         For a reduction XNOR gate, the output signal is HIGH if an even number of input signals are HIGH.
         If an odd number of input signals are HIGH or any input signal is undefined, the output signal will be LOW or undefined, respectively.
         """
-        if all(self.signal_in(i).is_defined for i in self.input_port.segments):
-            return {idx: Signal.HIGH if self.input_port.count_signals(Signal.HIGH) % 2 == 0 else Signal.LOW}
-        return {idx: Signal.UNDEFINED}
+        if any(self.signal_in(i).is_undefined for i in self.input_port.segments):
+            return {idx: Signal.UNDEFINED}
+        return {idx: Signal.HIGH if self.input_port.count_signals(Signal.HIGH) % 2 == 0 else Signal.LOW}
 
 
 class LogicNot(ReduceGate, BaseModel):
@@ -316,6 +322,7 @@ class LogicNot(ReduceGate, BaseModel):
     A logic not gate performs a logical not operation on all input signals.
     It produces a HIGH output signal if all input signals are LOW.
     The output is LOW, if any input signal is HIGH.
+    If there are undefined bits, the result is also UNDEFINED.
 
     Attributes:
         name (str): The name of the gate instance.
@@ -334,10 +341,13 @@ class LogicNot(ReduceGate, BaseModel):
 
         For a logic not gate, the output signal is HIGH if all input signals are LOW.
         The output is LOW, if any input signal is HIGH.
+        If there are undefined bits, the result is also UNDEFINED.
         """
-        if all(self.signal_in(i).is_defined for i in self.input_port.segments):
-            return {idx: Signal.LOW if any(self.signal_in(i) == Signal.HIGH for i in self.input_port.segments) else Signal.HIGH}
-        return {idx: Signal.UNDEFINED}
+        if any(self.signal_in(i) is Signal.HIGH for i in self.input_port.segments):
+            return {idx: Signal.LOW}
+        if any(self.signal_in(i).is_undefined for i in self.input_port.segments):
+            return {idx: Signal.UNDEFINED}
+        return {idx: Signal.HIGH}
 
 
 class AndGate(BinaryGate, BaseModel):

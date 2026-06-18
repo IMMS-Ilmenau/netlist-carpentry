@@ -474,26 +474,16 @@ def test_neg_gate(simple_module: Module) -> None:
     }
 
 
-def _test_signal_confr_n(gate: UnaryGate, sin: Signal, sout_prev: Signal, sout_new: Signal) -> None:
-    assert gate.signal_out() == sout_prev
-    for i in range(gate.a_width):
-        if not gate.input_port[i].is_tied:
-            gate.input_port.set_signal(sin, index=i)
-            if i == 1:
-                assert gate.signal_in(i) == Signal.HIGH
-            elif i == 2:
-                assert gate.signal_in(i) == Signal.FLOATING
-            else:
-                assert gate.signal_in(i) == sin
-    assert gate.signal_out() == sout_prev
-    gate.evaluate()
-    assert gate.signal_out() == Signal.UNDEFINED or sout_new
+def _test_signal_confr_n(gate: UnaryGate, sin: str, sout_prev: Signal, sout_new: Signal) -> None:
     gate.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
     gate.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
-    gate.input_port.set_signal(sin, 1)
-    gate.input_port.set_signal(sin, 2)
+    assert gate.signal_out() == sout_prev
+    gate.input_port.set_signals(sin)
+    for idx, sig in enumerate(sin):
+        assert gate.signal_in(gate.a_width - 1 - idx).value == sig
+    assert gate.signal_out() is sout_prev
     gate.evaluate()
-    assert gate.signal_out() == sout_new
+    assert gate.signal_out() is sout_new
     gate.modify_connection('A', WIRE_SEGMENT_1.path, index=1)
     gate.modify_connection('A', WIRE_SEGMENT_X.path, index=2)
 
@@ -534,19 +524,14 @@ def test_reduce_and(simple_module: Module) -> None:
     assert r.verilog == "assign\twire[0] = &{wireA2, 1'b1, wireA1[0]};"
     assert r.verilog_net_map == {'Y': 'wire[0]', 'A': "{wireA2, 1'b1, wireA1[0]}"}
 
-    _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
-    _test_signal_confr_n(r, Signal.FLOATING, Signal.UNDEFINED, Signal.UNDEFINED)
-    _test_signal_confr_n(r, Signal.HIGH, Signal.UNDEFINED, Signal.HIGH)
-    _test_signal_confr_n(r, Signal.LOW, Signal.HIGH, Signal.LOW)
-
-    r.input_port.set_signal(Signal.LOW, index=0)
-    r.input_port.set_signal(Signal.HIGH, index=3)
-    r.evaluate()
-    assert r.signal_out() == Signal.UNDEFINED
-
-    r.tie_port('A', index=2, sig_value='1')
-    r.evaluate()
-    assert r.signal_out() == Signal.LOW
+    _test_signal_confr_n(r, '01xz', Signal.UNDEFINED, Signal.LOW)
+    _test_signal_confr_n(r, '0000', Signal.LOW, Signal.LOW)
+    _test_signal_confr_n(r, '1111', Signal.LOW, Signal.HIGH)
+    _test_signal_confr_n(r, 'xxxx', Signal.HIGH, Signal.UNDEFINED)
+    _test_signal_confr_n(r, 'zzzz', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, '00zz', Signal.UNDEFINED, Signal.LOW)
+    _test_signal_confr_n(r, '11xx', Signal.LOW, Signal.UNDEFINED)
+    _test_signal_confr_n(r, 'zzxx', Signal.UNDEFINED, Signal.UNDEFINED)
 
 
 def test_reduce_and_bad_verilog(simple_module: Module) -> None:
@@ -574,24 +559,14 @@ def test_reduce_or(simple_module: Module) -> None:
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
     assert r.verilog == "assign\twire[0] = |{wireA2, 1'b1, wireA1[0]};"
 
-    _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
-    _test_signal_confr_n(r, Signal.FLOATING, Signal.UNDEFINED, Signal.UNDEFINED)
-    _test_signal_confr_n(r, Signal.HIGH, Signal.UNDEFINED, Signal.HIGH)
-    _test_signal_confr_n(r, Signal.LOW, Signal.HIGH, Signal.LOW)
-
-    r.input_port.set_signal(Signal.LOW, index=0)
-    r.input_port.set_signal(Signal.HIGH, index=3)
-    r.evaluate()
-    assert r.signal_out() == Signal.HIGH
-
-    r.input_port.tie_signal(Signal.FLOATING, index=1)
-    r.evaluate()
-    assert r.signal_out() == Signal.HIGH
-
-    r.modify_connection('A', WireSegmentPath(raw='0'), index=1)
-    r.input_port.set_signal(Signal.FLOATING, index=3)
-    r.evaluate()
-    assert r.signal_out() == Signal.UNDEFINED
+    _test_signal_confr_n(r, '01xz', Signal.UNDEFINED, Signal.HIGH)
+    _test_signal_confr_n(r, '0000', Signal.HIGH, Signal.LOW)
+    _test_signal_confr_n(r, '1111', Signal.LOW, Signal.HIGH)
+    _test_signal_confr_n(r, 'xxxx', Signal.HIGH, Signal.UNDEFINED)
+    _test_signal_confr_n(r, 'zzzz', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, '00zz', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, '11xx', Signal.UNDEFINED, Signal.HIGH)
+    _test_signal_confr_n(r, 'zzxx', Signal.HIGH, Signal.UNDEFINED)
 
 
 def test_reduce_bool(simple_module: Module) -> None:
@@ -609,24 +584,14 @@ def test_reduce_bool(simple_module: Module) -> None:
         r.verilog == "assign\twire[0] = |{wireA2, 1'b1, wireA1[0]};"
     )  # TODO EQY unable to prove equality for !(!wire), but can prove equality for |wire
 
-    _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
-    _test_signal_confr_n(r, Signal.FLOATING, Signal.UNDEFINED, Signal.UNDEFINED)
-    _test_signal_confr_n(r, Signal.HIGH, Signal.UNDEFINED, Signal.HIGH)
-    _test_signal_confr_n(r, Signal.LOW, Signal.HIGH, Signal.LOW)
-
-    r.input_port.set_signal(Signal.LOW, index=0)
-    r.input_port.set_signal(Signal.HIGH, index=3)
-    r.evaluate()
-    assert r.signal_out() == Signal.HIGH
-
-    r.input_port.tie_signal(Signal.FLOATING, index=1)
-    r.evaluate()
-    assert r.signal_out() == Signal.HIGH
-
-    r.modify_connection('A', WireSegmentPath(raw='0'), index=1)
-    r.input_port.set_signal(Signal.FLOATING, index=3)
-    r.evaluate()
-    assert r.signal_out() == Signal.UNDEFINED
+    _test_signal_confr_n(r, '01xz', Signal.UNDEFINED, Signal.HIGH)
+    _test_signal_confr_n(r, '0000', Signal.HIGH, Signal.LOW)
+    _test_signal_confr_n(r, '1111', Signal.LOW, Signal.HIGH)
+    _test_signal_confr_n(r, 'xxxx', Signal.HIGH, Signal.UNDEFINED)
+    _test_signal_confr_n(r, 'zzzz', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, '00zz', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, '11xx', Signal.UNDEFINED, Signal.HIGH)
+    _test_signal_confr_n(r, 'zzxx', Signal.HIGH, Signal.UNDEFINED)
 
 
 def test_reduce_xor(simple_module: Module) -> None:
@@ -642,21 +607,16 @@ def test_reduce_xor(simple_module: Module) -> None:
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
     assert r.verilog == "assign\twire[0] = ^{wireA2, 1'b1, wireA1[0]};"
 
-    _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
-    _test_signal_confr_n(r, Signal.FLOATING, Signal.UNDEFINED, Signal.UNDEFINED)
-    _test_signal_confr_n(r, Signal.HIGH, Signal.UNDEFINED, Signal.LOW)
-    _test_signal_confr_n(r, Signal.LOW, Signal.LOW, Signal.LOW)
-
-    r.input_port.set_signal(Signal.LOW, index=0)
-    r.input_port.set_signal(Signal.HIGH, index=3)
-    r.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
-    r.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
-    r.evaluate()
-    assert r.signal_out() == Signal.HIGH
-
-    r.input_port.set_signal(Signal.FLOATING, index=1)
-    r.evaluate()
-    assert r.signal_out() == Signal.UNDEFINED
+    _test_signal_confr_n(r, '01xz', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, '0000', Signal.UNDEFINED, Signal.LOW)
+    _test_signal_confr_n(r, '1111', Signal.LOW, Signal.LOW)
+    _test_signal_confr_n(r, 'xxxx', Signal.LOW, Signal.UNDEFINED)
+    _test_signal_confr_n(r, 'zzzz', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, '00zz', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, '11xx', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, 'zzxx', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, '1000', Signal.UNDEFINED, Signal.HIGH)
+    _test_signal_confr_n(r, '1101', Signal.HIGH, Signal.HIGH)
 
 
 def test_reduce_xnor(simple_module: Module) -> None:
@@ -672,21 +632,16 @@ def test_reduce_xnor(simple_module: Module) -> None:
     r.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
     assert r.verilog == "assign\twire[0] = ~^{wireA2, 1'b1, wireA1[0]};"
 
-    _test_signal_confr_n(r, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
-    _test_signal_confr_n(r, Signal.FLOATING, Signal.UNDEFINED, Signal.UNDEFINED)
-    _test_signal_confr_n(r, Signal.HIGH, Signal.UNDEFINED, Signal.HIGH)
-    _test_signal_confr_n(r, Signal.LOW, Signal.HIGH, Signal.HIGH)
-
-    r.input_port.set_signal(Signal.LOW, index=0)
-    r.input_port.set_signal(Signal.HIGH, index=3)
-    r.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
-    r.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
-    r.evaluate()
-    assert r.signal_out() == Signal.LOW
-
-    r.input_port.set_signal(Signal.FLOATING, index=1)
-    r.evaluate()
-    assert r.signal_out() == Signal.UNDEFINED
+    _test_signal_confr_n(r, '01xz', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, '0000', Signal.UNDEFINED, Signal.HIGH)
+    _test_signal_confr_n(r, '1111', Signal.HIGH, Signal.HIGH)
+    _test_signal_confr_n(r, 'xxxx', Signal.HIGH, Signal.UNDEFINED)
+    _test_signal_confr_n(r, 'zzzz', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, '00zz', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, '11xx', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, 'zzxx', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(r, '1000', Signal.UNDEFINED, Signal.LOW)
+    _test_signal_confr_n(r, '1101', Signal.LOW, Signal.LOW)
 
 
 def test_logic_not(simple_module: Module) -> None:
@@ -702,21 +657,16 @@ def test_logic_not(simple_module: Module) -> None:
     ln.modify_connection('Y', WireSegmentPath(raw='a.wire.0'), index=0)
     assert ln.verilog == "assign\twire[0] = !{wireA2, 1'b1, wireA1[0]};"
 
-    _test_signal_confr_n(ln, Signal.UNDEFINED, Signal.UNDEFINED, Signal.UNDEFINED)
-    _test_signal_confr_n(ln, Signal.FLOATING, Signal.UNDEFINED, Signal.UNDEFINED)
-    _test_signal_confr_n(ln, Signal.HIGH, Signal.UNDEFINED, Signal.LOW)
-    _test_signal_confr_n(ln, Signal.LOW, Signal.LOW, Signal.HIGH)
-
-    ln.input_port.set_signal(Signal.LOW, index=0)
-    ln.input_port.set_signal(Signal.LOW, index=3)
-    ln.modify_connection('A', WireSegmentPath(raw='a.wireA1.1'), index=1)
-    ln.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
-    ln.evaluate()
-    assert ln.signal_out() == Signal.HIGH
-
-    ln.input_port.set_signal(Signal.HIGH, index=1)
-    ln.evaluate()
-    assert ln.signal_out() == Signal.LOW
+    _test_signal_confr_n(ln, '01xz', Signal.UNDEFINED, Signal.LOW)
+    _test_signal_confr_n(ln, '0000', Signal.LOW, Signal.HIGH)
+    _test_signal_confr_n(ln, '1111', Signal.HIGH, Signal.LOW)
+    _test_signal_confr_n(ln, 'xxxx', Signal.LOW, Signal.UNDEFINED)
+    _test_signal_confr_n(ln, 'zzzz', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(ln, '00zz', Signal.UNDEFINED, Signal.UNDEFINED)
+    _test_signal_confr_n(ln, '11xx', Signal.UNDEFINED, Signal.LOW)
+    _test_signal_confr_n(ln, 'zzxx', Signal.LOW, Signal.UNDEFINED)
+    _test_signal_confr_n(ln, '1000', Signal.UNDEFINED, Signal.LOW)
+    _test_signal_confr_n(ln, '1101', Signal.LOW, Signal.LOW)
 
 
 def test_binary_gate(binary_gate: BinaryGate) -> None:

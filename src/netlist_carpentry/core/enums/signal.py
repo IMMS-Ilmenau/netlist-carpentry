@@ -5,6 +5,8 @@ from typing import Dict, List, Literal, Optional, Union
 
 from pydantic import PositiveInt
 
+from netlist_carpentry.core.exceptions import SignalError
+
 T_SIGNAL_STATES = Literal['0', '1', 'z', 'x']
 
 
@@ -95,6 +97,11 @@ class Signal(Enum):
         if self.is_defined:
             return Signal.HIGH if self is Signal.LOW else Signal.LOW
         return Signal.UNDEFINED
+
+    def __bool__(self) -> bool:
+        if self.is_defined:
+            return self is Signal.HIGH
+        raise SignalError(f'bool({self!r}) is not defined!')
 
     def __str__(self) -> str:
         return str(self.value)

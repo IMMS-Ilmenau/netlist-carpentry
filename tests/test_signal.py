@@ -3,6 +3,7 @@ import os
 import pytest
 
 from netlist_carpentry.core.enums.signal import Signal
+from netlist_carpentry.core.exceptions import SignalError
 
 
 def test_signal_enum_values() -> None:
@@ -57,6 +58,15 @@ def test_invert() -> None:
     assert Signal.HIGH.invert() is Signal.LOW
     assert Signal.FLOATING.invert() is Signal.UNDEFINED
     assert Signal.UNDEFINED.invert() is Signal.UNDEFINED
+
+
+def test_bool() -> None:
+    assert bool(Signal.LOW) is False
+    assert bool(Signal.HIGH) is True
+    with pytest.raises(SignalError):
+        bool(Signal.FLOATING)
+    with pytest.raises(SignalError):
+        bool(Signal.UNDEFINED)
 
 
 def test_str() -> None:

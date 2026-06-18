@@ -122,7 +122,7 @@ class ClkMixin(BaseModel):
     @property
     def clk_polarity(self) -> Signal:
         """Which clock edge activates the flip-flop. Default is Signal.HIGH, i.e. rising edge."""
-        return self.parameters.CLK_POLARITY or Signal.HIGH
+        return self.parameters.CLK_POLARITY if self.parameters.CLK_POLARITY is not None else Signal.HIGH
 
     @clk_polarity.setter
     def clk_polarity(self, new_signal: Signal) -> None:
@@ -168,7 +168,7 @@ class EnMixin(BaseModel):
     @property
     def en_polarity(self: EnableMixinProtocol) -> Signal:
         """Which EN-signal level enables writing on the data storage. Default is Signal.HIGH."""
-        return self.parameters.EN_POLARITY or Signal.HIGH
+        return self.parameters.EN_POLARITY if self.parameters.EN_POLARITY is not None else Signal.HIGH
 
     @en_polarity.setter
     def en_polarity(self: EnableMixinProtocol, new_signal: Signal) -> None:
@@ -240,7 +240,7 @@ class RstMixin(BaseModel):
     @property
     def rst_polarity(self: ResetMixinProtocol) -> Signal:
         """Which reset level resets the flip-flop. Default is Signal.HIGH: the flipflop is in reset, if the reset signal is HIGH."""
-        return self.parameters.ARST_POLARITY or Signal.HIGH
+        return self.parameters.ARST_POLARITY if self.parameters.ARST_POLARITY is not None else Signal.HIGH
 
     @rst_polarity.setter
     def rst_polarity(self: ResetMixinProtocol, new_signal: Signal) -> None:
