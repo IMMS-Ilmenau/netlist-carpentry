@@ -26,11 +26,34 @@ def _check_out_connection(port: Optional[PORT], inst: Instance) -> None:
 
 
 def _update_params(params: Dict[str, object], ports: List[Optional[PORT]], key: str = 'Y_WIDTH') -> None:
-    _check_width_mismatch(params, ports)
     if any(p is not None for p in ports) or key not in params:
         # Extract the width from the provided ports (if present)
         # If no ports are present and params does not contain "Y_WIDTH", set it to its default value 1
+        if key in params and params[key] != _get_width(ports):
+            raise WidthMismatchError(
+                f'Found a width value in the parameter dictionary ({params[key]}), which does not match the width of the given parameter dictionary ({params[key]})!'
+            )
         params.update({key: _get_width(ports)})
+
+
+def _common_width(ports: List[Optional[PORT]]) -> Optional[int]:
+    """Iterates through the list of given ports and checks if they all have the same width.
+
+    If all ports share the same width, it is returned. Otherwise, `None` is returned.
+    `None` elements in the list are ignored in the process.
+
+    Returns:
+        Optional[int]: The width that all ports have in common, if all ports share the same width.
+            Otherwise, `None` is returned.
+    """
+    common_width = None
+    for p in ports:
+        if p is not None:
+            if common_width is None:
+                common_width = p.width
+            elif p.width != common_width:
+                return None
+    return common_width
 
 
 def _get_width(ports: List[Optional[PORT]]) -> int:
@@ -59,13 +82,14 @@ def _get_width(ports: List[Optional[PORT]]) -> int:
     return filtered_ports[0].width if filtered_ports else 1
 
 
-def _check_width_mismatch(params: Dict[str, object], ports: List[Optional[PORT]], key: str = 'Y_WIDTH') -> None:
-    if key in params:
-        for p in ports:
-            if p is not None and p.width != params[key]:
-                raise WidthMismatchError(
-                    f'Found a width value in the parameter dictionary ({params[key]}), which does not match the width of the given port {p.raw_path} ({p.width})!'
-                )
+def _update_width(params: Dict[str, object], key: str, port: Optional[PORT], common_width: Optional[PositiveInt]) -> None:
+    new_width = common_width if common_width is not None else port.width if port is not None else 1
+    if key not in params:
+        params[key] = new_width
+    elif params[key] != new_width and port is not None:
+        raise WidthMismatchError(
+            f'Found a width value in the parameter dictionary ({key!r}, {params[key]}), which does not match the width of the given port ({new_width})!'
+        )
 
 
 def _un_gate(
@@ -76,9 +100,10 @@ def _un_gate(
     Y: Optional[PORT] = None,
     params: Optional[Dict[str, object]] = None,
 ) -> GATE:
-    params = params or {}
-    _update_params(params, [Y])
-    _update_params(params, [A], 'A_WIDTH')
+    params = params if params is not None else {}
+    common_width = _common_width([A, Y])
+    _update_width(params, 'A_WIDTH', A, common_width)
+    _update_width(params, 'Y_WIDTH', Y, common_width)
     g = module.create_instance(gate, inst_name, params)
     _check_out_connection(Y, g)
     if A is not None:
@@ -114,8 +139,10 @@ def _reduce_gate(
     Y: Optional[PORT] = None,
     params: Optional[Dict[str, object]] = None,
 ) -> GATE:
-    params = params or {}
-    _update_params(params, [A], 'A_WIDTH')
+    params = params if params is not None else {}
+    common_width = _common_width([A])
+    _update_width(params, 'A_WIDTH', A, common_width)
+    _update_width(params, 'Y_WIDTH', Y, 1)
     g = module.create_instance(gate, inst_name, params)
     _check_out_connection(Y, g)
     if A is not None:
@@ -174,10 +201,11 @@ def _bin_gate(
     Y: Optional[PORT] = None,
     params: Optional[Dict[str, object]] = None,
 ) -> GATE:
-    params = params or {}
-    _update_params(params, [A], 'A_WIDTH')
-    _update_params(params, [B], 'B_WIDTH')
-    _update_params(params, [Y])
+    params = params if params is not None else {}
+    common_width = _common_width([A, B, Y])
+    _update_width(params, 'A_WIDTH', A, common_width)
+    _update_width(params, 'B_WIDTH', B, common_width)
+    _update_width(params, 'Y_WIDTH', Y, common_width)
     g = module.create_instance(gate, inst_name, params)
     _check_out_connection(Y, g)
     if A is not None:
@@ -275,8 +303,11 @@ def _shift_gate(
     Y: Optional[PORT] = None,
     params: Optional[Dict[str, object]] = None,
 ) -> GATE:
-    params = params or {}
-    _update_params(params, [A, Y])
+    params = params if params is not None else {}
+    common_width = _common_width([A, B, Y])
+    _update_width(params, 'A_WIDTH', A, common_width)
+    _update_width(params, 'B_WIDTH', B, common_width)
+    _update_width(params, 'Y_WIDTH', Y, common_width)
     g = module.create_instance(gate, inst_name, params)
     _check_out_connection(Y, g)
     if A is not None:
@@ -356,9 +387,11 @@ def _binNto1_gate(
     Y: Optional[PORT] = None,
     params: Optional[Dict[str, object]] = None,
 ) -> GATE:
-    params = params or {}
-    _update_params(params, [A], 'A_WIDTH')
-    _update_params(params, [B], 'B_WIDTH')
+    params = params if params is not None else {}
+    common_width = _common_width([A, B])
+    _update_width(params, 'A_WIDTH', A, common_width)
+    _update_width(params, 'B_WIDTH', B, common_width)
+    _update_width(params, 'Y_WIDTH', Y, 1)
     g = module.create_instance(gate, inst_name, params)
     _check_out_connection(Y, g)
     if A is not None:
@@ -497,7 +530,7 @@ def multiplexer(
             f'Number of D ports does not match the width of the select port of mux {inst_name} in module {module.raw_path}: '
             + f'{len(D_ports)} D ports, but S is {S.width} bit wide!'
         )
-    params = params or {}
+    params = params if params is not None else {}
     _update_params(params, [*D_ports, Y], 'WIDTH')
     params.update({'BIT_WIDTH': _get_width([S])})
     gate = module.create_instance(g.Multiplexer, inst_name, params)
@@ -525,7 +558,7 @@ def demultiplexer(
             f'Number of Y ports does not match the width of the select port of demux {inst_name} in module {module.raw_path}: '
             + f'{len(Y_ports)} Y ports, but S is {S.width} bit wide!'
         )
-    params = params or {}
+    params = params if params is not None else {}
     _update_params(params, [*Y_ports, D], 'WIDTH')
     params.update({'BIT_WIDTH': _get_width([S])})
     gate = module.create_instance(g.Demultiplexer, inst_name, params)
@@ -549,10 +582,11 @@ def _arith_gate(
     Y: Optional[PORT] = None,
     params: Optional[Dict[str, object]] = None,
 ) -> GATE:
-    params = params or {}
-    _update_params(params, [A], 'A_WIDTH')
-    _update_params(params, [B], 'B_WIDTH')
-    _update_params(params, [Y])
+    params = params if params is not None else {}
+    common_width = _common_width([A, B, Y])
+    _update_width(params, 'A_WIDTH', A, common_width)
+    _update_width(params, 'B_WIDTH', B, common_width)
+    _update_width(params, 'Y_WIDTH', Y, common_width)
     a_width: PositiveInt = params['A_WIDTH']  # type: ignore
     b_width: PositiveInt = params['B_WIDTH']  # type: ignore
     y_width: PositiveInt = params['Y_WIDTH']  # type: ignore
@@ -644,7 +678,7 @@ def _dff(
     Q: Optional[PORT] = None,
     params: Optional[Dict[str, object]] = None,
 ) -> GATE:
-    params = params or {}
+    params = params if params is not None else {}
     _update_params(params, [D, Q], key='WIDTH')
     dff = module.create_instance(gate, inst_name, params)
     _check_out_connection(Q, dff)
@@ -793,7 +827,7 @@ def _scan_dff(
     params: Optional[Dict[str, object]] = None,
 ) -> GATE:
     dff = _dff(gate, module, inst_name, D, ctrl_ports, Q, params)
-    params = params or {}
+    params = params if params is not None else {}
     _update_params(params, [SI, SO])
     _check_out_connection(SO, dff)
     if SI is not None:
@@ -871,7 +905,7 @@ def dlatch(
     Q: Optional[PORT] = None,
     params: Optional[Dict[str, object]] = None,
 ) -> g.DLatch:
-    params = params or {}
+    params = params if params is not None else {}
     _update_params(params, [D, Q], key='WIDTH')
     dlatch = module.create_instance(g.DLatch, inst_name, params)
     _check_out_connection(Q, dlatch)

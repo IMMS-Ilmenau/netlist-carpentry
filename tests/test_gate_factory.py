@@ -16,6 +16,7 @@ def module() -> Module:
     m.create_port('P1', direction=Direction.IN, width=4)
     m.create_port('P2', direction=Direction.IN, width=4)
     m.create_port('P3', direction=Direction.OUT, width=4)
+    m.create_port('P1bit', direction=Direction.OUT, width=1)
     return m
 
 
@@ -53,10 +54,19 @@ def test_update_params(module: Module) -> None:
     assert update_params == {'Y_WIDTH': 4}
 
 
+def test_common_width(module: Module) -> None:
+    assert factory._common_width([]) is None
+    assert factory._common_width([None]) is None
+    assert factory._common_width([*module.ports.values()]) is None
+    module.ports.pop('P1bit')
+    assert factory._common_width([*module.ports.values()]) == 4
+    assert factory._common_width([None, *module.ports.values(), None, None]) == 4
+    module.create_port('1bitport')
+    assert factory._common_width([None, *module.ports.values(), None, None]) is None
+
+
 def test_un_gate(module: Module) -> None:
-    module.create_port('P4', direction=Direction.IN)
-    with pytest.raises(WidthMismatchError):
-        factory._un_gate(lib.NotGate, module, A=module.ports['P1'], Y=module.ports['P4'])
+    module.create_port('P4', direction=Direction.OUT)
     module.create_port('P5', direction=Direction.IN, width=4)
     with pytest.raises(MultipleDriverError):
         factory._un_gate(lib.NotGate, module, A=module.ports['P1'], Y=module.ports['P5'])
@@ -79,23 +89,57 @@ def test_un_gate(module: Module) -> None:
     assert next(iter(g.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_1_'
     assert g.ports['Y'].connected_wires == module.ports['P3'].connected_wires
 
+    g = factory._un_gate(lib.NotGate, module, A=module.ports['P1'], Y=module.ports['P4'])
+    assert g.ports['A'].width == 4
+    assert g.ports['Y'].width == 1
+
+    with pytest.raises(WidthMismatchError):
+        factory._un_gate(lib.NotGate, module, A=module.ports['P1'], params={'A_WIDTH': 32})
+
 
 def test_buffer(module: Module) -> None:
     g = factory.buffer(module)
     assert isinstance(g, lib.Buffer)
     assert g.name == '_Buffer_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.buffer(module, A=module.ports['P1'])  # A.width=4, Y not given => automatically assumed Y.width=4
+    assert g.ports['A'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.buffer(module, A=module.ports['P1'], Y=module.ports['P1bit'])  # A.width=4, Y.width=1
+    assert g.ports['A'].width == 4
+    assert g.ports['Y'].width == 1
 
 
 def test_not_gate(module: Module) -> None:
     g = factory.not_gate(module)
     assert isinstance(g, lib.NotGate)
     assert g.name == '_NotGate_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.not_gate(module, A=module.ports['P1'])  # A.width=4, Y not given => automatically assumed Y.width=4
+    assert g.ports['A'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.not_gate(module, A=module.ports['P1'], Y=module.ports['P1bit'])  # A.width=4, Y.width=1
+    assert g.ports['A'].width == 4
+    assert g.ports['Y'].width == 1
 
 
 def test_neg_gate(module: Module) -> None:
     g = factory.neg_gate(module)
     assert isinstance(g, lib.NegGate)
     assert g.name == '_NegGate_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.neg_gate(module, A=module.ports['P1'])  # A.width=4, Y not given => automatically assumed Y.width=4
+    assert g.ports['A'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.neg_gate(module, A=module.ports['P1'], Y=module.ports['P1bit'])  # A.width=4, Y.width=1
+    assert g.ports['A'].width == 4
+    assert g.ports['Y'].width == 1
 
 
 def test_reduce_gate(module: Module) -> None:
@@ -126,6 +170,12 @@ def test_reduce_gate(module: Module) -> None:
     assert g.ports['Y'].width == 1
     assert next(iter(g.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_1_'
     assert g.ports['Y'].connected_wires == module.ports['P5'].connected_wires
+
+    g = factory._reduce_gate(lib.ReduceOr, module, params={'A_WIDTH': 4, 'Y_WIDTH': 4})
+    assert g.ports['A'].width == 4
+    assert g.ports['Y'].width == 1
+    with pytest.raises(WidthMismatchError):
+        factory._reduce_gate(lib.ReduceOr, module, A=module.ports['P1'], Y=module.ports['P1bit'], params={'Y_WIDTH': 2})
 
 
 def test_reduce_and(module: Module) -> None:
@@ -197,48 +247,130 @@ def test_and_gate(module: Module) -> None:
     g = factory.and_gate(module)
     assert isinstance(g, lib.AndGate)
     assert g.name == '_AndGate_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.and_gate(module, A=module.ports['P1'])  # A.width=4, B+Y not given => automatically assumed Y.width=4
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.and_gate(module, A=module.ports['P1'], Y=module.ports['P1bit'])  # A.width=4, Y.width=1, B cannot be determined, 1 by default
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
 
 
 def test_or_gate(module: Module) -> None:
     g = factory.or_gate(module)
     assert isinstance(g, lib.OrGate)
     assert g.name == '_OrGate_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.or_gate(module, A=module.ports['P1'])  # A.width=4, B+Y not given => automatically assumed Y.width=4
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.or_gate(module, A=module.ports['P1'], Y=module.ports['P1bit'])  # A.width=4, Y.width=1, B cannot be determined, 1 by default
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
 
 
 def test_xor_gate(module: Module) -> None:
     g = factory.xor_gate(module)
     assert isinstance(g, lib.XorGate)
     assert g.name == '_XorGate_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.xor_gate(module, A=module.ports['P1'])  # A.width=4, B+Y not given => automatically assumed Y.width=4
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.xor_gate(module, A=module.ports['P1'], Y=module.ports['P1bit'])  # A.width=4, Y.width=1, B cannot be determined, 1 by default
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
 
 
 def test_xnor_gate(module: Module) -> None:
     g = factory.xnor_gate(module)
     assert isinstance(g, lib.XnorGate)
     assert g.name == '_XnorGate_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.xnor_gate(module, A=module.ports['P1'])  # A.width=4, B+Y not given => automatically assumed Y.width=4
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.xnor_gate(module, A=module.ports['P1'], Y=module.ports['P1bit'])  # A.width=4, Y.width=1, B cannot be determined, 1 by default
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
 
 
 def test_nor_gate(module: Module) -> None:
     g = factory.nor_gate(module)
     assert isinstance(g, lib.NorGate)
     assert g.name == '_NorGate_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.nor_gate(module, A=module.ports['P1'])  # A.width=4, B+Y not given => automatically assumed Y.width=4
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.nor_gate(module, A=module.ports['P1'], Y=module.ports['P1bit'])  # A.width=4, Y.width=1, B cannot be determined, 1 by default
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
 
 
 def test_nand_gate(module: Module) -> None:
     g = factory.nand_gate(module)
     assert isinstance(g, lib.NandGate)
     assert g.name == '_NandGate_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.nand_gate(module, A=module.ports['P1'])  # A.width=4, B+Y not given => automatically assumed Y.width=4
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.nand_gate(module, A=module.ports['P1'], Y=module.ports['P1bit'])  # A.width=4, Y.width=1, B cannot be determined, 1 by default
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
 
 
 def test_bweqx_gate(module: Module) -> None:
     g = factory.bitwise_case_equality_gate(module)
     assert isinstance(g, lib.BitwiseCaseEquality)
     assert g.name == '_BitwiseCaseEquality_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.bitwise_case_equality_gate(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.bitwise_case_equality_gate(module, A=module.ports['P1'], Y=module.ports['P1bit'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
 
 
 def test_shift_gate(module: Module) -> None:
     module.create_port('P4', direction=Direction.OUT)
-    with pytest.raises(WidthMismatchError):
-        factory._shift_gate(lib.ShiftLeft, module, A=module.ports['P1'], Y=module.ports['P4'])
     module.create_port('P5', direction=Direction.IN, width=4)
     with pytest.raises(MultipleDriverError):
         factory._shift_gate(lib.ShiftLeft, module, A=module.ports['P1'], Y=module.ports['P5'])
@@ -278,35 +410,104 @@ def test_shift_gate(module: Module) -> None:
     assert next(iter(g3.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_4_'
     assert g3.ports['Y'].connected_wires == module.ports['P3'].connected_wires
 
+    g4 = factory._shift_gate(lib.ShiftLeft, module, A=module.ports['P1'])
+    assert g4.ports['A'].width == 4
+    assert g4.ports['B'].width == 4
+    assert g4.ports['Y'].width == 4
+    g5 = factory._shift_gate(lib.ShiftLeft, module, A=module.ports['P1'], Y=module.ports['P4'])
+    assert g5.ports['A'].width == 4
+    assert g5.ports['B'].width == 1
+    assert g5.ports['Y'].width == 1
+
 
 def test_shift_signed(module: Module) -> None:
     g = factory.shift_signed(module)
     assert isinstance(g, lib.ShiftSigned)
     assert g.name == '_ShiftSigned_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.shift_signed(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.shift_signed(module, A=module.ports['P1'], Y=module.ports['P1bit'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
 
 
 def test_shift_left(module: Module) -> None:
     g = factory.shift_left(module)
     assert isinstance(g, lib.ShiftLeft)
     assert g.name == '_ShiftLeft_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.shift_left(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.shift_left(module, A=module.ports['P1'], Y=module.ports['P1bit'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
 
 
 def test_shift_right(module: Module) -> None:
     g = factory.shift_right(module)
     assert isinstance(g, lib.ShiftRight)
     assert g.name == '_ShiftRight_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.shift_right(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.shift_right(module, A=module.ports['P1'], Y=module.ports['P1bit'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
 
 
 def test_arithmetic_shift_left(module: Module) -> None:
     g = factory.arithmetic_shift_left(module)
     assert isinstance(g, lib.ArithmeticShiftLeft)
     assert g.name == '_ArithmeticShiftLeft_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.arithmetic_shift_left(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.arithmetic_shift_left(module, A=module.ports['P1'], Y=module.ports['P1bit'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
 
 
 def test_arithmetic_shift_right(module: Module) -> None:
     g = factory.arithmetic_shift_right(module)
     assert isinstance(g, lib.ArithmeticShiftRight)
     assert g.name == '_ArithmeticShiftRight_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.arithmetic_shift_right(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.arithmetic_shift_right(module, A=module.ports['P1'], Y=module.ports['P1bit'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
 
 
 def test_binNto1_gate(module: Module) -> None:
@@ -345,47 +546,142 @@ def test_binNto1_gate(module: Module) -> None:
     assert next(iter(g.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_2_'
     assert g.ports['Y'].connected_wires == module.ports['P5'].connected_wires
 
+    g = factory._binNto1_gate(lib.LogicAnd, module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 1
+    g = factory._binNto1_gate(lib.LogicAnd, module, A=module.ports['P1'], B=module.ports['P4'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+    with pytest.raises(WidthMismatchError):
+        factory._binNto1_gate(lib.LogicAnd, module, A=module.ports['P1'], B=module.ports['P4'], params={'B_WIDTH': 2})
+
 
 def test_logic_and(module: Module) -> None:
     g = factory.logic_and(module)
     assert isinstance(g, lib.LogicAnd)
     assert g.name == '_LogicAnd_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.logic_and(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 1
+    g = factory.logic_and(module, A=module.ports['P1'], params={'B_WIDTH': 2})
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 2
+    assert g.ports['Y'].width == 1
 
 
 def test_logic_or(module: Module) -> None:
     g = factory.logic_or(module)
     assert isinstance(g, lib.LogicOr)
     assert g.name == '_LogicOr_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.logic_or(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 1
+    g = factory.logic_or(module, A=module.ports['P1'], params={'B_WIDTH': 2})
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 2
+    assert g.ports['Y'].width == 1
 
 
 def test_less_than(module: Module) -> None:
     g = factory.less_than(module)
     assert isinstance(g, lib.LessThan)
     assert g.name == '_LessThan_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.less_than(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 1
+    g = factory.less_than(module, A=module.ports['P1'], params={'B_WIDTH': 2})
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 2
+    assert g.ports['Y'].width == 1
 
 
 def test_less_equal(module: Module) -> None:
     g = factory.less_equal(module)
     assert isinstance(g, lib.LessEqual)
     assert g.name == '_LessEqual_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.less_equal(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 1
+    g = factory.less_equal(module, A=module.ports['P1'], params={'B_WIDTH': 2})
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 2
+    assert g.ports['Y'].width == 1
 
 
 def test_equal(module: Module) -> None:
     g = factory.equal(module)
     assert isinstance(g, lib.Equal)
     assert g.name == '_Equal_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.equal(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 1
+    g = factory.equal(module, A=module.ports['P1'], params={'B_WIDTH': 2})
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 2
+    assert g.ports['Y'].width == 1
 
 
 def test_case_equal(module: Module) -> None:
     g = factory.case_equal(module)
     assert isinstance(g, lib.CaseEqual)
     assert g.name == '_CaseEqual_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.case_equal(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 1
+    g = factory.case_equal(module, A=module.ports['P1'], params={'B_WIDTH': 2})
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 2
+    assert g.ports['Y'].width == 1
 
 
 def test_not_equal(module: Module) -> None:
     g = factory.not_equal(module)
     assert isinstance(g, lib.NotEqual)
     assert g.name == '_NotEqual_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.not_equal(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 1
+    g = factory.not_equal(module, A=module.ports['P1'], params={'B_WIDTH': 2})
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 2
+    assert g.ports['Y'].width == 1
 
 
 def test_case_not_equal(module: Module) -> None:
@@ -398,12 +694,36 @@ def test_greater_than(module: Module) -> None:
     g = factory.greater_than(module)
     assert isinstance(g, lib.GreaterThan)
     assert g.name == '_GreaterThan_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.greater_than(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 1
+    g = factory.greater_than(module, A=module.ports['P1'], params={'B_WIDTH': 2})
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 2
+    assert g.ports['Y'].width == 1
 
 
 def test_greater_equal(module: Module) -> None:
     g = factory.greater_equal(module)
     assert isinstance(g, lib.GreaterEqual)
     assert g.name == '_GreaterEqual_0_'
+    assert g.ports['A'].width == 1
+    assert g.ports['B'].width == 1
+    assert g.ports['Y'].width == 1
+
+    g = factory.greater_equal(module, A=module.ports['P1'])
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 1
+    g = factory.greater_equal(module, A=module.ports['P1'], params={'B_WIDTH': 2})
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 2
+    assert g.ports['Y'].width == 1
 
 
 def test_multiplexer(module: Module) -> None:
@@ -531,6 +851,7 @@ def test_demultiplexer(module: Module) -> None:
 def test_adder(module: Module) -> None:
     A = module.create_port('A', Direction.IN, width=4)
     B = module.create_port('B', Direction.IN, width=4)
+    B2 = module.create_port('B2', Direction.IN, width=8)
     Y = module.create_port('Y', Direction.OUT, width=4)
     g = factory.adder(module, A=A, B=B, Y=Y)
     assert isinstance(g, lib.Adder)
@@ -541,6 +862,17 @@ def test_adder(module: Module) -> None:
     assert g.ports['B'].width == 4
     assert g.ports['Y'].is_connected
     assert g.ports['Y'].width == 4
+
+    g = factory.adder(module, A=A)
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.adder(module, A=A, B=B2)
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 8
+    assert g.ports['Y'].width == 1
+    with pytest.raises(WidthMismatchError):
+        factory.adder(module, A=A, B=B2, params={'B_WIDTH': 16})
 
 
 def test_adder_different_widths(module: Module) -> None:
@@ -563,33 +895,98 @@ def test_adder_different_widths(module: Module) -> None:
 
 
 def test_subtractor(module: Module) -> None:
+    A = module.create_port('A', Direction.IN, width=4)
+    B = module.create_port('B', Direction.IN, width=8)
     g = factory.subtractor(module)
     assert isinstance(g, lib.Subtractor)
     assert g.name == '_Subtractor_0_'
 
+    g = factory.subtractor(module, A=A)
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.subtractor(module, A=A, B=B)
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 8
+    assert g.ports['Y'].width == 1
+    with pytest.raises(WidthMismatchError):
+        factory.subtractor(module, A=A, B=B, params={'B_WIDTH': 16})
+
 
 def test_multiplier(module: Module) -> None:
+    A = module.create_port('A', Direction.IN, width=4)
+    B = module.create_port('B', Direction.IN, width=8)
     g = factory.multiplier(module)
     assert isinstance(g, lib.Multiplier)
     assert g.name == '_Multiplier_0_'
 
+    g = factory.multiplier(module, A=A)
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.multiplier(module, A=A, B=B)
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 8
+    assert g.ports['Y'].width == 1
+    with pytest.raises(WidthMismatchError):
+        factory.multiplier(module, A=A, B=B, params={'B_WIDTH': 16})
+
 
 def test_divider(module: Module) -> None:
+    A = module.create_port('A', Direction.IN, width=4)
+    B = module.create_port('B', Direction.IN, width=8)
     g = factory.divider(module)
     assert isinstance(g, lib.Divider)
     assert g.name == '_Divider_0_'
 
+    g = factory.divider(module, A=A)
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.divider(module, A=A, B=B)
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 8
+    assert g.ports['Y'].width == 1
+    with pytest.raises(WidthMismatchError):
+        factory.divider(module, A=A, B=B, params={'B_WIDTH': 16})
+
 
 def test_modulo(module: Module) -> None:
+    A = module.create_port('A', Direction.IN, width=4)
+    B = module.create_port('B', Direction.IN, width=8)
     g = factory.modulo(module)
     assert isinstance(g, lib.Modulo)
     assert g.name == '_Modulo_0_'
 
+    g = factory.divider(module, A=A)
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.divider(module, A=A, B=B)
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 8
+    assert g.ports['Y'].width == 1
+    with pytest.raises(WidthMismatchError):
+        factory.divider(module, A=A, B=B, params={'B_WIDTH': 16})
+
 
 def test_exponentiator(module: Module) -> None:
+    A = module.create_port('A', Direction.IN, width=4)
+    B = module.create_port('B', Direction.IN, width=8)
     g = factory.exponentiator(module)
     assert isinstance(g, lib.Exponentiator)
     assert g.name == '_Exponentiator_0_'
+
+    g = factory.divider(module, A=A)
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 4
+    assert g.ports['Y'].width == 4
+    g = factory.divider(module, A=A, B=B)
+    assert g.ports['A'].width == 4
+    assert g.ports['B'].width == 8
+    assert g.ports['Y'].width == 1
+    with pytest.raises(WidthMismatchError):
+        factory.divider(module, A=A, B=B, params={'B_WIDTH': 16})
 
 
 def test_dff_gate(module: Module) -> None:
