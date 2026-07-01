@@ -7,6 +7,7 @@ from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.netlist_elements.module import Module
+from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
 from netlist_carpentry.routines import opt_constant
 from netlist_carpentry.routines.opt.constant_folds import opt_constant_mux_inputs, opt_constant_propagation
@@ -136,7 +137,7 @@ def test_opt_constant_propagation_dff_d(module: Module) -> None:
     assert 'out_ff' not in module.wires
     assert module.ports['out_ff'].is_connected
     assert module.ports['out_ff'].is_tied_defined
-    assert module.ports['out_ff'].signal_array == {0: Signal.HIGH}
+    assert module.ports['out_ff'].signal_array == SignalArray(signals={0: Signal.HIGH})
 
 
 def test_opt_constant_propagation_dlatch() -> None:
@@ -150,7 +151,7 @@ def test_opt_constant_propagation_dlatch() -> None:
     assert opt_constant_propagation(module)
     assert module.ports['Q'].driver() == {0: None}
     assert module.ports['Q'].signal is Signal.FLOATING
-    assert module.ports['Q'].signal_array == {0: Signal.FLOATING}
+    assert module.ports['Q'].signal_array == SignalArray(signals={0: Signal.FLOATING})
     assert 'DLatch' not in module.instances
 
     module.disconnect(q)

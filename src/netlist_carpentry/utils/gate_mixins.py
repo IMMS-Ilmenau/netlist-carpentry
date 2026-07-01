@@ -8,6 +8,7 @@ from netlist_carpentry.core.exceptions import WidthMismatchError
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.core.netlist_elements.port import ANY_PORT
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
+from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.gate_lib_dataclasses import ClockParams, DFFParams, EnableParams, LoadParams, Parameters, ResetParams, SRParams
 from netlist_carpentry.utils.safe_format_dict import SafeFormatDict
@@ -308,9 +309,9 @@ class RstMixin(BaseModel):
         return self.ports['RST']
 
     @property
-    def rst_val(self: ResetMixinProtocol) -> Dict[int, Signal]:
+    def rst_val(self: ResetMixinProtocol) -> SignalArray:
         """The value of the flipflop during and after reset. Default is Signal.LOW, i.e. the initial flipflop state is 0 by default."""
-        return Signal.from_int(self.rst_val_int, fixed_width=self.data_width)
+        return SignalArray.from_int(self.rst_val_int, fixed_width=self.data_width)
 
     @property
     def in_reset(self: ResetMixinProtocol) -> bool:

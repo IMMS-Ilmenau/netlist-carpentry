@@ -23,7 +23,9 @@ from netlist_carpentry.core.netlist_elements.netlist_element import NetlistEleme
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2OBJ
 from netlist_carpentry.core.protocols.signals import LogicLevel
+from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.custom_dict import CustomDict
+from netlist_carpentry.utils.gate_lib_dataclasses import InstanceParams
 
 if TYPE_CHECKING:
     from netlist_carpentry.core.netlist_elements.module import Module
@@ -39,6 +41,8 @@ class Instance(NetlistElement, BaseModel):
 
     _ports = CustomDict[str, Port['Instance']]()
     module: Optional['Module'] = None
+
+    parameters: InstanceParams = InstanceParams()
 
     @property
     def path(self) -> InstancePath:
@@ -178,7 +182,7 @@ class Instance(NetlistElement, BaseModel):
         return any(p.is_unconnected_partly for p in self.ports.values())
 
     @property
-    def signals(self) -> Dict[str, Dict[int, Signal]]:
+    def signals(self) -> Dict[str, SignalArray]:
         """A dictionary with all signals currently present on all ports of this instance."""
         return {pname: p.signal_array for pname, p in self.ports.items()}
 
@@ -315,6 +319,10 @@ class Instance(NetlistElement, BaseModel):
             str: The generated Verilog wire name.
         """
         return "1'bz" if seg.is_unconnected else f'{seg.ws_path.parent.name}[{seg.ws_path.name}]'
+
+    def model_post_init(self, context: object) -> None:
+        self.parameters._parent = self
+        return super().model_post_init(context)
 
     def set_name(self, new_name: str) -> None:
         self.parent.instances[new_name] = self.parent.instances.pop(self.name)
@@ -570,7 +578,7 @@ class Instance(NetlistElement, BaseModel):
         """
         if port_name not in self.ports:
             raise ObjectNotFoundError(f'No port {port_name} exists in {self.__class__.__name__} {self.raw_path}!')
-        self.parameters[f'{port_name}_SIGNED'] = self.ports[port_name].parameters.get('signed', False)
+        self.parameters[f'{port_name}_SIGNED'] = self.ports[port_name].parameters.signed
 
     def split(self) -> Dict[NonNegativeInt, Self]:
         """

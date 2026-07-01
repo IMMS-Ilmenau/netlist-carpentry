@@ -19,6 +19,7 @@ from typing_extensions import Self
 
 from netlist_carpentry import CFG, Direction, Instance, Port, Signal
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
+from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.gate_lib_base_classes import (
     ArithmeticGate,
     BinaryGate,
@@ -122,8 +123,8 @@ class PosGate(UnaryGate, BaseModel):
         For an arithmetic negator gate, the output signal is the two's complement of the input signal.
         """
         if all(self.signal_in(i).is_defined for i in self.input_port.segments):
-            int_val = Signal.dict_to_int(self.input_port.signal_array, msb_first=self.input_port.msb_first, signed=self.a_signed)
-            return Signal.from_int(int_val, msb_first=self.output_port.msb_first, fixed_width=self.output_port.width)
+            int_val = self.input_port.signal_int or 0
+            return SignalArray.from_int(int_val, msb_first=self.output_port.msb_first, fixed_width=self.output_port.width).signals
         return {idx: Signal.UNDEFINED}
 
 
@@ -151,9 +152,9 @@ class NegGate(UnaryGate, BaseModel):
         For an arithmetic negator gate, the output signal is the two's complement of the input signal.
         """
         if all(self.signal_in(i).is_defined for i in self.input_port.segments):
-            int_val = Signal.dict_to_int(self.input_port.signal_array, msb_first=self.input_port.msb_first, signed=self.a_signed)
+            int_val = self.input_port.signal_int or 0
             comp_str = Signal.twos_complement(int_val, width=self.output_port.width, msb_first=self.output_port.msb_first)
-            return Signal.from_bin(comp_str, msb_first=self.output_port.msb_first, fixed_width=self.output_port.width)
+            return SignalArray.from_bin(comp_str, msb_first=self.output_port.msb_first, fixed_width=self.output_port.width).signals
         return {idx: Signal.UNDEFINED}
 
 
@@ -588,11 +589,13 @@ class ShiftSigned(ShiftGate, BaseModel):
         For a signed SHIFT gate, returns its left input shifted right by the number on the right side
         if it is positive or unsigned, and shifted left by the number on the right side if it is negative.
         """
-        val_a = Signal.dict_to_int(self.ports['A'].signal_array, msb_first=self.ports['A'].msb_first, signed=self.a_signed)
-        val_b = Signal.dict_to_int(self.ports['B'].signal_array, msb_first=self.ports['B'].msb_first, signed=self.b_signed)
+        if not self.ports['B'].signal_array.is_defined:
+            return {idx: Signal.UNDEFINED}
+        val_a = self.ports['A'].signal_array
+        val_b = self.ports['B'].signal_array
         shift_left = self.b_signed and self.ports['B'].signal_int is not None and self.ports['B'].signal_int < 0
-        out_val = val_a << -val_b if shift_left else val_a >> val_b
-        return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
+        out_val = val_a << -int(val_b) if shift_left else val_a >> val_b
+        return out_val.signals
 
 
 class ShiftLeft(ShiftGate, BaseModel):
@@ -618,10 +621,14 @@ class ShiftLeft(ShiftGate, BaseModel):
 
         For a SHIFT-LEFT gate, returns its left input shifted left by the number on the right side.
         """
-        val_a = Signal.dict_to_int(self.ports['A'].signal_array, msb_first=self.ports['A'].msb_first, signed=self.ports['A'].signed)
-        val_b = Signal.dict_to_int(self.ports['B'].signal_array, msb_first=self.ports['B'].msb_first)
+        if not self.ports['B'].signal_array.is_defined:
+            return {idx: Signal.UNDEFINED}
+        val_a = self.ports['A'].signal_array
+        val_b = self.ports['B'].signal_array
+        val_a.signed = False
+        val_b.signed = False
         out_val = val_a << val_b
-        return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
+        return out_val.signals
 
 
 class ShiftRight(ShiftGate, BaseModel):
@@ -647,11 +654,14 @@ class ShiftRight(ShiftGate, BaseModel):
 
         For a SHIFT-RIGHT gate, returns its left input shifted right by the number on the right side.
         """
-        val_a = Signal.dict_to_int(self.ports['A'].signal_array, msb_first=self.ports['A'].msb_first, signed=self.ports['A'].signed)
-        val_b = Signal.dict_to_int(self.ports['B'].signal_array, msb_first=self.ports['B'].msb_first)
-        mask = (1 << self.y_width) - 1
-        out_val = (mask & val_a) >> val_b  # Masks the shifting process, otherwise it would be an arithmetic shift, and not a logical shift
-        return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
+        if not self.ports['B'].signal_array.is_defined:
+            return {idx: Signal.UNDEFINED}
+        val_a = self.ports['A'].signal_array
+        val_b = self.ports['B'].signal_array
+        val_a.signed = False
+        val_b.signed = False
+        out_val = val_a >> val_b
+        return out_val.signals
 
 
 class ArithmeticShiftLeft(ShiftGate, BaseModel):
@@ -677,10 +687,10 @@ class ArithmeticShiftLeft(ShiftGate, BaseModel):
 
         For a SHIFT-LEFT gate, returns its left input shifted left by the number on the right side.
         """
-        val_a = Signal.dict_to_int(self.ports['A'].signal_array, msb_first=self.ports['A'].msb_first, signed=self.ports['A'].signed)
-        val_b = Signal.dict_to_int(self.ports['B'].signal_array, msb_first=self.ports['B'].msb_first)
-        out_val = val_a << val_b
-        return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
+        if not self.ports['B'].signal_array.is_defined:
+            return {idx: Signal.UNDEFINED}
+        out_val = self.ports['A'].signal_array << self.ports['B'].signal_array
+        return out_val.signals
 
 
 class ArithmeticShiftRight(ShiftGate, BaseModel):
@@ -706,10 +716,10 @@ class ArithmeticShiftRight(ShiftGate, BaseModel):
 
         For a SHIFT-RIGHT gate, returns its left input shifted right by the number on the right side.
         """
-        val_a = Signal.dict_to_int(self.ports['A'].signal_array, msb_first=self.ports['A'].msb_first, signed=self.ports['A'].signed)
-        val_b = Signal.dict_to_int(self.ports['B'].signal_array, msb_first=self.ports['B'].msb_first)
-        out_val = val_a >> val_b
-        return Signal.from_int(out_val, msb_first=self.ports['Y'].msb_first, fixed_width=self.ports['Y'].width)
+        if not self.ports['B'].signal_array.is_defined:
+            return {idx: Signal.UNDEFINED}
+        out_val = self.ports['A'].signal_array >> self.ports['B'].signal_array
+        return out_val.signals
 
 
 class ShiftX(ShiftGate, BaseModel):
@@ -806,9 +816,9 @@ class LogicAnd(BinaryNto1Gate, BaseModel):
         """
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
-        if all(s.is_defined for s in sin1.values()) and all(s.is_defined for s in sin2.values()):
+        if sin1.is_defined and sin2.is_defined:
             # Both int(sin1) > 0 and int(sin2) > 0
-            return {idx: Signal.HIGH if Signal.dict_to_int(sin1) and Signal.dict_to_int(sin2) else Signal.LOW}
+            return {idx: Signal.HIGH if int(sin1) and int(sin2) else Signal.LOW}
         return {idx: Signal.UNDEFINED}
 
 
@@ -838,9 +848,9 @@ class LogicOr(BinaryNto1Gate, BaseModel):
         """
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
-        if all(s.is_defined for s in sin1.values()) and all(s.is_defined for s in sin2.values()):
+        if sin1.is_defined and sin2.is_defined:
             # Either int(sin1) > 0 or int(sin2) > 0
-            return {idx: Signal.HIGH if Signal.dict_to_int(sin1) or Signal.dict_to_int(sin2) else Signal.LOW}
+            return {idx: Signal.HIGH if int(sin1) or int(sin2) else Signal.LOW}
         return {idx: Signal.UNDEFINED}
 
 
@@ -870,8 +880,8 @@ class LessThan(BinaryNto1Gate, BaseModel):
         """
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
-        if all(s.is_defined for s in sin1.values()) and all(s.is_defined for s in sin2.values()):
-            return {idx: Signal.HIGH if Signal.dict_to_int(sin1) < Signal.dict_to_int(sin2) else Signal.LOW}
+        if sin1.is_defined and sin2.is_defined:
+            return {idx: Signal.HIGH if int(sin1) < int(sin2) else Signal.LOW}
         return {idx: Signal.UNDEFINED}
 
 
@@ -901,8 +911,8 @@ class LessEqual(BinaryNto1Gate, BaseModel):
         """
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
-        if all(s.is_defined for s in sin1.values()) and all(s.is_defined for s in sin2.values()):
-            return {idx: Signal.HIGH if Signal.dict_to_int(sin1) <= Signal.dict_to_int(sin2) else Signal.LOW}
+        if sin1.is_defined and sin2.is_defined:
+            return {idx: Signal.HIGH if int(sin1) <= int(sin2) else Signal.LOW}
         return {idx: Signal.UNDEFINED}
 
 
@@ -933,8 +943,8 @@ class Equal(BinaryNto1Gate, BaseModel):
         """
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
-        if all(s.is_defined for s in sin1.values()) and all(s.is_defined for s in sin2.values()):
-            return {idx: Signal.HIGH if Signal.dict_to_int(sin1) == Signal.dict_to_int(sin2) else Signal.LOW}
+        if sin1.is_defined and sin2.is_defined:
+            return {idx: Signal.HIGH if int(sin1) == int(sin2) else Signal.LOW}
         return {idx: Signal.UNDEFINED}
 
 
@@ -997,8 +1007,8 @@ class NotEqual(BinaryNto1Gate, BaseModel):
         """
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
-        if all(s.is_defined for s in sin1.values()) and all(s.is_defined for s in sin2.values()):
-            return {idx: Signal.HIGH if Signal.dict_to_int(sin1) != Signal.dict_to_int(sin2) else Signal.LOW}
+        if sin1.is_defined and sin2.is_defined:
+            return {idx: Signal.HIGH if int(sin1) != int(sin2) else Signal.LOW}
         return {idx: Signal.UNDEFINED}
 
 
@@ -1060,8 +1070,8 @@ class GreaterThan(BinaryNto1Gate, BaseModel):
         """
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
-        if all(s.is_defined for s in sin1.values()) and all(s.is_defined for s in sin2.values()):
-            return {idx: Signal.HIGH if Signal.dict_to_int(sin1) > Signal.dict_to_int(sin2) else Signal.LOW}
+        if sin1.is_defined and sin2.is_defined:
+            return {idx: Signal.HIGH if int(sin1) > int(sin2) else Signal.LOW}
         return {idx: Signal.UNDEFINED}
 
 
@@ -1091,8 +1101,8 @@ class GreaterEqual(BinaryNto1Gate, BaseModel):
         """
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
-        if all(s.is_defined for s in sin1.values()) and all(s.is_defined for s in sin2.values()):
-            return {idx: Signal.HIGH if Signal.dict_to_int(sin1) >= Signal.dict_to_int(sin2) else Signal.LOW}
+        if sin1.is_defined and sin2.is_defined:
+            return {idx: Signal.HIGH if int(sin1) >= int(sin2) else Signal.LOW}
         return {idx: Signal.UNDEFINED}
 
 
@@ -1576,7 +1586,7 @@ class Adder(ArithmeticGate, BaseModel):
         """
         sig1_int, sig2_int = self.inputs_int()
 
-        return Signal.from_int(sig1_int + sig2_int, fixed_width=self.output_port.width)
+        return SignalArray.from_int(sig1_int + sig2_int, fixed_width=self.output_port.width, truncate=True).signals
 
 
 class Subtractor(ArithmeticGate, BaseModel):
@@ -1594,7 +1604,7 @@ class Subtractor(ArithmeticGate, BaseModel):
         """
         sig1_int, sig2_int = self.inputs_int()
 
-        return Signal.from_int(sig1_int - sig2_int, fixed_width=self.output_port.width)
+        return SignalArray.from_int(sig1_int - sig2_int, fixed_width=self.output_port.width, truncate=True).signals
 
 
 class Multiplier(ArithmeticGate, BaseModel):
@@ -1612,7 +1622,7 @@ class Multiplier(ArithmeticGate, BaseModel):
         """
         sig1_int, sig2_int = self.inputs_int()
 
-        return Signal.from_int(sig1_int * sig2_int, fixed_width=self.output_port.width)
+        return SignalArray.from_int(sig1_int * sig2_int, fixed_width=self.output_port.width, truncate=True).signals
 
 
 class Divider(ArithmeticGate, BaseModel):
@@ -1630,7 +1640,7 @@ class Divider(ArithmeticGate, BaseModel):
         """
         sig1_int, sig2_int = self.inputs_int()
 
-        return Signal.from_int(int(sig1_int / sig2_int), fixed_width=self.output_port.width)
+        return SignalArray.from_int(int(sig1_int / sig2_int), fixed_width=self.output_port.width, truncate=True).signals
 
 
 class Modulo(ArithmeticGate, BaseModel):
@@ -1648,7 +1658,7 @@ class Modulo(ArithmeticGate, BaseModel):
         """
         sig1_int, sig2_int = self.inputs_int()
 
-        return Signal.from_int(sig1_int % sig2_int, fixed_width=self.output_port.width)
+        return SignalArray.from_int(sig1_int % sig2_int, fixed_width=self.output_port.width, truncate=True).signals
 
 
 class Exponentiator(ArithmeticGate, BaseModel):
@@ -1694,7 +1704,7 @@ class Exponentiator(ArithmeticGate, BaseModel):
         """
         pow_sig = self._verilog_pow()
         if pow_sig is not None:
-            return Signal.from_int(pow_sig, fixed_width=self.output_port.width)
+            return SignalArray.from_int(pow_sig, fixed_width=self.output_port.width, truncate=True).signals
         return {i: Signal.UNDEFINED for i, _ in self.output_port}
 
 
@@ -1718,7 +1728,7 @@ class DFF(ClkMixin, StorageGate, BaseModel):
     """
     parameters: DFFParams = DFFParams()
 
-    prev_signals: Dict[str, Dict[int, Signal]] = {}
+    prev_signals: Dict[str, SignalArray] = {}
 
     @property
     def has_en(self) -> bool:
@@ -1932,7 +1942,7 @@ class ALDFFE(EnMixin, ALDFF):  # type: ignore[misc]
 class DFFSR(SRMixin, DFF):  # type: ignore[misc]
     instance_type: str = f'{CFG.id_internal}dffsr'
 
-    _prev_signals_sr: Dict[str, Dict[int, Signal]] = {}
+    _prev_signals_sr: Dict[str, SignalArray] = {}
 
     @property
     def verilog_template(self) -> str:

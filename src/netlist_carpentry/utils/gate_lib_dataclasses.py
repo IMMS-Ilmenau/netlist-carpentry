@@ -1,11 +1,14 @@
 """Module for typed dictionaries used throughout the gate library for convenience."""
 
-from typing import Dict, List, Optional, Tuple, TypedDict
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, TypedDict
 
-from pydantic import BaseModel, ConfigDict, NonNegativeInt, PositiveInt
+from pydantic import BaseModel, ConfigDict, NonNegativeInt, PositiveInt, PrivateAttr
 from typing_extensions import NotRequired, deprecated
 
 from netlist_carpentry import Signal
+
+if TYPE_CHECKING:
+    from netlist_carpentry import Instance
 
 
 @deprecated('TypedParams will be removed in 1.0.0! Use gate_lib_dataclasses.Parameters instead.')
@@ -44,10 +47,13 @@ class Parameters(BaseModel):
 
     def __eq__(self, value: object) -> bool:
         if isinstance(value, Parameters):
-            return super().__eq__(value)
+            return self.as_dict() == value.as_dict()
         if isinstance(value, dict):
             return self.as_dict() == value
         return NotImplemented
+
+    def get(self, key: str, default: Optional[object] = None) -> object:
+        return self.as_dict().get(key, default)
 
     def as_dict(self) -> Dict[str, object]:
         """Returns this parameter set as a dictionary.
@@ -70,8 +76,19 @@ class Parameters(BaseModel):
         return list(self.as_dict().items())
 
 
+class PortParams(Parameters):
+    upto: Optional[int] = None
+    offset: Optional[int] = None
+    signed: Optional[int] = None
+
+
 class InstanceParams(Parameters):
-    pass
+    _parent: Optional['Instance'] = PrivateAttr(default=None)
+
+    def _get_parent(self, port: str, key: str, default: Optional[PositiveInt]) -> Optional[PositiveInt]:
+        if self._parent is not None:
+            return int(getattr(self._parent.ports[port], key))  # type: ignore
+        return default
 
 
 class GateParams(InstanceParams):

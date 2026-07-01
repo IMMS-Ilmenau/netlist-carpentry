@@ -22,6 +22,7 @@ from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
+from netlist_carpentry.core.types import SignalArray
 
 
 @pytest.fixture
@@ -161,9 +162,9 @@ def test_has_unconnected_port_segments(standard_instance_with_ports: Instance) -
 def test_signals(standard_instance_with_ports: Instance) -> None:
     standard_instance_with_ports.ports['PortB'].set_signals('01zx')
     target = {
-        'PortA': {0: Signal.UNDEFINED},
-        'PortB': {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.FLOATING, 0: Signal.UNDEFINED},
-        'PortC': {0: Signal.UNDEFINED},
+        'PortA': SignalArray(signals={0: Signal.UNDEFINED}),
+        'PortB': SignalArray(signals={3: Signal.LOW, 2: Signal.HIGH, 1: Signal.FLOATING, 0: Signal.UNDEFINED}),
+        'PortC': SignalArray(signals={0: Signal.UNDEFINED}),
     }
     found = standard_instance_with_ports.signals
 

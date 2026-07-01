@@ -20,6 +20,7 @@ from netlist_carpentry.core.netlist_elements.netlist_element import NetlistEleme
 from netlist_carpentry.core.netlist_elements.port import Port
 from netlist_carpentry.core.netlist_elements.wire import Wire
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
+from netlist_carpentry.core.types import SignalArray
 
 
 @pytest.fixture
@@ -52,7 +53,7 @@ def test_wire_creation(standard_wire: Wire) -> None:
     assert standard_wire.width == 1
     assert standard_wire.offset == 1
     assert standard_wire.signal == Signal.UNDEFINED
-    assert standard_wire.signal_array == {1: Signal.UNDEFINED}
+    assert standard_wire.signal_array == SignalArray(signals={0: Signal.UNDEFINED})
     assert standard_wire.signal_str == 'x'
     assert standard_wire.signal_int is None
     assert len(standard_wire.segments) == 1
@@ -67,7 +68,7 @@ def test_wire_creation(standard_wire: Wire) -> None:
     assert standard_wire.can_carry_signal
     standard_wire[1].set_signal('1')
     assert standard_wire.signal == Signal.HIGH
-    assert standard_wire.signal_array == {1: Signal.HIGH}
+    assert standard_wire.signal_array == SignalArray(signals={0: Signal.HIGH})
 
 
 def test_wire_len(standard_wire: Wire) -> None:
@@ -286,23 +287,26 @@ def test_get_wire_segments(standard_wire: Wire) -> None:
 
 def test_set_signal(standard_wire: Wire) -> None:
     standard_wire.set_signal(Signal.HIGH, 1)
-    assert standard_wire.signal_array[1] == Signal.HIGH
-    # Although index 1 may indicate that there is also an index 0, this is not the case
-    # The wire only has one segment, which is index 1
+    assert standard_wire.signal_array[0] == Signal.HIGH
+    # Although segment 1 may indicate that there is also an segment 0, this is not the case
+    # The wire only has one segment, which is at index 1
     # This conforms to "wire[1:1]" in Verilog
+    # However, the signal_array still starts with index 0, ignoring the offset, since it is
+    # a vector of the SIGNALS of the corresponding wire and not of the segments
     # Accordingly, the integer value is still either 0 or 1 (since it is a 1-bit vector)
+    # Thus, signal_array[0] refers to the signal of the lowest segment, which is segment 1
     assert standard_wire.signal_int == 1
 
     standard_wire.set_signal(Signal.HIGH, 1)
-    assert standard_wire.signal_array[1] == Signal.HIGH
+    assert standard_wire.signal_array[0] == Signal.HIGH
     assert standard_wire.signal_int == 1
 
     standard_wire.set_signal(0, 1)
-    assert standard_wire.signal_array[1] == Signal.LOW
+    assert standard_wire.signal_array[0] == Signal.LOW
     assert standard_wire.signal_int == 0
 
     standard_wire.set_signal('Z', 1)
-    assert standard_wire.signal_array[1] == Signal.FLOATING
+    assert standard_wire.signal_array[0] == Signal.FLOATING
     assert standard_wire.signal_int is None
 
 
@@ -312,10 +316,12 @@ def test_set_signals() -> None:
     w = wire_4b()
     w.msb_first = False
     # Wire.set_signals assigns signals msb-first or lsb-first depending on Wire.msb_first
-    w.set_signals('1011')  # 1011b is 11d, but internal representation is LSB: 1101
-    assert w.signal_int == 11
-    assert w.signal_array == {4: Signal.HIGH, 3: Signal.HIGH, 2: Signal.LOW, 1: Signal.HIGH}  # Internal representation: 1101
+    w.set_signals('1011')  # 1011b (LSB) is 11d, but internal representation remains MSB: 1101
+    assert w.signal_int == 13  # Internal representation: 1101
+    assert w.signal_array == SignalArray(signals={3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.HIGH}, msb_first=False)
+    assert w.signal_str == '1011'
     w.msb_first = True
+    assert w.signal_str == '1101'
     assert w.offset == 1
     w.set_signals(2)  # 0010
     assert w.signal_int == 2
@@ -325,16 +331,18 @@ def test_set_signals() -> None:
     assert w.signal_int == 11
     w.set_signals({0: Signal.HIGH, 1: Signal.LOW})  # only 2 lowest bits are overwritten
     assert w.signal_int == 9
-    assert w.signal_array == {4: Signal.HIGH, 3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH}
+    assert w.signal_array == SignalArray(signals={3: Signal.HIGH, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.HIGH})
     assert w.signal_str == '1001'
     w.set_signals('01xz')
     assert w.signal_int is None
-    assert w.signal_array == {4: Signal.LOW, 3: Signal.HIGH, 2: Signal.UNDEFINED, 1: Signal.FLOATING}
+    assert w.signal_array == SignalArray(signals={3: Signal.LOW, 2: Signal.HIGH, 1: Signal.UNDEFINED, 0: Signal.FLOATING})
     assert w.signal_str == '01xz'
     w.msb_first = False
-    w.set_signals('01xz')
+    w.set_signals('01xz')  # Already in lsb-first format
     assert w.signal_int is None
-    assert w.signal_array == {4: Signal.FLOATING, 3: Signal.UNDEFINED, 2: Signal.HIGH, 1: Signal.LOW}
+    assert w.signal_array == SignalArray(signals={3: Signal.FLOATING, 2: Signal.UNDEFINED, 1: Signal.HIGH, 0: Signal.LOW}, msb_first=False)
+    assert w.signal_str == '01xz'
+    w.msb_first = True
     assert w.signal_str == 'zx10'
 
     w.set_signed(True)
@@ -348,7 +356,7 @@ def test_set_signals() -> None:
     assert w.signal_int == 15
 
     w = Wire(name='c', module=None)
-    with pytest.raises(IndexError):
+    with pytest.raises(ValueError):
         w.set_signals('1010')
 
 
@@ -529,12 +537,12 @@ def test_evaluate(standard_wire: Wire) -> None:
         assert p.signal == Signal.UNDEFINED
 
     standard_wire.driver()[1].set_signal(0)
-    assert standard_wire.signal_array[1] == Signal.UNDEFINED
+    assert standard_wire.signal_array[0] == Signal.UNDEFINED
     assert standard_wire.connected_port_segments[1][0].signal == Signal.LOW
     assert standard_wire.connected_port_segments[1][1].signal == Signal.UNDEFINED
     assert standard_wire.connected_port_segments[1][2].signal == Signal.UNDEFINED
     standard_wire.evaluate()
-    assert standard_wire.signal_array[1] == Signal.LOW
+    assert standard_wire.signal_array[0] == Signal.LOW
     assert standard_wire.connected_port_segments[1][0].signal == Signal.LOW
     assert standard_wire.connected_port_segments[1][1].signal == Signal.LOW
     assert standard_wire.connected_port_segments[1][2].signal == Signal.LOW

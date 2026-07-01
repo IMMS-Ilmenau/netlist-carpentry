@@ -7,6 +7,7 @@ from tqdm import tqdm
 from netlist_carpentry import LOG, Instance, Module, Signal
 from netlist_carpentry.core.exceptions import EvaluationError
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
+from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.gate_lib import DFF, DLatch
 from netlist_carpentry.utils.gate_lib_base_classes import PrimitiveGate
 from netlist_carpentry.utils.gate_mixins import ClockMixinProtocol, EnableMixinProtocol, ResetMixinProtocol
@@ -118,7 +119,7 @@ def _opt_constant_propagation_single_iter(module: Module) -> bool:
     return bool(mark_delete)
 
 
-def _propagate_output_port(module: Module, inst: PrimitiveGate, port_name: str, signals: Dict[int, Signal]) -> None:
+def _propagate_output_port(module: Module, inst: PrimitiveGate, port_name: str, signals: SignalArray) -> None:
     for idx, ps in inst.ports[port_name]:
         ws = ps.ws
         w = ws.parent
@@ -232,6 +233,6 @@ def _opt_constant_propagate_dlatch(module: Module, inst: DLatch) -> bool:
             _propagate_pass_wire(module, inst, 'Q', {idx: ps.ws for idx, ps in inst.ports['D']})
             return True
         else:  # Never transparent -> Q = x
-            _propagate_output_port(module, inst, 'Q', {idx: Signal.UNDEFINED for idx in inst.ports['Q'].signal_array})
+            _propagate_output_port(module, inst, 'Q', SignalArray(signals={idx: Signal.UNDEFINED for idx in inst.ports['Q'].signal_array}))
             return True
     return False

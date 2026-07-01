@@ -14,6 +14,7 @@ from netlist_carpentry.core.netlist_elements.element_path import PortPath, WireS
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.wire_segment import WIRE_SEGMENT_1
+from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.gate_lib import (
     ADFF,
     ADFFE,
@@ -180,12 +181,13 @@ def test_primitive_gate_set(primitive_gate: PrimitiveGate) -> None:
     p.tie_signal(0, 5)
     p.tie_signal(0, 6)
     p.tie_signal(0, 7)
-    assert primitive_gate.ports['A'].signal_array == {idx: Signal.LOW if idx < 8 else Signal.FLOATING for idx in range(4, 12)}
+    assert primitive_gate.ports['A'].offset == 4  # 4 bit offset, but signals dict still starts from 0 to 8 (2^0 to 2^8)
+    assert primitive_gate.ports['A'].signal_array.signals == {idx: Signal.LOW if idx < 4 else Signal.FLOATING for idx in range(0, 8)}
     primitive_gate.module.connect(primitive_gate.module.wires['w'][0], p[8])
     primitive_gate.module.connect(primitive_gate.module.wires['w'][1], p[9])
     primitive_gate.module.connect(primitive_gate.module.wires['w'][2], p[10])
     primitive_gate.module.connect(primitive_gate.module.wires['w'][3], p[11])
-    assert primitive_gate.ports['A'].signal_array == {idx: Signal.LOW if idx < 8 else Signal.UNDEFINED for idx in range(4, 12)}
+    assert primitive_gate.ports['A'].signal_array.signals == {idx: Signal.LOW if idx < 4 else Signal.UNDEFINED for idx in range(0, 8)}
 
     with pytest.raises(IndexError):
         primitive_gate.set('A', 1)
@@ -194,9 +196,9 @@ def test_primitive_gate_set(primitive_gate: PrimitiveGate) -> None:
         primitive_gate.set('A', 1, [4])
 
     primitive_gate.set('A', 0, 8)
-    assert primitive_gate.ports['A'].signal_array == {idx: Signal.LOW if idx <= 8 else Signal.UNDEFINED for idx in range(4, 12)}
+    assert primitive_gate.ports['A'].signal_array.signals == {idx: Signal.LOW if idx <= 4 else Signal.UNDEFINED for idx in range(0, 8)}
     primitive_gate.set('A', 1, [9, 10, 11])
-    assert primitive_gate.ports['A'].signal_array == {idx: Signal.LOW if idx <= 8 else Signal.HIGH for idx in range(4, 12)}
+    assert primitive_gate.ports['A'].signal_array.signals == {idx: Signal.LOW if idx <= 4 else Signal.HIGH for idx in range(0, 8)}
 
 
 def test_unary_gate(unary_gate: UnaryGate) -> None:
@@ -400,7 +402,7 @@ def test_pos_gate(simple_module: Module) -> None:
     g.ports['A'][2].tie_signal(Signal.HIGH)
     g.ports['A'][3].set_signal(Signal.LOW)  # 0111 -> 7 ==> pos makes it sign-extended ==> 00000111
     g.evaluate()
-    assert g.output_port.signal_array == {
+    assert g.output_port.signal_array.signals == {
         0: Signal.HIGH,
         1: Signal.HIGH,
         2: Signal.HIGH,
@@ -410,12 +412,12 @@ def test_pos_gate(simple_module: Module) -> None:
         6: Signal.LOW,
         7: Signal.LOW,
     }
-    g.parameters.A_SIGNED = True
+    g.ports['A'].set_signed(True)
     g.ports['A'][0].set_signal(Signal.HIGH)
     g.ports['A'][2].tie_signal(Signal.HIGH)
     g.ports['A'][3].set_signal(Signal.HIGH)  # 1111 -> -1 ==> pos makes it sign-extended ==> 11111111
     g.evaluate()
-    assert g.output_port.signal_array == {
+    assert g.output_port.signal_array.signals == {
         0: Signal.HIGH,
         1: Signal.HIGH,
         2: Signal.HIGH,
@@ -428,7 +430,7 @@ def test_pos_gate(simple_module: Module) -> None:
 
     g.ports['A'][3].set_signal(Signal.UNDEFINED)  # x111 -> x ==> whole signal array becomes undefined
     g.evaluate()
-    assert g.output_port.signal_array == {
+    assert g.output_port.signal_array.signals == {
         0: Signal.UNDEFINED,
         1: Signal.UNDEFINED,
         2: Signal.UNDEFINED,
@@ -463,20 +465,20 @@ def test_neg_gate(simple_module: Module) -> None:
     g.ports['A'][2].tie_signal(Signal.HIGH)
     g.ports['A'][3].set_signal(Signal.LOW)  # 0111 -> 7 ==> neg makes it -7 ==> 1001
     g.evaluate()
-    assert g.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
+    assert g.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
 
     g.ports['A'][0].set_signal(Signal.HIGH)
     g.ports['A'][2].tie_signal(Signal.HIGH)
     g.ports['A'][3].set_signal(Signal.HIGH)  # 1111 -> 15 ==> neg makes it -15 ==> 10001, but the upper 1 is cut off ==> 0001
     g.evaluate()
-    assert g.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}  # 4: Signal.HIGH
+    assert g.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}  # 4: Signal.HIGH
     g.modify_connection('Y', WireSegmentPath(raw='a.carry.0'), index=4)
     g.evaluate()
-    assert g.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW, 4: Signal.HIGH}
+    assert g.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW, 4: Signal.HIGH}
 
     g.ports['A'][3].set_signal(Signal.UNDEFINED)  # x111 -> x ==> whole signal array becomes undefined
     g.evaluate()
-    assert g.output_port.signal_array == {
+    assert g.output_port.signal_array.signals == {
         0: Signal.UNDEFINED,
         1: Signal.UNDEFINED,
         2: Signal.UNDEFINED,
@@ -1067,21 +1069,21 @@ def test_bitwise_case_equality_gate(simple_module: Module) -> None:
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.2'), index=2)
     g.ports['A'].set_signals('1111')
     g.ports['B'].set_signals('01xz')
-    assert g.ports['Y'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert g.ports['Y'].signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     g.evaluate()
-    assert g.ports['Y'].signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.HIGH, 3: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.HIGH, 3: Signal.LOW}
 
     g.ports['A'].set_signals('00xx')
     g.ports['B'].set_signals('0xxz')
-    assert g.ports['Y'].signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.HIGH, 3: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.HIGH, 3: Signal.LOW}
     g.evaluate()
-    assert g.ports['Y'].signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.HIGH}
+    assert g.ports['Y'].signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.HIGH}
 
     g.ports['A'].set_signals('0zzz')
     g.ports['B'].set_signals('zzzz')
-    assert g.ports['Y'].signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.HIGH}
+    assert g.ports['Y'].signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.HIGH}
     g.evaluate()
-    assert g.ports['Y'].signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
 
 
 def test_shift_signed_gate(simple_module: Module) -> None:
@@ -1126,48 +1128,63 @@ def test_shift_signed_gate(simple_module: Module) -> None:
     g.ports['A'].set_signals('0110')
     g.ports['B'].set_signals('0001')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.HIGH}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.HIGH}
 
     # A signed, B unsigned: right shift, but A is signed
-    g.parameters.A_SIGNED = True
+    g.ports['A'].set_signed(True)
     g.ports['A'].set_signals('0110')
     g.ports['B'].set_signals('0001')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.HIGH}
-    g.parameters.A_SIGNED = True
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.HIGH}
+    g.ports['A'].set_signed(True)
     g.ports['A'].set_signals('1011')  # -5
     g.ports['B'].set_signals('0010')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
 
     # A signed, B signed: left shift, but A is signed
-    g.parameters.B_SIGNED = True
+    g.ports['B'].set_signed(True)
     g.ports['A'].set_signals('1011')  # -5
     g.ports['B'].set_signals('0001')  # B == 1 > 0: Right Shift by 1: '1011' >> 1 = '1101' in signed context
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.HIGH}
-    g.parameters.A_SIGNED = True
+    assert g.ports['Y'].signal_array.signals == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.HIGH}
+    g.ports['A'].set_signed(True)
     g.ports['A'].set_signals('1011')  # -5
     g.ports['B'].set_signals('1111')  # B == -1 < 0: Left Shift by 1: '1011' << 1 = '0110'
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
 
     # A unsigned, B signed: logical left shift
-    g.parameters.A_SIGNED = False
+    g.ports['A'].set_signed(False)
     g.ports['A'].set_signals('1011')  # 11
     g.ports['B'].set_signals('0001')  # B == 1 > 0: Right Shift by 1: '1011' >> 1 = '0101' since A is unsigned
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.HIGH}
-    g.parameters.A_SIGNED = True
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.HIGH}
+    g.ports['A'].set_signed(True)
     g.ports['A'].set_signals('1011')  # -5
     g.ports['B'].set_signals('1111')  # B == -1 < 0: Left Shift by 1: '1011' << 1 = '0110'
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
 
     g.ports['A'].parameters['signed'] = '0'
     g.ports['B'].parameters['signed'] = '1'
     g.update_parameters()
     assert g.parameters == {'A_WIDTH': 4, 'A_SIGNED': False, 'B_WIDTH': 4, 'B_SIGNED': True, 'Y_WIDTH': 4}
+
+    g.ports['A'].set_signals('01xz')
+    g.ports['B'].set_signals('000x')  # everything becomes undefined
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == 'xxxx'
+
+    g.ports['A'].set_signals('01xz')
+    g.ports['B'].set_signals('1111')  # B == -1 < 0: Left Shift by 1
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == '1xz0'
+
+    g.ports['A'].set_signals('01xz')
+    g.ports['B'].set_signals('000z')  # everything becomes undefined
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == 'xxxx'
 
 
 def test_shl_gate(simple_module: Module) -> None:
@@ -1205,22 +1222,37 @@ def test_shl_gate(simple_module: Module) -> None:
     g.ports['A'].set_signals('0011')
     g.ports['B'].set_signals('0010')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.LOW}
 
     g.ports['A'].set_signals('0011')
     g.ports['B'].set_signals('0011')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.HIGH, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.LOW}
 
     g.ports['A'].set_signals('0011')
     g.ports['B'].set_signals('0100')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.LOW}
 
     g.ports['A'].set_signals('1111')
     g.ports['B'].set_signals('0001')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
+
+    g.ports['A'].set_signals('01xz')
+    g.ports['B'].set_signals('000x')  # everything becomes undefined
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == 'xxxx'
+
+    g.ports['A'].set_signals('01xz')
+    g.ports['B'].set_signals('0001')  # Left Shift by 1
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == '1xz0'
+
+    g.ports['A'].set_signals('01xz')
+    g.ports['B'].set_signals('000z')  # everything becomes undefined
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == 'xxxx'
 
 
 def test_shr_gate(simple_module: Module) -> None:
@@ -1255,25 +1287,47 @@ def test_shr_gate(simple_module: Module) -> None:
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.2'), index=2)
 
+    g.ports['A'].set_signals('1100')  # Port is marked as signed, but shr shifts bit-by-bit
+    g.ports['B'].set_signals('0010')
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == '0011'
+
+    g.ports['A'].set_signed(False)  # Should not change anything for the logical right shift
     g.ports['A'].set_signals('1100')
     g.ports['B'].set_signals('0010')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.HIGH}
+    assert str(g.ports['Y'].signal_array) == '0011'
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.HIGH}
 
     g.ports['A'].set_signals('1100')
     g.ports['B'].set_signals('0011')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.HIGH}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.HIGH}
 
     g.ports['A'].set_signals('1100')
     g.ports['B'].set_signals('0100')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.LOW}
 
     g.ports['A'].set_signals('1111')
     g.ports['B'].set_signals('0001')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.HIGH}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.HIGH}
+
+    g.ports['A'].set_signals('01xz')
+    g.ports['B'].set_signals('000x')  # everything becomes undefined
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == 'xxxx'
+
+    g.ports['A'].set_signals('xz10')
+    g.ports['B'].set_signals('0001')  # Left Shift by 1
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == '0xz1'
+
+    g.ports['A'].set_signals('01xz')
+    g.ports['B'].set_signals('000z')  # everything becomes undefined
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == 'xxxx'
 
 
 def test_sshl_gate(simple_module: Module) -> None:
@@ -1311,22 +1365,37 @@ def test_sshl_gate(simple_module: Module) -> None:
     g.ports['A'].set_signals('0011')
     g.ports['B'].set_signals('0010')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.LOW}
 
     g.ports['A'].set_signals('0011')
     g.ports['B'].set_signals('0011')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.HIGH, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.LOW}
 
     g.ports['A'].set_signals('0011')
     g.ports['B'].set_signals('0100')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.LOW}
 
     g.ports['A'].set_signals('1111')
     g.ports['B'].set_signals('0001')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
+
+    g.ports['A'].set_signals('01xz')
+    g.ports['B'].set_signals('000x')  # everything becomes undefined
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == 'xxxx'
+
+    g.ports['A'].set_signals('01xz')
+    g.ports['B'].set_signals('0001')  # Left Shift by 1
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == '1xz0'
+
+    g.ports['A'].set_signals('01xz')
+    g.ports['B'].set_signals('000z')  # everything becomes undefined
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == 'xxxx'
 
 
 def test_sshr_gate(simple_module: Module) -> None:
@@ -1361,25 +1430,54 @@ def test_sshr_gate(simple_module: Module) -> None:
     g.modify_connection('A', WireSegmentPath(raw='a.wireA1.2'), index=2)
     g.modify_connection('B', WireSegmentPath(raw='a.wireB.2'), index=2)
 
-    g.ports['A'].set_signals('1100')
-    g.ports['B'].set_signals('0001')
+    g.ports['A'].set_signals('1100')  # Port is marked as signed, sshr shifts sign bit as well
+    g.ports['B'].set_signals('0010')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.LOW}
+    assert str(g.ports['Y'].signal_array) == '1111'
 
+    g.ports['A'].set_signed(False)  # Now port is marked as unsigned, 0s are shifted in
     g.ports['A'].set_signals('1100')
     g.ports['B'].set_signals('0010')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.HIGH}
+    assert str(g.ports['Y'].signal_array) == '0011'
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.HIGH}
+
+    g.ports['A'].set_signed(True)
+    g.ports['A'].set_signals('1100')
+    g.ports['B'].set_signals('0010')
+    g.evaluate()
+    assert g.ports['Y'].signal_array.signals == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.HIGH}
 
     g.ports['A'].set_signals('0100')
     g.ports['B'].set_signals('0010')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.HIGH}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.LOW, 0: Signal.HIGH}
 
     g.ports['A'].set_signals('1111')
     g.ports['B'].set_signals('0001')
     g.evaluate()
-    assert g.ports['Y'].signal_array == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.HIGH}
+    assert g.ports['Y'].signal_array.signals == {3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.HIGH}
+
+    g.ports['A'].set_signed(False)  # Now port is marked as unsigned, 0s are shifted in
+    g.ports['A'].set_signals('1111')
+    g.ports['B'].set_signals('0001')
+    g.evaluate()
+    assert g.ports['Y'].signal_array.signals == {3: Signal.LOW, 2: Signal.HIGH, 1: Signal.HIGH, 0: Signal.HIGH}
+
+    g.ports['A'].set_signals('01xz')
+    g.ports['B'].set_signals('000x')  # everything becomes undefined
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == 'xxxx'
+
+    g.ports['A'].set_signals('xz10')
+    g.ports['B'].set_signals('0001')  # Left Shift by 1
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == '0xz1'
+
+    g.ports['A'].set_signals('01xz')
+    g.ports['B'].set_signals('000z')  # everything becomes undefined
+    g.evaluate()
+    assert str(g.ports['Y'].signal_array) == 'xxxx'
 
 
 def test_shiftx_gate(simple_module: Module) -> None:
@@ -1829,15 +1927,15 @@ def test_mux_behavior(simple_module: Module) -> None:
     m.ports['S'].set_signal(Signal.LOW, 1)  # => s_val = 1
     assert m.active_input == m.ports['D1']
     m.evaluate()
-    assert m.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.LOW, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert m.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.LOW, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     m.ports['S'].set_signal(Signal.LOW, 0)  # => s_val = 0
     assert m.active_input == m.ports['D0']
     m.evaluate()
-    assert m.output_port.signal_array == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert m.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     m.ports['S'].set_signal(Signal.HIGH, 1)  # => s_val = 2
     assert m.active_input == m.ports['D2']
     m.evaluate()
-    assert m.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert m.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
 
 
 def _init_demux_structure(d: Demultiplexer) -> None:
@@ -1977,25 +2075,25 @@ def test_demux_behavior(simple_module: Module) -> None:
     # Change S
     d.ports['S'].set_signal(Signal.LOW, 1)  # => s_val = 1
     assert d.active_output == d.ports['Y1']
-    assert d.ports['Y1'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y1'].signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     d.evaluate()
-    assert d.ports['Y0'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert d.ports['Y1'].signal_array == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert d.ports['Y2'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y0'].signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y1'].signal_array.signals == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y2'].signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     d.ports['S'].set_signal(Signal.LOW, 0)  # => s_val = 0
     assert d.active_output == d.ports['Y0']
-    assert d.ports['Y0'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y0'].signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     d.evaluate()
-    assert d.ports['Y0'].signal_array == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert d.ports['Y1'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert d.ports['Y2'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y0'].signal_array.signals == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y1'].signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y2'].signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     d.ports['S'].set_signal(Signal.HIGH, 1)  # => s_val = 2
     assert d.active_output == d.ports['Y2']
-    assert d.ports['Y2'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y2'].signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     d.evaluate()
-    assert d.ports['Y0'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert d.ports['Y1'].signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert d.ports['Y2'].signal_array == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y0'].signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y1'].signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert d.ports['Y2'].signal_array.signals == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
 
 
 def test_adder_structure(simple_module: Module) -> None:
@@ -2065,24 +2163,24 @@ def test_adder_behavior(simple_module: Module) -> None:
     assert a.ports['Y'].width == 4
 
     a.evaluate()  # 0 + 6 = 6
-    assert a.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert a.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
     a.tie_port('A', 2, '1')
     a.tie_port('A', 3, '1')
     a.evaluate()  # 12 + 6 = 18 (but no carry => 10010 ==> 0010 => 2)
-    assert a.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.LOW}  # 4: Signal.HIGH
+    assert a.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.LOW}  # 4: Signal.HIGH
 
     # Add fifth output connection
     a.modify_connection('Y', WireSegmentPath(raw='a.carry.0'), index=4)
     a.evaluate()  # 12 + 6 = 18
-    assert a.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.LOW, 4: Signal.HIGH}
+    assert a.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.LOW, 4: Signal.HIGH}
 
-    a.parameters.B_SIGNED = True
+    a.ports['B'].set_signed(True)
     a.tie_port('B', 0, '0')
     a.tie_port('B', 1, '1')
     a.tie_port('B', 2, '0')
     a.tie_port('B', 3, '1')  # 1010 in two's complement: -6
     a.evaluate()  # 12 + (-6) = 6
-    assert a.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW, 4: Signal.LOW}
+    assert a.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW, 4: Signal.LOW}
     a.tie_port('A', 3, 'Z')
     with pytest.raises(EvaluationError):
         a.evaluate()
@@ -2139,22 +2237,22 @@ def test_subtractor_behavior(simple_module: Module) -> None:
     assert s.ports['Y'].width == 4
 
     s.evaluate()  # 12 - 6 = 6
-    assert s.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert s.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
     s.tie_port('B', 3, '1')
     s.evaluate()  # 12 - 14 = -2 (but no carry and unsigned: -2 = 11110 ==> 1110 => 14)
-    assert s.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}  # 4: Signal.HIGH
+    assert s.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}  # 4: Signal.HIGH
 
     # Add fifth output connection
     s.modify_connection('Y', WireSegmentPath(raw='a.carry.0'), index=4)
     s.evaluate()
-    assert s.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH, 4: Signal.HIGH}
-    s.parameters.B_SIGNED = True
+    assert s.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH, 4: Signal.HIGH}
+    s.ports['B'].set_signed(True)
     s.tie_port('B', 0, '1')
     s.tie_port('B', 1, '0')
     s.tie_port('B', 2, '1')
     s.tie_port('B', 3, '1')  # 1101 in two's complement: -3
     s.evaluate()  # 12 - (-3) = 15 ==> 01111
-    assert s.output_port.signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH, 4: Signal.LOW}
+    assert s.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH, 4: Signal.LOW}
     s.tie_port('A', 3, 'Z')
     with pytest.raises(EvaluationError):
         s.evaluate()
@@ -2213,22 +2311,22 @@ def test_multiplier_behavior(simple_module: Module) -> None:
     assert m.ports['Y'].width == 4
 
     m.evaluate()  # 0 * 6 = 0
-    assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert m.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     m.tie_port('A', 2, '1')
     m.evaluate()  # 4 * 6 = 24 (but no carry => 11000 ==> 1000 => 16)
-    assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}  # 4: Signal.HIGH
+    assert m.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}  # 4: Signal.HIGH
 
     # Add fifth output connection
     m.modify_connection('Y', WireSegmentPath(raw='a.carry.0'), index=4)
     m.evaluate()
-    assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH, 4: Signal.HIGH}
+    assert m.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH, 4: Signal.HIGH}
     m.ports['B'].set_signed(True)
     m.tie_port('B', 0, '1')
     m.tie_port('B', 1, '0')
     m.tie_port('B', 2, '1')
     m.tie_port('B', 3, '1')  # 1101 in two's complement: -3
     m.evaluate()  # 4 * (-3) = -12 ==> 10100 in two's complement
-    assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.HIGH, 3: Signal.LOW, 4: Signal.HIGH}
+    assert m.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.HIGH, 3: Signal.LOW, 4: Signal.HIGH}
     m.tie_port('A', 3, 'Z')
     with pytest.raises(EvaluationError):
         m.evaluate()
@@ -2287,15 +2385,15 @@ def test_divider_behavior(simple_module: Module) -> None:
     assert d.ports['Y'].width == 4
 
     d.evaluate()  # 0 / 6 = 0
-    assert d.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert d.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     d.tie_port('A', 2, '1')
     d.tie_port('B', 1, '0')
     d.evaluate()  # 4 / 4 = 1
-    assert d.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert d.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
 
     d.tie_port('B', 0, '1')
     d.evaluate()  # 4 / 5 = 0 (truncating division)
-    assert d.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert d.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
 
     d.ports['B'].set_signed(True)
     d.tie_port('B', 0, '1')
@@ -2304,7 +2402,7 @@ def test_divider_behavior(simple_module: Module) -> None:
     d.tie_port('B', 3, '1')  # 1101 in two's complement: -3
     d.tie_port('A', 1, '1')  # A is now 6
     d.evaluate()  # 6 / (-3) = -2 ==> 1110 in two's complement
-    assert d.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
+    assert d.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
     d.tie_port('A', 3, 'Z')
     with pytest.raises(EvaluationError):
         d.evaluate()
@@ -2363,15 +2461,15 @@ def test_modulo_behavior(simple_module: Module) -> None:
     assert m.ports['Y'].width == 4
 
     m.evaluate()  # 0 % 6 = 0
-    assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert m.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     m.tie_port('A', 2, '1')
     m.tie_port('B', 1, '0')
     m.evaluate()  # 4 % 4 = 0
-    assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert m.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
 
     m.tie_port('B', 0, '1')
     m.evaluate()  # 4 % 5 = 4
-    assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.HIGH, 3: Signal.LOW}
+    assert m.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.HIGH, 3: Signal.LOW}
 
     m.ports['B'].set_signed(True)
     m.tie_port('B', 0, '1')
@@ -2381,7 +2479,7 @@ def test_modulo_behavior(simple_module: Module) -> None:
     m.tie_port('A', 0, '1')
     m.tie_port('A', 1, '1')  # A is now 7
     m.evaluate()  # 7 % (-3) = -2 ==> 1110 in two's complement
-    assert m.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
+    assert m.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
     m.tie_port('A', 3, 'Z')
     with pytest.raises(EvaluationError):
         m.evaluate()
@@ -2440,34 +2538,34 @@ def test_exponentiator_behavior(simple_module: Module) -> None:
     assert e.ports['Y'].width == 4
 
     e.evaluate()  # 0 ** 0 = 1
-    assert e.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert e.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     e.tie_port('A', 1, '1')
     e.evaluate()  # 2 ** 0 = 1
-    assert e.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert e.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     e.tie_port('A', 1, '0')
     e.tie_port('B', 1, '1')
     e.evaluate()  # 0 ** 2 = 0
-    assert e.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert e.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     e.tie_port('A', 0, '1')
     e.evaluate()  # 1 ** 2 = 1
-    assert e.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert e.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     e.tie_port('A', 1, '1')
     e.evaluate()  # 3 ** 2 = 9 ( ==> 1001)
-    assert e.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
+    assert e.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
     e.tie_port('A', 2, '1')
     e.evaluate()  # 7 ** 2 = 49 ( ==> 110001)
-    assert e.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}  # 4: HIGH, 5: HIGH
+    assert e.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}  # 4: HIGH, 5: HIGH
     assert not e.output_port.signed
 
     e.tie_port('A', 3, '1')  # ==> 15
     e.ports['A'].set_signed(True)  # ==> A is now -1
     e.evaluate()  # -1 ** 2
-    assert e.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert e.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     assert e.output_port.signed
     assert e.output_port.signal_int == 1
     e.tie_port('B', 0, '1')  # ==> 3
     e.evaluate()  # -1 ** 3
-    assert e.output_port.signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
+    assert e.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
     assert e.output_port.signed
     assert e.output_port.signal_int == -1
     e.ports['B'].set_signed(True)
@@ -2480,25 +2578,25 @@ def test_exponentiator_behavior(simple_module: Module) -> None:
     e.tie_port('B', 2, '1')
     e.tie_port('B', 3, '1')
     e.evaluate()  # 0 ** -1 = UNDEFINED, division by zero
-    assert e.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert e.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     assert e.output_port.signal_int is None
     e.tie_port('A', 0, '1')
     e.evaluate()  # 1 ** -1 = 1
-    assert e.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert e.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     assert e.output_port.signal_int == 1
     e.tie_port('A', 1, '1')
     e.tie_port('A', 2, '1')
     e.tie_port('A', 3, '1')
     e.evaluate()  # -1 ** -1 = -1
-    assert e.output_port.signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
+    assert e.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
     assert e.output_port.signal_int == -1
     e.tie_port('B', 0, '0')
     e.evaluate()  # -1 ** -2 = 1
-    assert e.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert e.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     assert e.output_port.signal_int == 1
     e.tie_port('A', 0, '0')
     e.evaluate()  # -2 ** -2 = 0 ==> Truncating towards 0
-    assert e.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert e.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     assert e.output_port.signal_int == 0
     e.tie_port('A', 3, 'Z')
     with pytest.raises(EvaluationError):
@@ -2638,16 +2736,16 @@ def test_dff_structure(simple_module: Module) -> None:
 def test_dff_behaviour(simple_module: Module) -> None:
     ff = DFF(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     _init_dff_structure(ff, init_all_in=True)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
 
     ff.output_port.create_port_segments(1, 4)
     ff.input_port.create_port_segments(1, 4)
     assert len(ff._curr_out) == 4
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW, 4: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW, 4: Signal.UNDEFINED}
     _clk(ff)
     assert len(ff._curr_out) == 5
 
@@ -2707,19 +2805,19 @@ def test_adff_behaviour(simple_module: Module) -> None:
     ff.modify_connection('RST', WireSegmentPath(raw='a.rst.0'))
     assert ff.rst_polarity is Signal.HIGH
     assert ff.rst_val_int == 0
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_rst(Signal.LOW)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_rst(Signal.HIGH)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     ff.set_rst(Signal.LOW)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
 
 
 def test_dffe_structure(simple_module: Module) -> None:
@@ -2765,15 +2863,15 @@ def test_dffe_behaviour(simple_module: Module) -> None:
     ff = DFFE(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     _init_dff_structure(ff, init_all_in=True)
     ff.modify_connection('EN', WireSegmentPath(raw='a.en.0'))
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_en(Signal.HIGH)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
 
 
 def test_adffe_structure(simple_module: Module) -> None:
@@ -2784,7 +2882,7 @@ def test_adffe_structure(simple_module: Module) -> None:
     assert ff.clk_polarity is Signal.HIGH
     assert ff.en_polarity is Signal.HIGH
     assert ff.rst_polarity is Signal.LOW
-    assert ff.rst_val == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.rst_val == SignalArray(signals={0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW})
 
     assert len(ff.ports) == 5
     assert 'D' in ff.ports
@@ -2829,50 +2927,50 @@ def test_adffe_behavior_init(simple_module: Module) -> None:
     _init_dff_structure(ff, True, True)
 
     assert not ff.in_reset
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
     ff.set_rst(Signal.HIGH)
     assert ff.in_reset
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
     ff.set_rst(Signal.LOW)
     assert not ff.in_reset
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
     ff.rst_val_int = 0xF
     ff.set_rst(Signal.HIGH)
     assert ff.in_reset
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
     _clk(ff)
     ff.set_rst(Signal.LOW)
     assert not ff.in_reset
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
 
 
 def test_adffe_behavior_clk(simple_module: Module) -> None:
     ff = ADFFE(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     _init_dff_structure(ff, True, True)
 
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
     ff.set_rst(Signal.HIGH)
     _clk(ff)
     ff.set_rst(Signal.LOW)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     ff.set_en(Signal.HIGH)
 
     ff.input_port.set_signal(Signal.HIGH)
     ff.input_port.set_signal(Signal.HIGH, index=1)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
 
     ff.input_port.set_signal(Signal.LOW, index=1)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
 
 
 def test_adffe_behavior_4bit(simple_module: Module) -> None:
@@ -2884,22 +2982,22 @@ def test_adffe_behavior_4bit(simple_module: Module) -> None:
     ff.set_rst(Signal.HIGH)
     _clk(ff)
     ff.set_rst(Signal.LOW)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     ff.set_en(Signal.HIGH)
 
     # Set first bit, others are still undefined
     ff.input_port.set_signal(Signal.HIGH)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
 
     ff.input_port.set_signal(Signal.LOW)
     ff.input_port.set_signal(Signal.HIGH, index=1)
     ff.input_port.set_signal(Signal.HIGH, index=2)
     ff.input_port.set_signal(Signal.HIGH, index=3)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
 
 
 def test_adffe_behavior_en(simple_module: Module) -> None:
@@ -2995,15 +3093,15 @@ def test_sdff_behaviour(simple_module: Module) -> None:
     ff = SDFF(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
     _init_dff_structure(ff, init_all_in=True)
     ff.modify_connection('RST', WireSegmentPath(raw='a.rst.0'))
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     ff.set_rst(Signal.HIGH)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
 
 
 def test_sdffce_structure(simple_module: Module) -> None:
@@ -3058,23 +3156,23 @@ def test_sdffce_behaviour(simple_module: Module) -> None:
     _init_dff_structure(ff, init_all_in=True)
     ff.modify_connection('RST', WireSegmentPath(raw='a.rst.0'))
     ff.modify_connection('EN', WireSegmentPath(raw='a.en.0'))
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_rst(Signal.HIGH)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_en(Signal.HIGH)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     ff.set_rst(Signal.LOW)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
 
 
 def test_sdffe_structure(simple_module: Module) -> None:
@@ -3128,23 +3226,23 @@ def test_sdffe_behaviour(simple_module: Module) -> None:
     _init_dff_structure(ff, init_all_in=True)
     ff.modify_connection('RST', WireSegmentPath(raw='a.rst.0'))
     ff.modify_connection('EN', WireSegmentPath(raw='a.en.0'))
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_rst(Signal.HIGH)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     ff.set_en(Signal.HIGH)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     ff.set_rst(Signal.LOW)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
 
 
 def test_aldff_structure(simple_module: Module) -> None:
@@ -3206,19 +3304,19 @@ def test_aldff_behaviour(simple_module: Module) -> None:
     ff.ad_port[1]._signal = Signal.LOW
     ff.ad_port[2]._signal = Signal.LOW
     ff.ad_port[3]._signal = Signal.HIGH
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     ff.set_al(Signal.LOW)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
     ff.set_al(Signal.HIGH)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
 
 
 def test_aldffe_structure(simple_module: Module) -> None:
@@ -3286,29 +3384,29 @@ def test_aldffe_behaviour(simple_module: Module) -> None:
     ff.ad_port[1]._signal = Signal.LOW
     ff.ad_port[2]._signal = Signal.LOW
     ff.ad_port[3]._signal = Signal.HIGH
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_en(Signal.HIGH)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     ff.set_al(Signal.LOW)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
     ff.set_en(Signal.LOW)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
     ff.set_al(Signal.HIGH)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
     ff.set_en(Signal.HIGH)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.HIGH}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
 
 
 def test_dffsr_structure(simple_module: Module) -> None:
@@ -3370,30 +3468,30 @@ def test_dffsr_behaviour(simple_module: Module) -> None:
     _init_dff_structure(ff, init_all_in=True)
     simple_module.connect(simple_module.wires['clr'], ff.ports['CLR'])
     simple_module.connect(simple_module.wires['set'], ff.ports['SET'])
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_clr(Signal.HIGH, [1, 2])
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_clr(Signal.LOW, [0, 3])  # CLR is LOW-active
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
     _clk(ff)  # 0 and 3 are LOW because of CLR, 1 and 2 are UNDEF and HIGH because of 01xz
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     # 0 and 3 are LOW because of CLR, 2 is HIGH because of 01xz, 1 is HIGH because of set_set, but 0 remains low, because CLR wins over SET
     ff.set_set(Signal.LOW, [0, 1])  # SET is LOW-active
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
     ff.set_clr(Signal.HIGH, [0, 1, 2, 3])  # CLR is LOW-active
     ff.set_set(Signal.HIGH, [0, 1, 2, 3])  # SET is LOW-active
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
     _clk(ff)  # Floating on input becomes Undefined on output
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     ff.set_clr(Signal.LOW, 2)  # CLR is LOW-active
     ff.set_set(Signal.LOW, 3)  # SET is LOW-active
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
 
 
 def test_dffsre_structure(simple_module: Module) -> None:
@@ -3462,55 +3560,55 @@ def test_dffsre_behaviour(simple_module: Module) -> None:
     simple_module.connect(simple_module.wires['clr'], ff.ports['CLR'])
     simple_module.connect(simple_module.wires['set'], ff.ports['SET'])
     simple_module.connect(simple_module.wires['wireC'], ff.ports['EN'])
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_clr(Signal.HIGH, [1, 2])
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_clr(Signal.LOW, [0, 3])  # CLR is LOW-active
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
     ff.set_clr(Signal.HIGH, [0, 3])  # CLR is LOW-active
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
     ff.set_en(Signal.LOW, [0, 1, 2, 3])
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
     ff.set_en(Signal.HIGH, [0])  # Only enable passing of idx 0, which is z and becomes x at the output
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
     ff.set_en(Signal.HIGH, [1, 2, 3])  #  Now pass all input signals (0-3) to output
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.LOW}
     _clk(ff)  # 0 and 3 are LOW because of CLR, 1 and 2 are UNDEF and HIGH because of 01xz
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     # 0 and 3 are LOW because of CLR, 2 is HIGH because of 01xz, 1 is HIGH because of set_set, but 0 remains low, because CLR wins over SET
     ff.set_set(Signal.LOW, [0, 1])  # SET is LOW-active
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
     ff.set_clr(Signal.HIGH, [0, 1, 2, 3])  # CLR is LOW-active
     ff.set_set(Signal.HIGH, [0, 1, 2, 3])  # SET is LOW-active
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
     _clk(ff)  # Floating on input becomes Undefined on output
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     ff.set_clr(Signal.LOW, 2)  # CLR is LOW-active
     ff.set_set(Signal.LOW, 3)  # SET is LOW-active
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
     ff.set_en(Signal.LOW, [0, 1, 2, 3])  #  Now block all input signals (0-3) from passing to output
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
     ff.set_clr(Signal.HIGH, [0, 1, 2, 3])  # Disable CLR Signal, CLR is LOW-active
     ff.set_set(Signal.HIGH, [0, 1, 2, 3])  # Disable SET Signal, SET is LOW-active
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
     ff.input_port.set_signals('0011')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
     ff.set_en(Signal.HIGH, [0, 1, 2, 3])  #  Now pass all input signals (0-3) to output
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.LOW, 3: Signal.HIGH}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.LOW}
 
 
 def _init_scan_structure(ff: DFF) -> None:
@@ -3571,22 +3669,22 @@ def test_scandff_behaviour(simple_module: Module) -> None:
     simple_module.instances['dff_inst'] = ff
     _init_dff_structure(ff, init_all_in=True)
     _init_scan_structure(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     ff.si_port.set_signals('0110')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
-    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     ff.se_port.set_signals('1')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
-    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
 
 
 def test_scanadff_structure(simple_module: Module) -> None:
@@ -3650,28 +3748,28 @@ def test_scanadff_behaviour(simple_module: Module) -> None:
     _init_scan_structure(ff)
     ff.rst_polarity = Signal.LOW  # Low active
     ff.modify_connection('RST', WireSegmentPath(raw='a.rst.0'))
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_rst(1)
-    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_rst(0)
-    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.so_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     ff.set_rst(1)
-    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.so_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     ff.si_port.set_signals('0110')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
-    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     ff.se_port.set_signals('1')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
-    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
 
 
 def test_scandffe_structure(simple_module: Module) -> None:
@@ -3731,27 +3829,27 @@ def test_scandffe_behaviour(simple_module: Module) -> None:
     _init_dff_structure(ff, init_all_in=True)
     _init_scan_structure(ff)
     ff.modify_connection('EN', WireSegmentPath(raw='a.en.0'))
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_en(0)
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_en(1)
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     ff.si_port.set_signals('0110')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
-    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     ff.se_port.set_signals('1')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
-    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
 
 
 def test_scanadffe_structure(simple_module: Module) -> None:
@@ -3817,33 +3915,33 @@ def test_scanadffe_behaviour(simple_module: Module) -> None:
     _init_dff_structure(ff, init_all_in=True, init_rst_en=True)
     _init_scan_structure(ff)
     ff.rst_polarity = Signal.LOW  # Low active
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.input_port.set_signals('01xz')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_rst(1)
-    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_rst(0)
-    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.so_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     ff.set_rst(1)
-    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
+    assert ff.so_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
     ff.set_en(0)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
-    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
+    assert ff.so_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
     ff.set_en(1)
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     ff.si_port.set_signals('0110')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
-    assert ff.so_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     ff.se_port.set_signals('1')
-    assert ff.output_port.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED, 2: Signal.HIGH, 3: Signal.LOW}
     _clk(ff)
-    assert ff.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
-    assert ff.so_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert ff.so_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
 
 
 def _init_dlatch_structure(dl: DLatch, init_all: bool = False) -> None:
@@ -3914,37 +4012,37 @@ def test_dlatch_behavior(simple_module: Module) -> None:
     dl.modify_connection('D', WireSegmentPath(raw='a.wireA1.2'), index=2)
     dl.modify_connection('D', WireSegmentPath(raw='Z'), index=3)
     dl.evaluate()
-    assert dl.input_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.UNDEFINED, 3: Signal.FLOATING}
+    assert dl.input_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.UNDEFINED, 3: Signal.FLOATING}
     assert dl.en_port.signal == Signal.FLOATING
     assert all(s == Signal.UNDEFINED for s in dl.output_port.signal_array.values())
 
     dl.modify_connection('EN', WireSegmentPath(raw='a.clk.0'))
     dl.en_port.set_signal(Signal.LOW)
     dl.evaluate()
-    assert dl.input_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.UNDEFINED, 3: Signal.FLOATING}
+    assert dl.input_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.UNDEFINED, 3: Signal.FLOATING}
     assert dl.en_port.signal == Signal.LOW
     assert all(s == Signal.UNDEFINED for s in dl.output_port.signal_array.values())
 
     dl.en_port.set_signal(Signal.HIGH)
     dl.evaluate()
-    assert dl.input_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.UNDEFINED, 3: Signal.FLOATING}
+    assert dl.input_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.UNDEFINED, 3: Signal.FLOATING}
     assert dl.en_port.signal == Signal.HIGH
-    assert dl.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.UNDEFINED, 3: Signal.FLOATING}
+    assert dl.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.UNDEFINED, 3: Signal.FLOATING}
 
     dl.modify_connection('D', WireSegmentPath(raw='a.wireA1.3'), index=3)
     dl.input_port.set_signal(Signal.LOW, 2)
     dl.input_port.set_signal(Signal.HIGH, 3)
     dl.evaluate()
-    assert dl.input_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.HIGH}
+    assert dl.input_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.HIGH}
     assert dl.en_port.signal == Signal.HIGH
-    assert dl.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.HIGH}
+    assert dl.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.HIGH}
 
     dl.en_port.set_signal(Signal.LOW)
     dl.input_port.set_signal(Signal.HIGH, 2)
     dl.input_port.set_signal(Signal.LOW, 3)
-    assert dl.input_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
+    assert dl.input_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW}
     assert dl.en_port.signal == Signal.LOW
-    assert dl.output_port.signal_array == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.HIGH}
+    assert dl.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.LOW, 3: Signal.HIGH}
 
 
 def test_get(simple_module: Module) -> None:

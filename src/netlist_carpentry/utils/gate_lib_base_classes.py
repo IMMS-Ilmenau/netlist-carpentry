@@ -683,8 +683,8 @@ class ArithmeticGate(BinaryGate, BaseModel):
         if self.input_ports[0].has_undefined_signals or self.input_ports[1].has_undefined_signals:
             err = f'Cannot calculate output signal for {self.__class__.__name__} {self.raw_path}: one of the inputs contain undefined signal values!'
             raise EvaluationError(err)
-        sig1_int = Signal.dict_to_int(self.input_ports[0].signal_array, signed=self.a_signed)
-        sig2_int = Signal.dict_to_int(self.input_ports[1].signal_array, signed=self.b_signed)
+        sig1_int = int(self.input_ports[0].signal_array) or 0
+        sig2_int = int(self.input_ports[1].signal_array) or 0
         return sig1_int, sig2_int
 
 

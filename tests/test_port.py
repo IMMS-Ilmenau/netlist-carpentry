@@ -60,7 +60,7 @@ def test_port_creation(standard_port_in: Port[Instance], standard_port_out: Port
     assert not standard_port_in.is_module_port
     assert standard_port_in.type is EType.PORT
     assert standard_port_in.signal is Signal.FLOATING  # Unconnected load port => Signal.FLOATING
-    assert standard_port_in.signal_array == {0: Signal.FLOATING}
+    assert standard_port_in.signal_array.signals == {0: Signal.FLOATING}
     assert standard_port_in.signal_str == 'z'
     with pytest.raises(IndexError):
         standard_port_in[42]
@@ -74,7 +74,7 @@ def test_port_creation(standard_port_in: Port[Instance], standard_port_out: Port
     assert standard_port_out[0].hierarchy_level == 2
     assert standard_port_out[1].hierarchy_level == 2
     assert standard_port_out.signal is Signal.UNDEFINED  # Unconnected driving port (i.e. no load) => Signal.UNDEFINED until evaluated
-    assert standard_port_out.signal_array == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED}
+    assert standard_port_out.signal_array.signals == {0: Signal.UNDEFINED, 1: Signal.UNDEFINED}
     assert standard_port_out.signal_str == 'xx'
     assert standard_port_out.has_undefined_signals
     assert not standard_port_out.is_tied_partly
@@ -182,7 +182,7 @@ def test_port_signal_int(standard_port_in: Port[Instance], standard_port_out: Po
     assert standard_port_out.signal_int == -1
     standard_port_out.tie_signal(0, 0)
     standard_port_out.tie_signal('1', 1)  # MSB_FIRST is false for standard_port_out => in 01, the 0 is actually the LSB
-    assert standard_port_out.signal_int == 1
+    assert standard_port_out.signal_int == -2  # 01 with LSB first is 2 (unsigned), or -2 (signed)
 
 
 def test_port_is_partly_connected(standard_port_out: Port[Module]) -> None:
@@ -543,14 +543,14 @@ def test_set_signal(standard_port_in: Port[Instance]) -> None:
 
 def test_set_signals(standard_port_out: Port[Module]) -> None:
     standard_port_out.msb_first = False
-    standard_port_out.set_signals(2)  # 01
+    standard_port_out.set_signals(2)  # 01 in LSB-first, but internal order remains the same
     assert standard_port_out.signal_int == 2
-    assert standard_port_out.signal_array == {1: Signal.LOW, 0: Signal.HIGH}  # by default: standard_port_out is lsbfirst
+    assert standard_port_out.signal_array.signals == {1: Signal.HIGH, 0: Signal.LOW}  # by default: standard_port_out is lsbfirst
     assert standard_port_out.signal_str == '01'
     standard_port_out.msb_first = True
     standard_port_out.set_signals(2)  # 10
     assert standard_port_out.signal_int == 2
-    assert standard_port_out.signal_array == {1: Signal.HIGH, 0: Signal.LOW}  # standard_port_out is now msbfirst
+    assert standard_port_out.signal_array.signals == {1: Signal.HIGH, 0: Signal.LOW}  # standard_port_out is now msbfirst
     assert standard_port_out.signal_str == '10'
     standard_port_out.set_signals(2)  # 10
     assert standard_port_out.signal_int == 2
@@ -558,7 +558,7 @@ def test_set_signals(standard_port_out: Port[Module]) -> None:
     assert standard_port_out.signal_int == 3
     standard_port_out.set_signals('xz')
     assert standard_port_out.signal_int is None
-    assert standard_port_out.signal_array == {0: Signal.FLOATING, 1: Signal.UNDEFINED}
+    assert standard_port_out.signal_array.signals == {0: Signal.FLOATING, 1: Signal.UNDEFINED}
     standard_port_out.set_signals({0: Signal.LOW, 1: Signal.HIGH})  # 2
     assert standard_port_out.signal_int == 2
     standard_port_out.set_signed(True)
@@ -571,7 +571,7 @@ def test_set_signals(standard_port_out: Port[Module]) -> None:
     # only one segment left, it's the one with index 1 (which is "1"), but the integer value does not care about the offset
     assert standard_port_out.signal_int == 1
     standard_port_out.remove_port_segment(1)
-    with pytest.raises(IndexError):
+    with pytest.raises(ValueError):
         standard_port_out.set_signals('1010')  # No segments left, cannot set signals
 
 

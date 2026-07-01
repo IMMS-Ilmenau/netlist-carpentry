@@ -35,8 +35,32 @@ class Signal(Enum):
     UNDEFINED = 'x'
     """The signal state cannot be determined."""
 
+    @classmethod
+    def parsable(cls, signal_like: object) -> bool:
+        """Returns True if the given signal_like object can be translated into an object from this enum.
+
+        If True, the given object can be translated into a signal via `Signal.get(object)`.
+        If False, `Signal.get(object)` returns `Signal.UNDEFINED`.
+
+        Parseable signal_like objects are the integers `0` and `1`, the strings `'0'`, `'1'`, `'x'` and `'z'`,
+        boolean values `True` and `False`, as well as objects from this enum (e.g. `Signal.HIGH`).
+
+        Args:
+            signal_like (object): The object to check whether it conforms to an object from this enum.
+                Parseable signal_like objects are the integers `0` and `1`, the strings `'0'`, `'1'`, `'x'` and `'z'`,
+                boolean values `True` and `False`, as well as objects from this enum (e.g. `Signal.HIGH`).
+
+        Returns:
+            bool: True, if the given object can be translated into a signal via `Signal.get(object)`. False otherwise.
+        """
+        if isinstance(signal_like, Signal):
+            return True
+        if signal_like in [0, 1, '0', '1', 'x', 'z', 'X', 'Z', True, False]:
+            return True
+        return False
+
     @staticmethod
-    def get(sval: Union[str, int]) -> 'Signal':
+    def get(sval: Union[str, int, bool, 'Signal']) -> 'Signal':
         """
         This method is used to get the Signal corresponding to the given string or integer value.
 
@@ -187,13 +211,14 @@ class Signal(Enum):
             >>> Signal.from_int(-1, fixed_width=4)
             {0: <Signal.HIGH>, 1: <Signal.HIGH>, 2: <Signal.HIGH>, 3: <Signal.HIGH>}
         """
-        # Produces the two-s complement for negative ints
-        if sig_val < 0:
-            width = fixed_width if fixed_width is not None else len(bin(abs(sig_val))[2:])
-            sig_bin_str = format(sig_val & ((1 << width) - 1), f'0{width}b')
-        else:
-            sig_bin_str = str(bin(sig_val))[2:]  # Cut off the 0b at the start
-        return Signal.from_bin(sig_bin_str, msb_first, fixed_width)
+        from netlist_carpentry.core.types import SignalArray
+
+        warnings.warn(
+            "Signal.from_int() is deprecated and will be removed in v1.0.0. Use SignalArray.from_int() instead! SignalArray can be imported from 'netlist_carpentry.core.types'.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return SignalArray.from_int(sig_val, msb_first, fixed_width).signals
 
     @staticmethod
     def to_int(sig_list: List['Signal'], msb_first: bool = True, signed: bool = False) -> int:
@@ -308,19 +333,14 @@ class Signal(Enum):
             >>> Signal.from_bin("11", fixed_width=4)
             {0: <Signal.HIGH>, 1: <Signal.HIGH>, 2: <Signal.LOW>, 3: <Signal.LOW>}
         """
-        if any(s not in ['0', '1', 'z', 'x'] for s in sig_str):
-            raise ValueError(
-                f'Cannot transform signal string into signal array: found illegal character in string {sig_str} (may only contain 0, 1, x and z)'
-            )
-        if fixed_width is not None:
-            sig_str = sig_str.zfill(fixed_width)[-fixed_width:]
-        if msb_first:
-            sig_str = ''.join(reversed(sig_str))
-        sig_dict: Dict[int, 'Signal'] = {}
-        for idx, bin_val in enumerate(sig_str):
-            new_sig_val = Signal.get(bin_val)
-            sig_dict[idx] = new_sig_val
-        return sig_dict
+        from netlist_carpentry.core.types import SignalArray
+
+        warnings.warn(
+            "Signal.from_bin() is deprecated and will be removed in v1.0.0. Use SignalArray.from_bin() instead! SignalArray can be imported from 'netlist_carpentry.core.types'.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return SignalArray.from_bin(sig_str, msb_first, fixed_width).signals
 
     @staticmethod
     def to_bin(

@@ -1,4 +1,5 @@
 import os
+import re
 
 import pytest
 
@@ -23,6 +24,21 @@ def test_signal_enum_names() -> None:
 def test_signal_enum_invalid_value() -> None:
     with pytest.raises(ValueError):
         Signal(2)
+
+
+def test_parsable() -> None:
+    assert Signal.parsable('0')
+    assert Signal.parsable(0)
+    assert Signal.parsable(False)
+    assert Signal.parsable('1')
+    assert Signal.parsable(1)
+    assert Signal.parsable(True)
+    assert Signal.parsable('z')
+    assert Signal.parsable('Z')
+    assert Signal.parsable('x')
+    assert Signal.parsable('X')
+    assert not Signal.parsable(42)
+    assert not Signal.parsable('ABC')
 
 
 def test_get() -> None:
@@ -188,16 +204,23 @@ def test_repr() -> None:
 
 
 def test_from_int() -> None:
-    assert Signal.from_int(0) == {0: Signal.LOW}
-    assert Signal.from_int(1) == {0: Signal.HIGH}
-    assert Signal.from_int(2) == {1: Signal.HIGH, 0: Signal.LOW}
-    assert Signal.from_int(2, fixed_width=4) == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.LOW}
-    assert Signal.from_int(2, fixed_width=1) == {0: Signal.LOW}
-    assert Signal.from_int(2, msb_first=False) == {1: Signal.LOW, 0: Signal.HIGH}
-    assert Signal.from_int(42) == {5: Signal.HIGH, 4: Signal.LOW, 3: Signal.HIGH, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.LOW}
-    assert Signal.from_int(42, fixed_width=3) == {2: Signal.LOW, 1: Signal.HIGH, 0: Signal.LOW}
-    assert Signal.from_int(-4) == {2: Signal.HIGH, 1: Signal.LOW, 0: Signal.LOW}
-    assert Signal.from_int(-4, fixed_width=5) == {4: Signal.HIGH, 3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.LOW}
+    with pytest.warns(
+        DeprecationWarning,
+        match=re.escape(
+            "Signal.from_int() is deprecated and will be removed in v1.0.0. Use SignalArray.from_int() instead! SignalArray can be imported from 'netlist_carpentry.core.types'"
+        ),
+    ):
+        assert Signal.from_int(0) == {0: Signal.LOW}
+        assert Signal.from_int(1) == {0: Signal.HIGH}
+        assert Signal.from_int(2) == {1: Signal.HIGH, 0: Signal.LOW}
+        assert Signal.from_int(2, fixed_width=4) == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.LOW}
+        with pytest.raises(ValueError):
+            Signal.from_int(2, fixed_width=1)
+        assert Signal.from_int(42) == {5: Signal.HIGH, 4: Signal.LOW, 3: Signal.HIGH, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.LOW}
+        with pytest.raises(ValueError):
+            Signal.from_int(42, fixed_width=3)
+        assert Signal.from_int(-4) == {2: Signal.HIGH, 1: Signal.LOW, 0: Signal.LOW}
+        assert Signal.from_int(-4, fixed_width=5) == {4: Signal.HIGH, 3: Signal.HIGH, 2: Signal.HIGH, 1: Signal.LOW, 0: Signal.LOW}
 
 
 def test_to_int() -> None:
@@ -228,20 +251,26 @@ def test_dict_to_int() -> None:
 
 
 def test_from_bin() -> None:
-    assert Signal.from_bin('0') == {0: Signal.LOW}
-    assert Signal.from_bin('1') == {0: Signal.HIGH}
-    assert Signal.from_bin('10') == {1: Signal.HIGH, 0: Signal.LOW}
-    assert Signal.from_bin('10', fixed_width=4) == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.LOW}
-    assert Signal.from_bin('10', fixed_width=1) == {0: Signal.LOW}
-    assert Signal.from_bin('10', msb_first=False) == {1: Signal.LOW, 0: Signal.HIGH}
-    assert Signal.from_bin('101010') == {5: Signal.HIGH, 4: Signal.LOW, 3: Signal.HIGH, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.LOW}
-    assert Signal.from_bin('101010', fixed_width=3) == {2: Signal.LOW, 1: Signal.HIGH, 0: Signal.LOW}
-    assert Signal.from_bin('0x0') == {2: Signal.LOW, 1: Signal.UNDEFINED, 0: Signal.LOW}
+    with pytest.warns(
+        DeprecationWarning,
+        match=re.escape(
+            "Signal.from_bin() is deprecated and will be removed in v1.0.0. Use SignalArray.from_bin() instead! SignalArray can be imported from 'netlist_carpentry.core.types'"
+        ),
+    ):
+        assert Signal.from_bin('0') == {0: Signal.LOW}
+        assert Signal.from_bin('1') == {0: Signal.HIGH}
+        assert Signal.from_bin('10') == {1: Signal.HIGH, 0: Signal.LOW}
+        assert Signal.from_bin('10', fixed_width=4) == {3: Signal.LOW, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.LOW}
+        with pytest.raises(ValueError):
+            Signal.from_bin('10', fixed_width=1)
+        assert Signal.from_bin('10', msb_first=False) == {1: Signal.LOW, 0: Signal.HIGH}
+        assert Signal.from_bin('101010') == {5: Signal.HIGH, 4: Signal.LOW, 3: Signal.HIGH, 2: Signal.LOW, 1: Signal.HIGH, 0: Signal.LOW}
+        assert Signal.from_bin('0x0') == {2: Signal.LOW, 1: Signal.UNDEFINED, 0: Signal.LOW}
 
-    with pytest.raises(ValueError):
-        Signal.from_bin('0123')
-    with pytest.raises(ValueError):
-        Signal.from_bin('abc')
+        with pytest.raises(ValueError):
+            Signal.from_bin('0123')
+        with pytest.raises(ValueError):
+            Signal.from_bin('abc')
 
 
 def test_to_bin() -> None:

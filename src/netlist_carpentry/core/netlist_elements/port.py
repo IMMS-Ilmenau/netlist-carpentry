@@ -13,14 +13,13 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    TypedDict,
     TypeVar,
     Union,
     overload,
 )
 
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
-from typing_extensions import NotRequired, Self
+from typing_extensions import Self
 
 from netlist_carpentry import LOG, Direction, Signal
 from netlist_carpentry.core.enums.element_type import EType
@@ -37,19 +36,15 @@ from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DIC
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.protocols.signals import LogicLevel, SignalDict, SignalOrLogicLevel
+from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.custom_dict import CustomDict
+from netlist_carpentry.utils.gate_lib_dataclasses import PortParams
 
 if TYPE_CHECKING:
     from netlist_carpentry import Instance, Module
 
 T_PARENT = TypeVar('T_PARENT', bound='Union[Module, Instance]')
 ANY_PORT = Union['Port[Module]', 'Port[Instance]']
-
-
-class PortParams(TypedDict):
-    upto: NotRequired[int]
-    offset: NotRequired[int]
-    signed: NotRequired[int]
 
 
 class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
@@ -67,7 +62,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
             Can also be None, in which case the port does not belong to any object initially, but should be assigned to an instance or module later.
     """
 
-    parameters: PortParams = {}
+    parameters: PortParams = PortParams()
     direction: Direction
     """The direction of this port, indicating whether it's an input, output, or bidirectional connection."""
     _segments = CustomDict[int, PortSegment]()
@@ -187,26 +182,22 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Offset is ignored when calculating this property. If a 4 bit port has an offset of 3, the returned
         integer is built form the actually present segments (i.e. the integer value is between 0 and 15).
-        Analogously, if segments are missing in between, they are also ignored and treated as if there
-        was no gap. If a port has a segment with index 0 and with index 2, but a segment for index 1 is
-        missing, the returned integer will be the decimal representation of the values of the segments 2 and 0,
-        without including or mentioning the gap at index 1. The calculated number ranges thus between 0 and 3,
-        and *not* between 0 and 7.
+        If segments are missing in between, they will be filled with undefined values.
+        If a port has a segment with index 0 and with index 2, but a segment for index 1 is
+        missing (not to be confused with an unconnected segment), the returned string will have the values
+        of the segments 2 and 0 (in descending order), and `Signal.UNDEFINED` at index 1.
+        In such case, no integer can be deduced, because of the undefined value at index 1, and `None` is returned.
 
         If the signal string for a 4 bit port is '1001', then this property will return 9.
         If the string contains 'x' or 'z', the signal does not form an integer and this property returns `None`.
         """
         try:
-            sig_str_msb = self.signal_str if self.msb_first else ''.join(reversed(self.signal_str))
-            int_val = int(sig_str_msb, 2)
-            if self.signed and sig_str_msb[0] == '1':  # Is signed and sign bit is set
-                int_val -= 1 << self.width
-            return int_val
+            return int(self.signal_array)
         except ValueError:
             return None
 
     @property
-    def signal_array(self) -> Dict[int, Signal]:
+    def signal_array(self) -> SignalArray:
         """
         Returns an array of signals associated with this port, ordered by bit index.
 
@@ -215,9 +206,10 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         where the index of the list corresponds to the bit index of the segment.
 
         Returns:
-            Dict[int, Signal]: The array of signals associated with each segment of this port.
+            SignalArray: The array of signals associated with each segment of this port.
         """
-        return {idx: self[idx].signal for idx in self.segments}
+        signals = {idx - (self.offset or 0): self[idx].signal for idx in self.segments}
+        return SignalArray(signals=signals, signed=self.signed, msb_first=self.msb_first)
 
     @property
     def signal_str(self) -> str:
@@ -228,18 +220,17 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         Offset is ignored by this property. If a 4 bit port has an offset of 3, the returned
         string only consists of the actually present segments (i.e. the string consists of the signals
         at the 4 present segments).
-        Analogously, if segments are missing in between, they are also ignored and treated as if there
-        was no gap. If a port has a segment with index 0 and with index 2, but a segment for index 1 is
+        If segments are missing in between, they will be filled with undefined values.
+        If a port has a segment with index 0 and with index 2, but a segment for index 1 is
         missing (not to be confused with an unconnected segment), the returned string will have the values
-        of the segments 2 and 0 (in descending order), without including or mentioning the gap at index 1.
+        of the segments 2 and 0 (in descending order), and `Signal.UNDEFINED` at index 1.
 
         If the signal string for a 4 bit port is '1010', then the segments with indices 3 and 1 (plus offset)
         are currently 1 and the other two segments are 0.
         If the string contains 'x', the corresponding segment has an undefined value, and if the string
         contains 'z', the corresponding segment is floating.
         """
-        sorted_keys = sorted(self.signal_array.keys(), reverse=True)
-        return ''.join(self.signal_array[k].value for k in sorted_keys)
+        return str(self.signal_array)
 
     @property
     def has_undefined_signals(self) -> bool:
@@ -397,7 +388,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
     @property
     def signed(self) -> bool:
         # Normally, signed should only be either 0 or 1, but treat non-zero cases as signed (e.g. '1'/'0' or True/False)
-        return 'signed' in self.parameters and int(self.parameters['signed']) != 0
+        return self.parameters.signed is not None and int(self.parameters.signed) != 0
 
     @property
     def unsigned(self) -> bool:
@@ -644,9 +635,9 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
     def set_signals(self, signal: SignalDict) -> None: ...
     def set_signals(self, signal: Union[int, str, SignalDict]) -> None:
         if isinstance(signal, int):
-            signal = Signal.from_int(signal, msb_first=self.msb_first, fixed_width=self.width)
+            signal = SignalArray.from_int(signal, msb_first=self.msb_first, fixed_width=self.width).signals
         if isinstance(signal, str):
-            signal = Signal.from_bin(signal, msb_first=self.msb_first, fixed_width=self.width)
+            signal = SignalArray.from_bin(signal, msb_first=self.msb_first, fixed_width=self.width).signals
         for idx, sig in signal.items():
             if self.offset is not None:
                 self[idx + self.offset].set_signal(sig)
@@ -744,7 +735,7 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
                 False otherwise.
         """
         prev = self.signed
-        self.parameters['signed'] = int(signed)
+        self.parameters.signed = int(signed)
         if self.is_instance_port:
             self.parent.update_signedness(self.name)  # type: ignore
         return prev != self.signed

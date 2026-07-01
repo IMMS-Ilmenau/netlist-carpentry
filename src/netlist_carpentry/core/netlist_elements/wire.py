@@ -22,6 +22,7 @@ from netlist_carpentry.core.netlist_elements.netlist_element import NetlistEleme
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
 from netlist_carpentry.core.protocols.signals import LogicLevel, SignalDict, SignalOrLogicLevel
+from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.gate_lib_dataclasses import WireParams
 
@@ -139,15 +140,16 @@ class Wire(NetlistElement, BaseModel):
         return Signal.UNDEFINED
 
     @property
-    def signal_array(self) -> Dict[int, Signal]:
+    def signal_array(self) -> SignalArray:
         """
-        A dictionary of wire segment indices to the signals of the corresponding wire segments.
+        A SignalArray object containing a dictionary of wire segment indices to the signals of the corresponding wire segments.
 
         Returns:
-            A dictionary with integer keys representing wire segment indices and values being Signal objects
-            representing the signal of each wire segment.
+            A SignalArray object containing a dictionary with integer keys representing wire segment indices and values being
+            Signal objects representing the signal of each wire segment.
         """
-        return {idx: self[idx].signal for idx in self.segments}
+        signals = {idx - (self.offset or 0): self[idx].signal for idx in self.segments}
+        return SignalArray(signals=signals, msb_first=self.msb_first, signed=self.signed)
 
     @property
     def signal_str(self) -> str:
@@ -168,8 +170,7 @@ class Wire(NetlistElement, BaseModel):
         If the string contains 'x', the corresponding segment has an undefined value, and if the string
         contains 'z', the corresponding segment is floating.
         """
-        sorted_keys = sorted(self.signal_array.keys(), reverse=True)
-        return ''.join(self.signal_array[k].value for k in sorted_keys)
+        return str(self.signal_array)
 
     @property
     def signal_int(self) -> Optional[int]:
@@ -192,11 +193,7 @@ class Wire(NetlistElement, BaseModel):
         If the string contains 'x' or 'z', the signal does not form an integer and this property returns `None`.
         """
         try:
-            sig_str_msb = self.signal_str if self.msb_first else ''.join(reversed(self.signal_str))
-            int_val = int(sig_str_msb, 2)
-            if self.signed and sig_str_msb[0] == '1':  # Is signed and sign bit is set
-                int_val -= 1 << self.width
-            return int_val
+            return int(self.signal_array)
         except ValueError:
             return None
 
@@ -366,9 +363,9 @@ class Wire(NetlistElement, BaseModel):
     def set_signals(self, signal: SignalDict) -> None: ...
     def set_signals(self, signal: Union[int, str, SignalDict]) -> None:
         if isinstance(signal, int):
-            signal = Signal.from_int(signal, msb_first=self.msb_first, fixed_width=self.width)
+            signal = SignalArray.from_int(signal, msb_first=self.msb_first, fixed_width=self.width).signals
         if isinstance(signal, str):
-            signal = Signal.from_bin(signal, msb_first=self.msb_first, fixed_width=self.width)
+            signal = SignalArray.from_bin(signal, msb_first=self.msb_first, fixed_width=self.width).signals
         for idx, sig in signal.items():
             if self.offset is not None:
                 self[idx + self.offset].set_signal(sig)
