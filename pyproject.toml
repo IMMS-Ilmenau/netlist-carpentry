@@ -22,6 +22,7 @@ dependencies = [
     "scipy>=1.13.1",
     "tqdm>=4.67.1",
     "types-tqdm>=4.67.0.20250516",
+    "yowasp-yosys>=0.66.0.0.post1165",
     "z3-solver>=4.15.0.0",
 ]
 

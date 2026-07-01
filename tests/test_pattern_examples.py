@@ -1,4 +1,6 @@
 import os
+import re
+from pathlib import Path
 
 import pytest
 from utils import save_results
@@ -8,7 +10,7 @@ from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.core.graph.constraint import CASCADING_OR_CONSTRAINT
 from netlist_carpentry.core.graph.pattern import Pattern
 from netlist_carpentry.core.graph.pattern_generator import PatternGenerator
-from netlist_carpentry.io.read.read_utils import generate_json_netlist
+from netlist_carpentry.io.read.read_utils import generate_json, generate_json_netlist
 from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
 from netlist_carpentry.routines.opt import opt_chains
 from netlist_carpentry.utils.gate_lib import OrGate
@@ -35,8 +37,8 @@ def dec_mux_circuit() -> Circuit:
 
 @pytest.fixture()
 def dec_mux_pattern() -> Pattern:
-    generate_json_netlist('tests/files/or_pattern_find.v', 'tests/files/or_pattern_find.json')
-    generate_json_netlist('tests/files/or_pattern_replace.v', 'tests/files/or_pattern_replace.json')
+    generate_json([Path('tests/files/or_pattern_find.v')], overwrite=True)
+    generate_json([Path('tests/files/or_pattern_replace.v')], overwrite=True)
     find_pattern_file = 'tests/files/or_pattern_find.json'
     replace_pattern_file = 'tests/files/or_pattern_replace.json'
     p = PatternGenerator.build_from_yosys_netlists(find_pattern_file, replace_pattern_file, constraints=[CASCADING_OR_CONSTRAINT])
@@ -68,7 +70,9 @@ def test_decentral_mux_pattern_replacement(dec_mux_circuit: Circuit, dec_mux_pat
 
 
 def test_decentral_mux_pattern_replacement_fnc() -> None:
-    generate_json_netlist('tests/files/decentral_mux.v', 'tests/files/decentral_mux.json')
+    warn_str = r"'generate_json_netlist()' is deprecated and will be removed in v1.0.0. Call `generate_json` with a `ReadConfig` object with the corresponding data (or simply with the RTL files) instead!"
+    with pytest.warns(DeprecationWarning, match=re.escape(warn_str)):
+        generate_json_netlist('tests/files/decentral_mux.v', 'tests/files/decentral_mux.json')
     opt_chains(None, 'tests/files/decentral_mux.v', 'decentral_mux', gates=['or'], output_path='./tests/files/gen/decentral_mux_fnc_replaced.v')
     c_before = read('tests/files/decentral_mux.v')
     c_after = read('./tests/files/gen/decentral_mux_fnc_replaced.v')

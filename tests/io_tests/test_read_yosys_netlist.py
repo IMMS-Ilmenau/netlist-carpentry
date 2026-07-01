@@ -15,7 +15,7 @@ from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
-from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
+from netlist_carpentry.io.read.yosys.netlist_reader import YosysNetlistReader as YNR
 from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
 from netlist_carpentry.utils.gate_lib import ADFF, DFF, DFFE, Adder
 
@@ -592,6 +592,20 @@ def test_hierarchical_circuit(hierarchical_reader: YNR) -> None:
     for m in c:
         save_results(p2v.module2v(m), 'v', m.name)
     save_results(p2v.circuit2v(c), 'v', c.name)
+
+
+def test_deprecation_warnings() -> None:
+    warn_str = "Importing 'netlist_carpentry.io.read.yosys_netlist_types' is deprecated and will be removed in v1.0.0. This module has been renamed and moved to 'netlist_carpentry.io.read.yosys.netlist_types'! Please use 'import netlist_carpentry.io.read.yosys.netlist_types' instead."
+    with pytest.warns(DeprecationWarning):
+        import netlist_carpentry.io.read.yosys_netlist_types as tmp
+
+        tmp
+
+    warn_str = "Importing 'netlist_carpentry.io.read.yosys_netlist' is deprecated and will be removed in v1.0.0. This module has been renamed and moved to 'netlist_carpentry.io.read.yosys.netlist_reader'! Please use 'import netlist_carpentry.io.read.yosys.netlist_reader' instead."
+    with pytest.warns(DeprecationWarning, match=warn_str):
+        import netlist_carpentry.io.read.yosys_netlist as tmp
+
+        tmp
 
 
 if __name__ == '__main__':

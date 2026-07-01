@@ -9,7 +9,7 @@ from netlist_carpentry import Circuit, Module
 from netlist_carpentry.core.graph.constraint import Constraint
 from netlist_carpentry.core.graph.module_graph import ModuleGraph
 from netlist_carpentry.core.graph.pattern import Pattern
-from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
+from netlist_carpentry.io.read.yosys.netlist_reader import YosysNetlistReader as YNR
 
 
 class PatternGenerator:

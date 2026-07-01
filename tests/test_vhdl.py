@@ -3,6 +3,7 @@ import os
 import pytest
 
 from netlist_carpentry import read
+from netlist_carpentry.core.exceptions import YosysError
 
 
 def test_vhdl_simple_counter() -> None:
@@ -19,7 +20,7 @@ def test_vhdl_simple_counter() -> None:
         assert len(c.instances['§add']) == 1
     except FileNotFoundError:
         pytest.xfail('Installation of OSS CAD SUITE failed!')
-    except RuntimeError:
+    except YosysError:
         pytest.xfail('Source dependencies probably missing')
 
 

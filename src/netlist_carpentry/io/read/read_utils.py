@@ -1,24 +1,26 @@
 """Module for simple access of read methods to transform circuits from a text file into Python objects."""
 
 import subprocess
-import tempfile
+import warnings
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import time
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional, Union, overload
 
+import netlist_carpentry.scripts.script_caller as sc
 from netlist_carpentry import LOG, Circuit
-from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader
-from netlist_carpentry.scripts.script_builder import build_and_execute
+from netlist_carpentry.core.exceptions import YosysError
+from netlist_carpentry.io.read.yosys import ReadConfig
+from netlist_carpentry.io.read.yosys.netlist_reader import YosysNetlistReader
 
 
-def read_json(json_path: Union[str, Path], circuit_name: str = '') -> Circuit:
+def read_json(json_path: Union[str, Path], circuit_name: Optional[str] = None) -> Circuit:
     """
     Reads a JSON file and converts it to a Circuit object using the YosysNetlistReader.
 
     Args:
         json_path (Union[str, Path]): The path to the JSON file.
-        circuit_name (str, optional): The name of the circuit to be created. If not provided, the default name will be used.
+        circuit_name (Optional[str], optional): The name of the circuit to be created. Defaults to None, in which case the default name will be used.
 
     Returns:
         Circuit: A Circuit object representing the circuit defined in the JSON file.
@@ -26,25 +28,61 @@ def read_json(json_path: Union[str, Path], circuit_name: str = '') -> Circuit:
     return YosysNetlistReader(json_path).transform_to_circuit(circuit_name)
 
 
+def read_via_cfg(cfg: ReadConfig, circuit_name: Optional[str] = None, verbose: bool = False) -> Circuit:
+    """Reads a Verilog file and converts it to a Circuit object based on the given config.
+
+    The config is used to create the Yosys script that generates the JSON netlist, which is then read
+    by the `read_json` method, which produces a circuit object based on the content of the netlist.
+
+    Args:
+        cfg (ReadConfig): The Yosys config which contains the properties and passes that will be used when creating the JSON netlist.
+        circuit_name (Optional[str], optional): The chosen name for this circuit. Defaults to None, in which case the circuit receives a generic name.
+        verbose (bool, optional): Whether to show Yosys output. If True, all Yosys output is shown. Defaults to False.
+
+    Raises:
+        YosysError: Whenever Yosys fails to generate a JSON netlist. Also shows what exactly went wrong.
+
+    Returns:
+        Circuit: The circuit object represented in the JSON netlist that was generated via the given Yosys config.
+    """
+    with TemporaryDirectory() as tmpdir:
+        if cfg.json_path is None:
+            cfg.json_path = Path(tmpdir) / 'tmp.json'
+        LOG.debug(f'Generating Yosys netlist from {len(cfg.files)} files...')
+        start = time()
+        gen_process = sc.call(cfg.shell_script(), verbose)
+        errors = gen_process.stderr if gen_process.stderr is not None else ''
+        if errors:
+            LOG.error(str(errors))
+        if int(gen_process.returncode) != 0:
+            stdout = gen_process.stdout if gen_process.stdout else ''
+            raise YosysError(f'Failed to generate JSON netlist:\n{stdout}\n{errors}')
+        LOG.debug(f'Generated Yosys netlist from {len(cfg.files)} files in {round(time() - start, 2)}s!')
+        return read_json(cfg.json_path, circuit_name)
+
+
 def read(
-    verilog_paths: Union[str, Path, Sequence[Union[str, Path]]],
-    top: str = '',
-    circuit_name: str = '',
+    cfg_or_files: Union[ReadConfig, str, Path, List[Union[str, Path]]],
+    top: Optional[str] = None,
+    circuit_name: Optional[str] = None,
     verbose: bool = False,
-    out: Union[str, Path] = '',
+    *,
+    out: Union[str, Path, None] = None,
     source_paths: Optional[List[str]] = None,
     no_hierarchy: bool = False,
-    **kwargs: object,
 ) -> Circuit:
     """
-    Reads a Verilog file and converts it to a Circuit object using the YosysNetlistReader.
+    Reads a Verilog file and converts it to a Circuit object.
 
-    The Verilog file is first converted to a JSON file using Yosys (via the generate_json_netlist function),
-    which is then read by the read_json function.
+    Under the hood, the Verilog file is first converted to a JSON file using Yosys, for which the config
+    is built using `read_via_cfg` for the given parameters. The config is then used to create and run Yosys
+    to create a JSON netlist, which is then read by the `read_json` function.
     The Circuit represented by the provided Verilog file is returned as a result.
 
     Args:
-        verilog_paths (Union[str, Path]): The path to the Verilog file. Alternatively, a list of paths.
+        cfg_or_files (Union[ReadConfig, str, Path, List[Union[str, Path]]], optional): The ReadConfig object containing
+            data and settings required to read the circuit. Alternatively, a path to an RTL file (or a list of paths)
+            can be provided, from which the circuit will then be built.
         top (str, optional): The name of the top-level module in the Verilog file. If not provided, no top module
             is set, which means that the circuit will not have a specified hierarchy until set manually via Circuit.set_top().
         circuit_name (str, optional): The name of the circuit to be created. If not provided, the default name will be used.
@@ -56,36 +94,52 @@ def read(
             Defaults to None, in which case no additional files are sourced.
         no_hierarchy (bool, optional): Whether to resolve the hierarchy of the given circuit or not.
             If True, the yosys "hierarchy" path is skipped. Defaults to False.
-        kwargs: Additional keyword arguments that are passed to the script building function.
-            Accepts all keyword arguments that `netlist_carpentry.scripts.script_builder.build_script()` accepts.
 
     Returns:
         Circuit: A Circuit object representing the circuit defined in the Verilog file.
     """
-    if isinstance(verilog_paths, (str, Path)):
-        paths = [Path(verilog_paths).resolve()]
+    if isinstance(cfg_or_files, ReadConfig):
+        if any([top, out, source_paths, no_hierarchy]):
+            raise ValueError(
+                'If a ReadConfig is given to `read()`, all other reading-related arguments must remain unset (top, out, source_paths, no_hierarchy)!'
+            )
     else:
-        paths = [Path(p).resolve() for p in verilog_paths]
+        if isinstance(cfg_or_files, (str, Path)):
+            paths = [Path(cfg_or_files).resolve()]
+        else:
+            paths = [Path(p).resolve() for p in cfg_or_files]
 
-    if not paths:
-        raise ValueError('No verilog paths provided!')
-    with TemporaryDirectory() as tmpdirname:
-        out_path = Path(out) if out else Path(tmpdirname)
-        script_path = out_path / 'gen_json.sh'
-        json_path = out_path / f'{paths[0].stem}.json'
-        LOG.debug(f'Generating Yosys netlist from {len(paths)} files...')
-        start = time()
-        gen_process = build_and_execute(
-            script_path, paths, json_path, verbose=verbose, top=top, source_paths=source_paths, no_hierarchy=no_hierarchy, **kwargs
-        )
-        LOG.debug(f'Generated Yosys netlist from {len(paths)} files in {round(time() - start, 2)}s!')
-        errors = gen_process.stderr if gen_process.stderr is not None else ''
-        if errors:
-            LOG.error(errors)
-        if int(gen_process.returncode) != 0:
-            stdout = gen_process.stdout if gen_process.stdout else ''
-            raise RuntimeError(f'Failed to generate JSON netlist:\n{stdout}\n{errors}')
-        return read_json(json_path, circuit_name)
+        if not paths:
+            raise ValueError('No verilog paths provided!')
+        output = Path(out) if out else None
+        if output is not None and output.is_dir():
+            output /= paths[0].stem + '.json'
+        envs = [Path(p) for p in source_paths] if source_paths else None
+        cfg_or_files = ReadConfig(files=paths, output=output, top=top, no_hierarchy=no_hierarchy, environments=envs)
+    return read_via_cfg(cfg_or_files, circuit_name, verbose)
+
+
+@overload
+def generate_json(
+    cfg_or_files: List[Path], yosys_script_path: Optional[Path] = None, verbose: bool = False, overwrite: bool = False
+) -> subprocess.CompletedProcess[str]: ...
+@overload
+def generate_json(
+    cfg_or_files: ReadConfig, yosys_script_path: Optional[Path] = None, verbose: bool = False, overwrite: bool = False
+) -> subprocess.CompletedProcess[str]: ...
+def generate_json(
+    cfg_or_files: Union[ReadConfig, List[Path]], yosys_script_path: Optional[Path] = None, verbose: bool = False, overwrite: bool = False
+) -> subprocess.CompletedProcess[str]:
+    if isinstance(cfg_or_files, list):
+        if not cfg_or_files:
+            raise YosysError('Cannot create JSON netlist: The given file list is empty!')
+        cfg_or_files = ReadConfig(files=cfg_or_files)
+    if not cfg_or_files.json_path:
+        cfg_or_files.json_path = cfg_or_files.files[0].parent / (cfg_or_files.files[0].stem + '.json')
+    if cfg_or_files.json_path.exists() and not overwrite:
+        raise FileExistsError(f'Cannot create JSON netlist: A file {cfg_or_files.json_path!r} already exists!')
+    LOG.info(f'Generating JSON netlist at {cfg_or_files.json_path!r}...')
+    return sc.call(cfg_or_files.shell_script(yosys_script_path), verbose)
 
 
 def generate_json_netlist(
@@ -95,7 +149,7 @@ def generate_json_netlist(
     verbose: bool = False,
     yosys_script_path: Union[str, Path] = '',
     no_hierarchy: bool = False,
-) -> subprocess.Popen[str]:
+) -> subprocess.CompletedProcess[str]:
     """Generate a JSON netlist from the given input file using Yosys.
 
     Args:
@@ -109,26 +163,19 @@ def generate_json_netlist(
             If True, the yosys "hierarchy" path is skipped. Defaults to False.
 
     Returns:
-        subprocess.Popen[str]: The return object of the subprocess that executed Yosys.
+        subprocess.CompletedProcess[str]: The return object of the subprocess that executed Yosys.
     """
-    from netlist_carpentry import NC_SCRIPTS_DIR
-
-    pmux2mux_path = Path(NC_SCRIPTS_DIR + '/hdl/pmux2mux.v')
+    warnings.warn(
+        "'generate_json_netlist()' is deprecated and will be removed in v1.0.0. Call `generate_json` with a `ReadConfig` object with the corresponding data (or simply with the RTL files) instead!",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if isinstance(input_file_path, str):
         input_file_path = Path(input_file_path)
     if isinstance(output_file_path, str):
         output_file_path = Path(output_file_path)
     output_dir = output_file_path.parent
     output_dir.mkdir(exist_ok=True)
-    with tempfile.NamedTemporaryFile('w', delete_on_close=False) as tmp:  # type: ignore[call-overload, misc]
-        path = Path(tmp.name) if not yosys_script_path else Path(yosys_script_path)  # type: ignore[misc]
-        tmp.close()  # type: ignore[misc]
-        return build_and_execute(
-            path,
-            [input_file_path],
-            output_file_path,
-            verbose=verbose,
-            top=top_module_name,
-            techmap_paths=[pmux2mux_path],  # type: ignore[misc]
-            no_hierarchy=no_hierarchy,
-        )
+    top = top_module_name or None
+    rc = ReadConfig(files=[input_file_path], output=output_file_path, top=top, no_hierarchy=no_hierarchy)
+    return generate_json(rc, Path(yosys_script_path) if yosys_script_path else None, verbose=verbose, overwrite=True)

@@ -27,7 +27,7 @@ def test_decentral_mux(log_setup: Log) -> None:
     assert len(c.modules) == 1
     mux = c.first
     c.set_top(mux)
-    assert len(mux.metadata.yosys) == 2
+    assert len(mux.metadata.yosys) == 3
     assert c.top == mux
     assert len(mux.ports) == 3
     assert len(mux.instances) == 96
@@ -39,7 +39,7 @@ def test_decentral_mux_signedness(log_setup: Log) -> None:
     assert len(c.modules) == 1
     mux = c.first
     c.set_top(mux)
-    assert len(mux.metadata.yosys) == 2
+    assert len(mux.metadata.yosys) == 3
     assert c.top == mux
     assert len(mux.ports) == 3
     assert len(mux.instances) == 96
@@ -70,7 +70,7 @@ def test_signed_example(log_setup: Log) -> None:
     assert len(c.modules) == 1
     signed_module = c.first
     c.set_top(signed_module)
-    assert len(signed_module.metadata.yosys) == 1
+    assert len(signed_module.metadata.yosys) == 2
     assert c.top == signed_module
     assert len(signed_module.ports) == 3
     assert len(signed_module.instances) == 1

@@ -6,8 +6,9 @@ sys.path.append('.')
 
 import pytest
 
-from netlist_carpentry import read, read_json
+from netlist_carpentry import ReadConfig, read, read_json, read_via_cfg
 from netlist_carpentry.core.circuit import Circuit
+from netlist_carpentry.core.exceptions import YosysError
 
 
 def test_static_read_json() -> None:
@@ -25,6 +26,24 @@ def test_static_read_json() -> None:
     assert circuit.top_name == 'simpleAdder'
 
 
+def test_read_via_cfg() -> None:
+    circuit = read_via_cfg(ReadConfig(files=[Path('tests/files/simpleAdder.v')], top='simpleAdder'), circuit_name='Circuit', verbose=True)
+    assert circuit is not None
+    assert isinstance(circuit, Circuit)
+    assert circuit.name == 'Circuit'
+    assert len(circuit.modules) == 1
+    assert 'simpleAdder' in circuit.modules
+    adder = circuit['simpleAdder']
+    assert len(adder.metadata['yosys']) == 3
+    assert len(adder.ports) == 5
+    assert len(adder.instances) == 2
+    assert len(adder.wires) == 6
+    assert circuit.top_name == 'simpleAdder'
+
+    circuit = read_via_cfg(ReadConfig(files=[Path('tests/files/simpleAdder.v')], top='simpleAdder'), verbose=True)
+    assert circuit.name == 'tmp'
+
+
 def test_static_read_verilog() -> None:
     circuit = read(Path('tests/files/simpleAdder.v'), 'simpleAdder')
     assert circuit is not None
@@ -39,9 +58,12 @@ def test_static_read_verilog() -> None:
 
     assert circuit.top_name == 'simpleAdder'
 
+    with pytest.raises(ValueError):
+        read(ReadConfig(files=[Path('tests/files/simpleAdder.v')]), top='simpleAdder', verbose=True)
+
 
 def test_static_read_verilog_not_exist() -> None:
-    with pytest.raises(RuntimeError):
+    with pytest.raises(YosysError):
         read('nonexistent_file.v')
 
 

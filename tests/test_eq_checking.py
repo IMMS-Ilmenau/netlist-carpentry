@@ -8,7 +8,7 @@ from utils import save_results
 from netlist_carpentry import read, run_equiv, run_equiv_miter, run_eqy
 from netlist_carpentry.core.graph.constraint import CASCADING_OR_CONSTRAINT
 from netlist_carpentry.core.graph.pattern_generator import PatternGenerator
-from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
+from netlist_carpentry.io.read.yosys.netlist_reader import YosysNetlistReader as YNR
 from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
 from netlist_carpentry.routines.opt.floodfill.chain_optimizer import opt_chains
 from netlist_carpentry.scripts.equivalence_checking import EquivalenceChecking

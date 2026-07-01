@@ -44,6 +44,7 @@ InstanceType = str
 VerilogPath = str
 
 if TYPE_CHECKING:
+    from netlist_carpentry.io.read.yosys import ReadConfig
     from netlist_carpentry.routines.check.report import CheckReport
 
 
@@ -826,3 +827,23 @@ class Circuit(BaseModel):
         with open(path, 'w', encoding='utf-8') as f:
             # ensure_ascii=False: special characters are displayed correctly
             f.write(json.dumps(md_dict, indent=2, ensure_ascii=False))
+
+    @classmethod
+    def read(cls, cfg_or_files: Union[ReadConfig, List[Path]], circuit_name: Optional[str] = None, verbose: bool = False) -> 'Circuit':
+        """Reads a Verilog file and converts it to a Circuit object based on the given config or the given files.
+
+        Args:
+            cfg_or_files (Union[ReadConfig, List[Path]): The ReadConfig instance that contains all necessary information to read the given RTL files.
+                Alternatively, a list of paths to RTL files can be given.
+            circuit_name (Optional[str], optional): A name for the circuit to read. If None, a generic name is given. Defaults to None.
+            verbose (bool, optional): Whether to print Yosys feedback. Defaults to False.
+
+        Returns:
+            Circuit: The read circuit using the given ReadConfig instance.
+        """
+        from netlist_carpentry import read_via_cfg
+        from netlist_carpentry.io.read.yosys import ReadConfig
+
+        if isinstance(cfg_or_files, list):
+            cfg_or_files = ReadConfig(files=cfg_or_files)
+        return read_via_cfg(cfg_or_files, circuit_name=circuit_name, verbose=verbose)

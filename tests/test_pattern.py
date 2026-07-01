@@ -1,19 +1,21 @@
 import os
+import re
 from pprint import pprint
 
 import networkx as nx
 import pytest
 import utils
 
-from netlist_carpentry import EMPTY_GRAPH, EMPTY_PATTERN
+from netlist_carpentry import EMPTY_GRAPH, EMPTY_PATTERN, ReadConfig
+from netlist_carpentry.core.circuit import Path
 from netlist_carpentry.core.graph.module_graph import ModuleGraph
 from netlist_carpentry.core.graph.pattern import Pattern
 from netlist_carpentry.core.graph.pattern_generator import PatternGenerator
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.port import Port
-from netlist_carpentry.io.read.read_utils import generate_json_netlist, read
-from netlist_carpentry.io.read.yosys_netlist import YosysNetlistReader as YNR
+from netlist_carpentry.io.read.read_utils import generate_json, generate_json_netlist, read
+from netlist_carpentry.io.read.yosys.netlist_reader import YosysNetlistReader as YNR
 from netlist_carpentry.utils.gate_lib import NandGate, XnorGate
 
 
@@ -380,8 +382,8 @@ def test_build_pattern_verilog() -> None:
 
 
 def test_build_pattern_yosys() -> None:
-    generate_json_netlist('tests/files/or_pattern_find.v', 'tests/files/or_pattern_find.json')
-    generate_json_netlist('tests/files/or_pattern_replace.v', 'tests/files/or_pattern_replace.json')
+    generate_json(ReadConfig(files=[Path('tests/files/or_pattern_find.v')], output='tests/files/or_pattern_find.json'), overwrite=True)
+    generate_json(ReadConfig(files=[Path('tests/files/or_pattern_replace.v')], output='tests/files/or_pattern_replace.json'), overwrite=True)
     find_pattern_file = 'tests/files/or_pattern_find.json'
     replace_pattern_file = 'tests/files/or_pattern_replace.json'
 
@@ -403,7 +405,9 @@ def test_build_pattern_yosys() -> None:
 
 
 def test_graph_from_file_fail() -> None:
-    generate_json_netlist('tests/files/dec.v', 'tests/files/dec.json', no_hierarchy=True)
+    warn_str = r"'generate_json_netlist()' is deprecated and will be removed in v1.0.0. Call `generate_json` with a `ReadConfig` object with the corresponding data (or simply with the RTL files) instead!"
+    with pytest.warns(DeprecationWarning, match=re.escape(warn_str)):
+        generate_json_netlist('tests/files/dec.v', 'tests/files/dec.json', no_hierarchy=True)
     with pytest.raises(ValueError):
         # Contains multiple modules
         PatternGenerator._module_from_json('tests/files/dec.json', remove_ports=True)
@@ -462,8 +466,8 @@ def test_get_mapping() -> None:
 
 
 def test_get_mapping_not_matching() -> None:
-    generate_json_netlist('tests/files/or_pattern_find.v', 'tests/files/or_pattern_find.json')
-    generate_json_netlist('tests/files/simpleAdder.v', 'tests/files/simpleAdder.json')
+    generate_json(ReadConfig(files=[Path('tests/files/or_pattern_find.v')], output='tests/files/or_pattern_find.json'), overwrite=True)
+    generate_json(ReadConfig(files=[Path('tests/files/simpleAdder.v')], output='tests/files/simpleAdder.json'), overwrite=True)
 
     find_pattern_file = 'tests/files/or_pattern_find.json'
     not_matching_file = 'tests/files/simpleAdder.json'

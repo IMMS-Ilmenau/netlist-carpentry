@@ -37,6 +37,9 @@ class Config:
         self.allow_detached_segments = False
         """Whether to allow port or wire segments to exist without a parent object. Defaults to False, raising a DetachedSegementError whenever a segment exists without a parent"""
 
+        self.yosys_executable: str = 'yosys'
+        """The shell command to start Yosys. Defaults to `yosys`, which is normally used to run Yosys."""
+
 
 CFG = Config()
 """Global config object for storing all program configuration data."""

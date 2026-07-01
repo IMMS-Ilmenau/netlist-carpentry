@@ -141,3 +141,9 @@ class MaxRetriesExceededError(RuntimeError):
     """Raised when the maximum number of retries has been exceeded."""
 
     pass
+
+
+class YosysError(RuntimeError):
+    """Raised whenever issues occur that are related to a Yosys process."""
+
+    pass

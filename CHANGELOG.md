@@ -17,13 +17,33 @@
 - Implemented factory methods for the mentioned Yosys cells
 - Implemented factory methods for `DIV` (divider) and `MOD` (modulo) cells
 - Added lots of docstrings
+- Added `netlist_carpentry.ON_WINDOWS` flag, which is used in several places to determine the OS Netlist Carpentry is running on
+- Added a Yosys reading config class `netlist_carpentry.ReadConfig`, which is now used to build the read script dynamically for more convenience - see the documentation of the class for more information
+- Introduced `netlist_carpentry.read_via_cfg()` which uses a configured `ReadConfig` object to read a circuit, `netlist_carpentry.read()` now builds a `ReadConfig` object under the hood and calls `read_via_cfg()` with it
+- Added `netlist_carpentry.generate_json()`, which generates a JSON netlist using a `ReadConfig` object, or plain file list
+- Added `netlist_carpentry.Circuit.read()` (class method), which reads a circuit based on a `ReadConfig` or provided RTL file paths - `Circuit.read()` calls `netlist_carpentry.read()` under the hood
+- Added `yowasp-yosys` as a dependency
+  - The yosys executable to use is now a config parameter and can be accessed via `netlist_carpentry.CFG.yosys_executable`
+  - Default Yosys command is 'yosys', which is the standard way to start Yosys in the command line
+  - If 'yosys' does not start Yosys or the command is not found, Netlist Carpentry now falls back to using 'yowasp-yosys'
+  - `ReadConfig.yosys_executable` returns the command used to start Yosys, which references the current `CFG.yosys_executable` - if 'yosys' does not work, `CFG.yosys_executable` now automatically references 'yowasp-yosys'
+
 
 ## FIXED
 - Fixed bug in signal evaluation process for DFFs with Enable, that arose whenever the Enable signal is undefined
+- Fixed lots of issues arising when using Netlist Carpentry on Windows
 
 ## CHANGED
 - `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.ARST_POLARITY` → `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.RST_POLARITY`
 - `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.ARST_VALUE` → `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.RST_VALUE`
+- `netlist_carpentry.io.read.yosys_netlist` → `netlist_carpentry.io.read.yosys.netlist_reader`
+- `netlist_carpentry.io.read.yosys_netlist_types` → `netlist_carpentry.io.read.yosys.netlist_types`
+- The following functions from `netlist_carpentry.scripts.script_builder` now display a deprecation warning in favor of `ReadConfig` objects and their methods:
+  - `build_script()`
+  - `get_yosys_cmds()`
+  - `render_bash_script()`
+  - Each method displays an extensive description of how the current behavior can be achieved with `ReadConfig` objects
+- `netlist_carpentry.read()` now also accepts `ReadConfig` objects, but fails with a `ValueError` if additional reading parameters are set (e.g. `top`, `out`, `source_paths`, `no_hierarchy`)
 
 
 # Older Versions

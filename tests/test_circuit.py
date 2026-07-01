@@ -4,13 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from netlist_carpentry import Circuit, Direction, Module, read, run_equiv, run_eqy
+from netlist_carpentry import Circuit, Direction, Module, ReadConfig, read, run_equiv, run_eqy
 from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.exceptions import (
     IdentifierConflictError,
     ObjectNotFoundError,
     PathResolutionError,
     SignalAssignmentError,
+    YosysError,
 )
 from netlist_carpentry.core.netlist_elements.element_path import (
     InstancePath,
@@ -130,7 +131,7 @@ def test_add_from_circuit_file(empty_circuit: Circuit) -> None:
     with pytest.raises(IdentifierConflictError):
         empty_circuit.add_from_circuit('tests/files/simpleAdder.v')
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(YosysError):
         empty_circuit.add_from_circuit('bad_path')
 
 
@@ -739,7 +740,7 @@ def test_prove_equivalence(connected_circuit: Circuit) -> None:
     os.remove(eqy_path)
     assert not eqy_path.exists()
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(YosysError, match=r"ERROR: Module `nonexisting_module' not found!"):
         connected_circuit.prove_equivalence([vpath], Path('tests/files/gen/eqy_out'), gold_top_module='nonexisting_module', quiet=True)
 
 
@@ -912,6 +913,18 @@ def test_export_metadata(connected_circuit: Circuit) -> None:
         found_data = json.loads(f.read())
     assert found_data == target_data4
     os.remove(path)
+
+
+def test_read() -> None:
+    with pytest.raises(YosysError):
+        Circuit.read([])
+
+    c = Circuit.read([Path('tests/files/simpleAdder.v')], circuit_name='AAA', verbose=True)
+    assert c.top_name == 'simpleAdder'
+    assert c.name == 'AAA'
+
+    c2 = Circuit.read(ReadConfig(files=[Path('tests/files/simpleAdder.v')]), circuit_name='AAA')
+    assert c == c2
 
 
 if __name__ == '__main__':
