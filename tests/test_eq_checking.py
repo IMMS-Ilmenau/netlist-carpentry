@@ -53,6 +53,9 @@ def test_create_eqy_file() -> None:
 def test_decentral_mux_eqy_creation() -> None:
     name = 'decentral_mux'
     eqy_path = Path(f'tests/files/gen/{name}.eqy')
+    if eqy_path.exists():
+        os.remove(eqy_path)
+
     eqy = EquivalenceChecking([f'tests/files/{name}.v'], name, [f'tests/files/gen/test_write_py2v_examples.test_{name}.v'], name, eqy_path)
     eqy._create_eqy_file()
     with open(eqy_path) as f:

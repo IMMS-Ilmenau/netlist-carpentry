@@ -1,5 +1,6 @@
 """Module for simple access of read methods to transform circuits from a text file into Python objects."""
 
+import os
 import subprocess
 import warnings
 from pathlib import Path
@@ -45,7 +46,7 @@ def read_via_cfg(cfg: ReadConfig, circuit_name: Optional[str] = None, verbose: b
     Returns:
         Circuit: The circuit object represented in the JSON netlist that was generated via the given Yosys config.
     """
-    with TemporaryDirectory() as tmpdir:
+    with TemporaryDirectory(dir=os.getcwd()) as tmpdir:
         if cfg.json_path is None:
             cfg.json_path = Path(tmpdir) / 'tmp.json'
         LOG.debug(f'Generating Yosys netlist from {len(cfg.files)} files...')
