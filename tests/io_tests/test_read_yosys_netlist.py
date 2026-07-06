@@ -3,6 +3,7 @@ import os
 import sys
 
 from netlist_carpentry.core.enums.signal import Signal
+from netlist_carpentry.io.read.yosys.netlist_types import YosysData, YosysModule
 
 sys.path.append('.')
 
@@ -13,11 +14,10 @@ from netlist_carpentry import WIRE_SEGMENT_0, WIRE_SEGMENT_1, WIRE_SEGMENT_X, re
 from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
-from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.io.read.yosys.netlist_reader import YosysNetlistReader as YNR
 from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
-from netlist_carpentry.utils.gate_lib import ADFF, DFF, DFFE, Adder
+from netlist_carpentry.utils.gate_lib import ADFF, DFF, Adder
 
 
 @pytest.fixture(scope='function')
@@ -60,54 +60,53 @@ def test_adder_netlist_dict(simple_reader: YNR) -> None:
 
     assert len(nl_dict) == 2
     assert 'creator' in nl_dict
-    assert len(nl_dict['modules']) == 1
+    assert len(nl_dict.modules) == 1
 
-    adder = nl_dict['modules']['simpleAdder']
-    assert len(adder['attributes']) == 3
-    assert len(adder['ports']) == 5
-    assert len(adder['cells']) == 2
-    assert len(adder['netnames']) == 6
-    assert '§0§out§8§0§' in adder['netnames']
+    adder = nl_dict.modules['simpleAdder']
+    assert len(adder.attributes) == 3
+    assert len(adder.ports) == 5
+    assert len(adder.cells) == 2
+    assert len(adder.netnames) == 6
+    assert '§0§out§8§0§' in adder.netnames
 
 
 def test_preprocess_dict(simple_reader: YNR) -> None:
     given_dict = {
         'modules': {
             'adder': {
-                r"§paramod\simpleAdder\WIDTH=s32'00000100": {
-                    'some_key': r"§paramod\simpleAdder\WIDTH=s32'00000100",
+                'cells': {
+                    '$some_cell$/path/to/src/file.v:420$69': {},
+                    r"§paramod\simpleAdder\WIDTH=s32'00000100": {'type': r"§paramod\simpleAdder\WIDTH=s32'00000100"},
                 },
-                'cells': {'$some_cell$/path/to/src/file.v:420$69': {}},
             },
             r"§paramod\simpleAdder\WIDTH=s32'00000100": {},
         }
     }
-    target_dict = {
-        'modules': {
-            'adder': {
-                '§simpleAdder§WIDTH§4': {
-                    'some_key': '§simpleAdder§WIDTH§4',
+    target_dict = YosysData(
+        **{
+            'modules': {
+                'adder': {
+                    'cells': {'some_cell§file§v§420§69': {}, '§simpleAdder§WIDTH§4': {'type': '§simpleAdder§WIDTH§4'}},
                 },
-                'cells': {'some_cell§file§v§420§69': {}},
-            },
-            '§simpleAdder§WIDTH§4': {},
+                '§simpleAdder§WIDTH§4': {},
+            }
         }
-    }
-    found_dict = simple_reader._preprocess_dict(given_dict)
+    )
+    found_dict = simple_reader._preprocess_dict(YosysData(**given_dict))
 
     assert target_dict == found_dict
 
 
 def test_preprocess_dict_escaped_identifiers(escaped_identifier_reader: YNR) -> None:
-    found_dict = escaped_identifier_reader.read()['modules']
+    found_dict = escaped_identifier_reader.read().modules
     assert 'subModule§1§' in found_dict
     assert 'weirdName§§' in found_dict
-    assert '§0input§§' in found_dict['weirdName§§']['ports']
-    assert '§out§put' in found_dict['weirdName§§']['ports']
-    assert 'In§tance§§§§§' in found_dict['weirdName§§']['cells']
-    assert '§0input§§' in found_dict['weirdName§§']['netnames']
-    assert '§out§put' in found_dict['weirdName§§']['netnames']
-    assert 'someWire§§' in found_dict['weirdName§§']['netnames']
+    assert '§0input§§' in found_dict['weirdName§§'].ports
+    assert '§out§put' in found_dict['weirdName§§'].ports
+    assert 'In§tance§§§§§' in found_dict['weirdName§§'].cells
+    assert '§0input§§' in found_dict['weirdName§§'].netnames
+    assert '§out§put' in found_dict['weirdName§§'].netnames
+    assert 'someWire§§' in found_dict['weirdName§§'].netnames
 
 
 def test_simplify_module_name(simple_reader: YNR) -> None:
@@ -202,7 +201,7 @@ def test_adder_netlist_transform_to_circuit_name(simple_reader: YNR) -> None:
 
 def test_populate_circuit_empty_module(simple_reader: YNR) -> None:
     c = Circuit(name='test')
-    simple_reader._populate_circuit({'test_module': {}}, c)
+    simple_reader._populate_circuit({'test_module': YosysModule()}, c)
 
     assert c.module_count == 1
     assert c.top_name == ''
@@ -212,7 +211,7 @@ def test_build_wires(simple_reader: YNR) -> None:
     m = Module(name='simpleAdder')
 
     m1 = copy.deepcopy(m)
-    simple_reader._build_wires(m1, {})
+    simple_reader._build_wires(m1, YosysModule())
     assert m == m1
 
     with pytest.raises(AttributeError):
@@ -220,12 +219,14 @@ def test_build_wires(simple_reader: YNR) -> None:
 
     simple_reader._build_wires(
         m,
-        {
-            'netnames': {
-                'in2': {'bits': [12, 13], 'attributes': {'src': 'simpleAdder.v:5.22-5.25'}},
-                'out': {'bits': [20, 21, 22], 'attributes': {'src': 'simpleAdder.v:6.22-6.25'}},
-            }
-        },
+        YosysModule(
+            **{
+                'netnames': {
+                    'in2': {'bits': [12, 13], 'attributes': {'src': 'simpleAdder.v:5.22-5.25'}},
+                    'out': {'bits': [20, 21, 22], 'attributes': {'src': 'simpleAdder.v:6.22-6.25'}},
+                }
+            },
+        ),
     )
 
     assert len(m.wires) == 2
@@ -245,23 +246,23 @@ def test_build_port(simple_reader: YNR) -> None:
     m = Module(name='simpleAdder')
     with pytest.raises(AttributeError):
         simple_reader.net_number_mapping[m.name] = {}
-        simple_reader._build_ports(m, {'ports': {'in2': {'direction': 'input'}, 'out': {'direction': 'output'}}})
+        simple_reader._build_ports(m, YosysModule(**{'ports': {'in2': {'direction': 'input'}, 'out': {'direction': 'output'}}}))
 
     m = Module(name='simpleAdder')
     with pytest.raises(AttributeError):
         simple_reader.net_number_mapping[m.name] = {}
         simple_reader._build_ports(
-            m, {'ports': {'in2': {'direction': 'input', 'bits': [12, 13]}, 'out': {'direction': 'output', 'bits': [20, 21, 22]}}}
+            m, YosysModule(**{'ports': {'in2': {'direction': 'input', 'bits': [12, 13]}, 'out': {'direction': 'output', 'bits': [20, 21, 22]}}})
         )
 
     m1 = copy.deepcopy(m)
-    simple_reader._build_ports(m1, {})
+    simple_reader._build_ports(m1, YosysModule())
     assert m == m1
 
     m = Module(name='simpleAdder')
-    simple_reader._build_wires(m, {'netnames': {'in2': {'bits': [12, 13]}, 'out': {'bits': [20, 21, 22]}}})
+    simple_reader._build_wires(m, YosysModule(**{'netnames': {'in2': {'bits': [12, 13]}, 'out': {'bits': [20, 21, 22]}}}))
     simple_reader._build_ports(
-        m, {'ports': {'in2_p': {'direction': 'input', 'bits': [12, 13]}, 'out_p': {'direction': 'output', 'bits': [20, 21, 22]}}}
+        m, YosysModule(**{'ports': {'in2_p': {'direction': 'input', 'bits': [12, 13]}, 'out_p': {'direction': 'output', 'bits': [20, 21, 22]}}})
     )
 
     assert len(m.ports) == 2
@@ -285,7 +286,9 @@ def test_build_port(simple_reader: YNR) -> None:
 def test_build_port_const(simple_reader: YNR) -> None:
     m = Module(name='simpleAdder')
     simple_reader.net_number_mapping[m.name] = {}
-    simple_reader._build_ports(m, {'ports': {'in2_p': {'direction': 'input', 'bits': ['0']}, 'out_p': {'direction': 'output', 'bits': ['1', 'x']}}})
+    simple_reader._build_ports(
+        m, YosysModule(**{'ports': {'in2_p': {'direction': 'input', 'bits': ['0']}, 'out_p': {'direction': 'output', 'bits': ['1', 'x']}}})
+    )
 
     assert len(m.ports['in2_p']) == 1
     assert m.ports['in2_p'][0].ws_path == WIRE_SEGMENT_0.path
@@ -299,7 +302,7 @@ def test_build_instances(simple_reader: YNR) -> None:
 
     # TODO add pytest.raises cases
     m1 = copy.deepcopy(m)
-    simple_reader._build_instances(m1, {})
+    simple_reader._build_instances(m1, YosysModule())
     assert m == m1
 
     wires = {
@@ -343,12 +346,17 @@ def test_build_instances(simple_reader: YNR) -> None:
         }
     }
 
+    insts = YosysModule(**instances)
+    insts.clean()
+    ws = YosysModule(**wires)
+    ws.clean()
     with pytest.raises(AttributeError):
         simple_reader.net_number_mapping[m.name] = {}
-        simple_reader._build_instances(m, instances)
+        simple_reader._build_instances(m, insts)
 
-    simple_reader._build_wires(m, wires)
-    simple_reader._build_instances(m, instances)
+    m = Module(name='simpleAdder')
+    simple_reader._build_wires(m, ws)
+    simple_reader._build_instances(m, insts)
     assert len(m.instances) == 2
     assert '§add' in m.instances_by_types
     assert '§adff' in m.instances_by_types
@@ -400,129 +408,6 @@ def test_build_instances(simple_reader: YNR) -> None:
     assert adff.ports['Q'].width == 9
     assert adff.ports['Q'].is_instance_port
     assert all(adff.ports['Q'][i].raw_ws_path == f'simpleAdder.out.{i}' for i in adff.ports['Q'].segments)
-
-
-def test_build_instance_port_edge_cases(simple_reader: YNR) -> None:
-    simple_reader.net_number_mapping['test'] = {2: WireSegmentPath(raw='test.w.0')}
-    m = Module(name='test')
-    m.create_wire('w')
-    inst = Instance(name='instance', instance_type='§and', module=None)
-    inst_dict = {'connections': {'A': [2]}, 'port_directions': {}}
-
-    simple_reader._build_instance_ports(m, inst, inst_dict)
-    assert len(inst.ports) == 1
-    assert inst.ports['A'].direction == Direction.UNKNOWN
-    assert inst.ports['A'][0].raw_ws_path == 'test.w.0'
-    assert m.wires['w'][0].port_segments == [inst.ports['A'][0]]
-
-    m.wires['w'][0].port_segments.clear()
-    inst_dict.pop('port_directions')
-    inst = Instance(name='instance', instance_type='§and', module=None)
-    simple_reader._build_instance_ports(m, inst, inst_dict)
-    assert len(inst.ports) == 1
-    assert inst.ports['A'].direction == Direction.UNKNOWN
-    assert inst.ports['A'][0].raw_ws_path == 'test.w.0'
-    assert m.wires['w'][0].port_segments == [inst.ports['A'][0]]
-
-
-def test_build_instance_port_consts(simple_reader: YNR) -> None:
-    simple_reader.net_number_mapping['test'] = {2: WireSegmentPath(raw='')}
-    m = Module(name='test')
-    inst = Instance(name='instance', instance_type='§and', module=None)
-    inst_dict = {'connections': {'A': ['0', '1', 'x']}, 'port_directions': {'A': 'input'}}
-
-    simple_reader._build_instance_ports(m, inst, inst_dict)
-    assert len(inst.ports) == 1
-    assert len(inst.ports['A']) == 3
-    assert inst.ports['A'][0].ws_path == WIRE_SEGMENT_0.path
-    assert inst.ports['A'][1].ws_path == WIRE_SEGMENT_1.path
-    assert inst.ports['A'][2].ws_path == WIRE_SEGMENT_X.path
-
-
-def test_prepare_dict(simple_reader: YNR) -> None:
-    # Currently does nothing, will be expanded later
-    simple_reader._prepare_dict('§and', {})
-
-    dff_dict = {'port_directions': {'ARST': 'input'}, 'connections': {'ARST': [2]}}
-    simple_reader._prepare_dff_dict('§adffe', dff_dict)
-
-    assert dff_dict == {'port_directions': {'RST': 'input'}, 'connections': {'RST': [2]}}
-
-    dff_dict = {'port_directions': {'ARST': 'input', 'SRST': 'input'}, 'connections': {'ARST': [2], 'SRST': [2]}}
-    simple_reader._prepare_dff_dict('§dffe', dff_dict)
-    assert dff_dict == {'port_directions': {'ARST': 'input', 'SRST': 'input'}, 'connections': {'ARST': [2], 'SRST': [2]}}
-
-    dff_dict = {'port_directions': {'SRST': 'input'}, 'connections': {'SRST': [2]}}
-    simple_reader._prepare_dff_dict('§sdff', dff_dict)
-
-    assert dff_dict == {'port_directions': {'RST': 'input'}, 'connections': {'RST': [2]}}
-
-
-def test_prepare_dict_mux(simple_reader: YNR) -> None:
-    mux_dict = {'port_directions': {'A': 'input', 'B': 'input', 'S': 'input', 'Y': 'output'}, 'connections': {'A': [2], 'B': [3], 'S': [4], 'Y': [5]}}
-    simple_reader._prepare_dict('mux', mux_dict)
-
-    target_dict = {
-        'port_directions': {'D0': 'input', 'D1': 'input', 'S': 'input', 'Y': 'output'},
-        'connections': {'D0': [2], 'D1': [3], 'S': [4], 'Y': [5]},
-    }
-    assert mux_dict == target_dict
-
-
-def test_build_metadata(simple_reader: YNR) -> None:
-    m = Module(name='simpleAdder')
-    simple_reader._build_metadata(m, {})
-
-    assert len(m.metadata) == 0
-
-    simple_reader._build_metadata(m, {'attributes': {'foo': '42', 'bar': 'baz', 'qux': '000110100100'}})
-
-    assert m.metadata.yosys['foo'] == '42'
-    assert m.metadata.yosys['bar'] == 'baz'
-    assert m.metadata.yosys['qux'] == 420
-
-
-def test_build_parameters(simple_reader: YNR) -> None:
-    m = Module(name='simpleAdder')
-    simple_reader._build_module_parameters(m, {})
-
-    assert m.parameters == {}
-
-    simple_reader._build_module_parameters(m, {'parameters': {'foo': '42', 'bar': 'baz', 'qux': '000110100100'}})
-
-    assert m.parameters.foo == '42'
-    assert m.parameters.bar == 'baz'
-    assert m.parameters.qux == 420
-
-
-def test_get_inst(hierarchical_reader: YNR) -> None:
-    inst = hierarchical_reader._get_inst('§nonexisting_cell', 'inst')
-    inst.module = Circuit(name='c').create_module('m')
-    assert inst.name == 'inst'
-    assert inst.instance_type == '§nonexisting_cell'
-    assert not inst.is_primitive
-    assert inst.is_blackbox
-    assert not inst.is_module_instance
-
-
-def test_instance_post_processing(hierarchical_reader: YNR) -> None:
-    inst = ADFF(name='abc', instance_type='§adff', module=None)
-    inst_data = {'parameters': {'ARST_VALUE': '001100'}}  # 12
-    hierarchical_reader._instance_post_processing(inst, inst_data)
-    assert inst.rst_val_int == 12
-    inst_data = {'parameters': {'ARST_VALUE': 42}}
-    hierarchical_reader._instance_post_processing(inst, inst_data)
-    assert inst.rst_val_int == 42
-    inst_data = {'parameters': {'ARST_POLARITY': '1'}}
-    hierarchical_reader._instance_post_processing(inst, inst_data)
-    assert inst.rst_polarity == Signal.HIGH
-    inst_data = {'parameters': {'CLK_POLARITY': '0'}}
-    hierarchical_reader._instance_post_processing(inst, inst_data)
-    assert inst.clk_polarity == Signal.LOW
-    inst = DFFE(name='abc', instance_type='§dffe', module=None)
-    inst_data = {'parameters': {'EN_POLARITY': 0}}
-    hierarchical_reader._instance_post_processing(inst, inst_data)
-    assert inst.en_polarity == Signal.LOW
 
 
 def test_instance_index_offset(hierarchical_reader: YNR) -> None:

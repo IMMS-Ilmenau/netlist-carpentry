@@ -31,6 +31,11 @@
 
 ## FIXED
 - Fixed bug in signal evaluation process for DFFs with Enable, that arose whenever the Enable signal is undefined
+- Fixed default port widths for factory methods (`netlist_carpentry.utils.gate_lib_factory`), so port widths are now derived from given ports by default, as long as no conflicts would occur
+  - Default width is still 1 (e.g. if no ports are given at all)
+  - If one port for an AND gate is given with width=4, it is assumed, the other ports also have width=4
+  - If one port for an AND gate is given with width=4, and another is given with width=8, no assumption is made (default width of 1 is used)
+  - This does not apply for gates with fixed port widths (e.g. CLK/RST port of a DFF or output of reduction gates, which always are 1 bit wide)
 - Fixed lots of issues arising when using Netlist Carpentry on Windows
 
 ## CHANGED
@@ -44,6 +49,13 @@
   - `render_bash_script()`
   - Each method displays an extensive description of how the current behavior can be achieved with `ReadConfig` objects
 - `netlist_carpentry.read()` now also accepts `ReadConfig` objects, but fails with a `ValueError` if additional reading parameters are set (e.g. `top`, `out`, `source_paths`, `no_hierarchy`)
+- Major internal rewrite of `netlist_carpentry.io.read.yosys.YosysNetlistReader` and yosys-related typeddicts
+  - `netlist_carpentry.io.read.yosys.netlist_types.PortAttributes` → `netlist_carpentry.io.read.yosys.netlist_types.PortData`
+  - `netlist_carpentry.io.read.yosys.netlist_types.YosysCell` → `netlist_carpentry.io.read.yosys.netlist_types.CellData`
+  - `netlist_carpentry.io.read.yosys.netlist_types.Netnames` → `netlist_carpentry.io.read.yosys.netlist_types.WireData`
+  - `netlist_carpentry.io.read.yosys.netlist_types.YosysPortDirections` → `netlist_carpentry.io.read.yosys.netlist_types.PortDirections`
+  - Moved most of `YosysNetlistReader._build_...()` methods to the corresponding classes in `netlist_carpentry.io.read.yosys.netlist_types`
+  - Previous classes `PortAttributes`, `YosysCell`, `Netnames`, and `PortDirections` can still be referenced but show a deprecation warning
 
 
 # Older Versions

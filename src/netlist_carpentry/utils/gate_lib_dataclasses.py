@@ -52,6 +52,9 @@ class Parameters(BaseModel):
             return self.as_dict() == value
         return NotImplemented
 
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + repr(self.as_dict())
+
     def get(self, key: str, default: Optional[object] = None) -> object:
         return self.as_dict().get(key, default)
 
@@ -137,10 +140,10 @@ class SRParams(SRParamsMixin, GateParams):
     pass
 
 
-class WireParams(BaseModel):
+class WireParams(Parameters):
     """Common parameters for Wires."""
 
-    signed: Optional[int]
+    signed: Optional[int] = None
 
 
 class UnaryParams(GateParams):

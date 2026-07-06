@@ -48,21 +48,18 @@ def test_decentral_mux_signedness(log_setup: Log) -> None:
     dI = mux.ports['DATA_I']
     assert dI.width == 16
     assert dI.offset == 0
-    assert 'signed' in dI.parameters
-    assert dI.parameters['signed'] == 0
-    assert not dI.signed
+    assert dI.parameters.signed is None
+    assert dI.signed is False
     sI = mux.ports['SELECT_I']
     assert sI.width == 8
     assert sI.offset == 0
-    assert 'signed' in sI.parameters
-    assert sI.parameters['signed'] == 0
-    assert not sI.signed
+    assert sI.parameters.signed is None
+    assert sI.signed is False
     dO = mux.ports['DATA_O']
     assert dO.width == 1
     assert dO.offset == 0
-    assert 'signed' in dO.parameters
-    assert dO.parameters['signed'] == 0
-    assert not dO.signed
+    assert dO.parameters.signed is None
+    assert dO.signed is False
 
 
 def test_signed_example(log_setup: Log) -> None:

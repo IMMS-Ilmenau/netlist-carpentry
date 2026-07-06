@@ -833,7 +833,7 @@ def __getattr__(name: str) -> object:
     if name in _new_class_name_map():
         new = _new_class_name_map()[name]
         warnings.warn(
-            f"The '{name}' class is deprecated and will be removed in v1.0.0. Use '{new.__name__}' instead.",
+            f'The {name!r} class is deprecated and will be removed in v1.0.0. Use {new.__name__!r} from netlist_carpentry.utils.gate_mixins instead.',
             DeprecationWarning,
             stacklevel=2,  # Ensures the warning points to the user's code, not this line
         )

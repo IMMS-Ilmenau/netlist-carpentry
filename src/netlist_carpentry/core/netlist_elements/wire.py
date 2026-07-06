@@ -41,7 +41,7 @@ class Wire(NetlistElement, BaseModel):
 
     _segments = CustomDict[int, WireSegment]()
 
-    parameters: WireParams = {}
+    parameters: WireParams = WireParams()
 
     msb_first: bool = True
     """Whether this port is MSB (most significant bit) first or not"""
