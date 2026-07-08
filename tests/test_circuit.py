@@ -79,6 +79,13 @@ def test_add_module(empty_circuit: Circuit) -> None:
     m2 = Module(name='testModule', parameters={'foo': 'bar'})
     with pytest.raises(IdentifierConflictError):
         empty_circuit.add_module(m2)
+    c2 = empty_circuit.model_copy(deep=True)
+    with pytest.raises(IdentifierConflictError):  # fetch_existing, but modules differ
+        empty_circuit.add_module(m2, fetch_existing=True)
+    m22 = empty_circuit.add_module(m, fetch_existing=True)
+    assert m22 != m2
+    assert m22 == m
+    assert c2 == empty_circuit
     assert empty_circuit.module_count == 1
     assert len(empty_circuit) == 1
     assert empty_circuit.first == m

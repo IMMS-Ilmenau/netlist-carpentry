@@ -153,18 +153,24 @@ class Circuit(BaseModel):
             return first
         raise IndexError(f'No defined first module: Circuit {self.name} does not have any modules!')
 
-    def add_module(self, module: Module) -> Module:
+    def add_module(self, module: Module, fetch_existing: bool = False) -> Module:
         """
         Adds a module to the circuit.
 
+        Raises an IdentifierConflictError if a module with the same name already exists.
+
         Args:
             module (Module): The module to add.
+            fetch_existing (bool, optional): Whether to fetch an existing module if an identical module exists already.
+                Only has an effect if the exact same module is given twice.
 
         Returns:
             Module: The module that was added.
         """
         module._circuit = self
         self._add_module_instances(module)
+        if module.name in self and self[module.name] == module and fetch_existing:
+            return module
         return self.modules.add(module.name, module)
 
     def _add_module_instances(self, module: Module) -> None:
