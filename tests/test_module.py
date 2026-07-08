@@ -317,6 +317,14 @@ def test_create_instance(empty_module: Module, connected_module: Module) -> None
     inst = empty_module.create_instance(connected_module)
     assert inst.name == f'_{connected_module.name}_2_'
 
+    c2 = Circuit(name='c2')
+    m_c2 = c2.create_module('m_c2')
+    assert m_c2.circuit is c2
+    inst = empty_module.create_instance(m_c2, 'I_m_c2')
+    assert m_c2.circuit is c2
+    assert inst.circuit is c
+    assert inst.module_definition.circuit is c
+
 
 def test_create_instance_gatelib(empty_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import XorGate

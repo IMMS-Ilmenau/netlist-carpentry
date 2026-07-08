@@ -139,8 +139,10 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             inst.parameters = params  # type: ignore
             for pname, p in interface_definition.ports.items():
                 inst.connect(pname, ws_path=None, direction=p.direction, width=p.width)
-            if self.has_circuit:
-                if interface_definition.name not in self.circuit:
+            if self.has_circuit and interface_definition.name not in self.circuit:
+                if interface_definition.has_circuit and self.circuit != interface_definition.circuit:
+                    interface_definition = self.circuit.copy_module(interface_definition, interface_definition.name)
+                else:
                     self.circuit.add_module(interface_definition)
         else:
             inst = interface_definition(name=name, module=self, parameters=dict(params))  # type: ignore
