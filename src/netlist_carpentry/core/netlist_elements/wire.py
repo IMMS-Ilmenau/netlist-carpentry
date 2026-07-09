@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import builtins
+import warnings
 from typing import TYPE_CHECKING, Callable, Dict, Generator, List, Literal, Optional, Tuple, Union, overload
 
-from pydantic import BaseModel, NonNegativeInt, PositiveInt
+from pydantic import BaseModel, NonNegativeInt, PositiveInt, model_validator
 from typing_extensions import Self
 
 from netlist_carpentry import LOG, Signal
@@ -239,6 +240,22 @@ class Wire(NetlistElement, BaseModel):
         Accordingly, each port segment from the list is connected to the same wire segment.
         """
         return {idx: s.port_segments for idx, s in self}
+
+    @model_validator(mode='after')
+    def _link_parent(self) -> Self:
+        if self.module is None:
+            warnings.warn(
+                "From v1.0.0, parameter 'module' is strictly required for Wire objects and must be a 'Module', and must not be None! "
+                + "You may also use 'Module.create_wire()' instead.",
+                FutureWarning,
+                stacklevel=3,  # Ensures the warning points to the user's code (one layer above pydantic), not this line
+            )
+            return self
+        if self.name not in self.parent.wires:
+            self.parent.add_wire(self)
+        else:
+            raise IdentifierConflictError(f'A wire {self.name} already exists in parent {self.parent.type.value} {self.parent.name}!')
+        return self
 
     def set_name(self, new_name: str) -> None:
         self.parent.wires[new_name] = self.parent.wires.pop(self.name)
@@ -542,8 +559,6 @@ class Wire(NetlistElement, BaseModel):
             raise IdentifierConflictError(f'An object with name {new_name} already exists in module {self.parent.name}!')
         w = Wire(name=new_name, module=self.module)
         w.create_wire_segments(self.width, self.offset or 0)
-        if self.has_parent:
-            self.parent.add_wire(w)
         return w
 
     def evaluate(self) -> None:

@@ -198,15 +198,15 @@ def test_module2v_empty(writer: P2VTransformer) -> None:
 
 
 def test_module2v(writer: P2VTransformer, standard_module: Module) -> None:
-    from tests.utils import standard_instance_with_ports, wire_1b, wire_4b
+    from tests.utils import standard_instance_with_ports, wire_1b
 
     inst = standard_instance_with_ports(init_module=False)
     inst.ports['PortC'][0].set_ws_path('test_module1.wire1b.1')
     standard_module.add_instance(inst)
     wire = wire_1b()
     standard_module.add_wire(wire)
-    wire = wire_4b(init_module=False)
-    standard_module.add_wire(wire)
+    wire = standard_module.create_wire('wire4b', width=4, offset=1)
+    wire.msb_first = False
     standard_module.connect(wire[1], standard_module.create_port('out_assign', Direction.OUT)[0])
     standard_module.parameters.foo = 'bar'
     standard_module.parameters.baz = 42

@@ -515,7 +515,8 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Returns:
             Wire: The wire that was added.
         """
-        self._raise_if_occupied(wire.name)
+        if wire.name in self.instances or wire.name in self.wires:  # Ignore wires, as wires may have a port with the same name
+            raise IdentifierConflictError(f'An object with name {wire.name} exists already in module {self.name}!')
         if wire.has_parent and wire.module is not self:
             raise SingleOwnershipError(f'Wire {self.raw_path} belongs to module {wire.parent.name}. Cannot add it to module {self.name}!')
         wire.module = self
@@ -541,8 +542,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             return self._create_generic_wire(width, is_locked, offset)
         w = Wire(name=name, module=self)
         w.create_wire_segments(width, offset)
-        w.change_mutability(is_now_locked=is_locked)
-        return self.add_wire(w)
+        return w.change_mutability(is_now_locked=is_locked)
 
     def _create_generic_wire(self, width: PositiveInt = 1, is_locked: bool = False, offset: NonNegativeInt = 0) -> Wire:
         """

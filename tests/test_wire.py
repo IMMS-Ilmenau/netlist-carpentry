@@ -75,7 +75,7 @@ def test_wire_len(standard_wire: Wire) -> None:
     assert len(standard_wire) == 1
     assert len(standard_wire) == len(standard_wire.segments)
 
-    empty_wire = Wire(name='', module=None)
+    empty_wire = Wire(name='', module=Module(name='m'))
 
     assert len(empty_wire) == 0
     assert len(empty_wire) == len(empty_wire.segments)
@@ -90,7 +90,7 @@ def test_eq(standard_wire: Wire) -> None:
     w1 = standard_wire.model_copy(deep=True)
     assert standard_wire == w1
 
-    w2 = Wire(name='wrong_path', module=None)
+    w2 = Wire(name='wrong_path', module=Module(name='m'))
     assert standard_wire != w2
 
     w3 = 'wrong_type'
@@ -139,7 +139,7 @@ def test_wire_offset() -> None:
     w.remove_wire_segment(1)
     assert w.offset == 2
 
-    w = Wire(name='c', module=None)
+    w = Wire(name='c', module=Module(name='m'))
     assert w.offset is None  # No segments: no offset
 
 
@@ -355,7 +355,7 @@ def test_set_signals() -> None:
     assert w.parameters['signed'] == 0
     assert w.signal_int == 15
 
-    w = Wire(name='c', module=None)
+    w = Wire(name='c', module=Module(name='m'))
     with pytest.raises(ValueError):
         w.set_signals('1010')
 
@@ -507,7 +507,8 @@ def test_change_mutability(standard_wire: Wire) -> None:
 
 
 def test_copy_object(standard_wire: Wire) -> None:
-    new_w = standard_wire.copy_object('new_wire')
+    with pytest.warns(FutureWarning):
+        new_w = standard_wire.copy_object('new_wire')
     assert isinstance(new_w, Wire)
     assert new_w.raw_path == 'new_wire'
     assert new_w.connected_port_segments == {1: []}

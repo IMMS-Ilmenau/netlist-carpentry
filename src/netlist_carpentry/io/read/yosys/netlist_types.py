@@ -294,7 +294,7 @@ class WireData(NetlistContent):
         """
         msb_first = not bool(self.upto)  # upto=1 represents wire[0:7], upto=0/None represents wire[7:0]
         params = WireParams(signed=self.signed)
-        w = module.add_wire(Wire(name=wire_name, msb_first=msb_first, module=module, parameters=params))
+        w = Wire(name=wire_name, msb_first=msb_first, module=module, parameters=params)
         self._build_connections(net_number_map, module, w)
         self.build_metadata(w)
         return w

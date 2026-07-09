@@ -104,7 +104,8 @@ def standard_wire() -> Wire:
     ps2 = p2.create_port_segment(0).set_ws_path('test_module1.wire1')
     ps3 = p3.create_port_segment(0).set_ws_path('test_module1.wire1')
 
-    w = Wire(name='wire1', module=None)
+    with pytest.warns(FutureWarning):
+        w = Wire(name='wire1', module=None)
     w.create_wire_segment(1).add_port_segments([ps1, ps2, ps3])
     return w
 
@@ -114,7 +115,8 @@ def wire_1b() -> Wire:
     p2 = Port(name='b.p2', direction=Direction.IN, module_or_instance=Instance(name='b', instance_type='foo'))
     p1.create_port_segment(0)
     p2.create_port_segment(0)
-    w = Wire(name='wire1b', module=None)
+    with pytest.warns(FutureWarning):
+        w = Wire(name='wire1b', module=None)
     w.create_wire_segment(1).add_port_segments([p1[0], p2[0]])
     return w
 
@@ -144,7 +146,8 @@ def wire_4b(init_module: bool = True) -> Wire:
 
 
 def locked_wire() -> Wire:
-    w = Wire(name='locked_wire', module=None)
+    with pytest.warns(FutureWarning):
+        w = Wire(name='locked_wire', module=None)
     w._add_wire_segment(locked_wire_segment())
     return w.change_mutability(True)
 

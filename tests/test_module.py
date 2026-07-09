@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from netlist_carpentry import LOG, WIRE_SEGMENT_X, run_equiv, run_eqy
+from netlist_carpentry import LOG, WIRE_SEGMENT_X, Wire, run_equiv, run_eqy
 from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.core.enums.direction import Direction as Dir
 from netlist_carpentry.core.enums.element_type import EType
@@ -276,11 +276,9 @@ def test_add_instance(empty_module: Module, locked_module: Module) -> None:
     assert len(empty_module.instances) == 1
     assert empty_module.instances[i.name] == i
 
-    i3 = standard_instance_with_ports()
     empty_module.create_port('double')
-    i3.name = 'double'
     with pytest.raises(IdentifierConflictError):
-        empty_module.add_wire(i3)
+        empty_module.add_wire(Wire(name='double', module=empty_module))
 
     assert len(locked_module.instances) == 1
     i.module = None
@@ -782,7 +780,7 @@ def test_add_wire(empty_module: Module, locked_module: Module) -> None:
     assert empty_module.wires[w.name] == w
 
     w3 = standard_wire()
-    empty_module.create_port('double')
+    empty_module.create_instance(Module(name='abc'), 'double')
     w3.name = 'double'
     with pytest.raises(IdentifierConflictError):
         empty_module.add_wire(w3)
