@@ -48,24 +48,28 @@ from netlist_carpentry.utils.log import LOG
 def primitive_gate() -> Instance:
     m = Module(name='m')
     m.create_wire('w', width=4)
-    p = PrimitiveGate(name='primitive_gate_inst', instance_type='primitive_gate')
+    with pytest.warns(FutureWarning):
+        p = PrimitiveGate(name='primitive_gate_inst', instance_type='primitive_gate')
     m.add_instance(p)
     return p
 
 
 @pytest.fixture
 def unary_gate() -> Instance:
-    return UnaryGate(name='unary_gate_inst', instance_type='unary_gate', module=None)
+    with pytest.warns(FutureWarning):
+        return UnaryGate(name='unary_gate_inst', instance_type='unary_gate', module=None)
 
 
 @pytest.fixture
 def reduce_gate() -> Instance:
-    return ReduceGate(name='reduce_gate_inst', instance_type='reduce_gate', parameters={'A_WIDTH': 4}, module=None)
+    with pytest.warns(FutureWarning):
+        return ReduceGate(name='reduce_gate_inst', instance_type='reduce_gate', parameters={'A_WIDTH': 4}, module=None)
 
 
 @pytest.fixture
 def binary_gate() -> Instance:
-    return BinaryGate(name='binary_gate_inst', instance_type='binary_gate', module=None)
+    with pytest.warns(FutureWarning):
+        return BinaryGate(name='binary_gate_inst', instance_type='binary_gate', module=None)
 
 
 @pytest.fixture()
@@ -252,6 +256,7 @@ def test_unary_gate_8bit(simple_module: Module) -> None:
     g.update_parameters()
     assert g.parameters == {'A_SIGNED': False, 'A_WIDTH': 8, 'Y_WIDTH': 8}
 
+    simple_module.remove_instance(g)
     g = UnaryGate(name='unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8, 'A_WIDTH': 4}, module=simple_module)
     assert len(g.connections['A']) == 4
     assert len(g.connections['Y']) == 8
@@ -265,7 +270,6 @@ def test_unary_gate_8bit(simple_module: Module) -> None:
 
 def test_unary_gate_split(simple_module: Module) -> None:
     g = UnaryGate(name='unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
-    simple_module.add_instance(g)
     a = simple_module.create_port('A', Direction.IN, width=8)
     y = simple_module.create_port('Y', Direction.OUT, width=8)
     simple_module.connect(a, g.ports['A'])
@@ -734,6 +738,7 @@ def test_binary_gate_8bit(simple_module: Module) -> None:
     assert list(range(8)) == list(g.input_ports[0].segments.keys())
     assert list(range(8)) == list(g.input_ports[1].segments.keys())
 
+    simple_module.remove_instance(g)
     g = BinaryGate(name='binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8, 'A_WIDTH': 4, 'B_WIDTH': 6}, module=simple_module)
     assert len(g.connections['A']) == 4
     assert len(g.connections['B']) == 6
@@ -748,7 +753,6 @@ def test_binary_gate_8bit(simple_module: Module) -> None:
 
 def test_binary_gate_split(simple_module: Module) -> None:
     g = BinaryGate(name='binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
-    simple_module.add_instance(g)
     a = simple_module.create_port('A', Direction.IN, width=8)
     b = simple_module.create_port('B', Direction.IN, width=8)
     y = simple_module.create_port('Y', Direction.OUT, width=8)
@@ -1484,7 +1488,6 @@ def test_shiftx_gate(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ShiftX
 
     g = ShiftX(name='shiftx_inst', parameters={'Y_WIDTH': 4, 'A_WIDTH': 4, 'B_WIDTH': 4}, module=simple_module)
-    simple_module.add_instance(g)
     assert g.name == 'shiftx_inst'
     assert g.instance_type == '§shiftx'
     assert g.verilog_template == 'assign\t{out} = {in1}[{in2} +: {width}];'
@@ -1857,7 +1860,6 @@ def test_mux_structure(simple_module: Module) -> None:
 
 def test_mux_split(simple_module: Module) -> None:
     m = Multiplexer(name='mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
-    simple_module.add_instance(m)
     d0 = simple_module.create_port('D0', Direction.IN, width=4)
     d1 = simple_module.create_port('D1', Direction.IN, width=4)
     d2 = simple_module.create_port('D2', Direction.IN, width=4)
@@ -2012,7 +2014,6 @@ def test_demux_structure(simple_module: Module) -> None:
 
 def test_demux_split(simple_module: Module) -> None:
     dm = Demultiplexer(name='mux_inst', parameters={'BIT_WIDTH': 3, 'WIDTH': 4}, module=simple_module)
-    simple_module.add_instance(dm)
     d = simple_module.create_port('D', Direction.OUT, width=4)
     s = simple_module.create_port('S', Direction.OUT, width=3)
     y0 = simple_module.create_port('Y0', Direction.OUT, width=4)
@@ -2636,7 +2637,6 @@ def test_clocked_gate_split(simple_module: Module) -> None:
         parameters={'CLK_POLARITY': Signal.LOW, 'RST_POLARITY': Signal.LOW, 'WIDTH': 8},
         module=simple_module,
     )
-    simple_module.add_instance(dff)
     d = simple_module.create_port('D', Direction.IN, width=8)
     q = simple_module.create_port('Q', Direction.OUT, width=8)
     clk = simple_module.create_port('clk', Direction.OUT)
@@ -3410,7 +3410,8 @@ def test_aldffe_behaviour(simple_module: Module) -> None:
 
 
 def test_dffsr_structure(simple_module: Module) -> None:
-    ff = DFFSR(name='dff_inst', parameters={'WIDTH': 4, 'RST_POLARITY': Signal.LOW, 'CLR_POLARITY': Signal.LOW}, module=None)
+    with pytest.warns(FutureWarning):
+        ff = DFFSR(name='dff_inst', parameters={'WIDTH': 4, 'RST_POLARITY': Signal.LOW, 'CLR_POLARITY': Signal.LOW}, module=None)
     simple_module.add_instance(ff)
 
     assert ff.name == 'dff_inst'
@@ -3463,7 +3464,8 @@ def test_dffsr_structure(simple_module: Module) -> None:
 
 
 def test_dffsr_behaviour(simple_module: Module) -> None:
-    ff = DFFSR(name='dff_inst', parameters={'WIDTH': 4, 'SET_POLARITY': Signal.LOW, 'CLR_POLARITY': Signal.LOW})
+    with pytest.warns(FutureWarning):
+        ff = DFFSR(name='dff_inst', parameters={'WIDTH': 4, 'SET_POLARITY': Signal.LOW, 'CLR_POLARITY': Signal.LOW})
     simple_module.add_instance(ff)
     _init_dff_structure(ff, init_all_in=True)
     simple_module.connect(simple_module.wires['clr'], ff.ports['CLR'])
@@ -3495,7 +3497,8 @@ def test_dffsr_behaviour(simple_module: Module) -> None:
 
 
 def test_dffsre_structure(simple_module: Module) -> None:
-    ff = DFFSRE(name='dff_inst', parameters={'WIDTH': 4, 'RST_POLARITY': Signal.LOW, 'CLR_POLARITY': Signal.LOW}, module=None)
+    with pytest.warns(FutureWarning):
+        ff = DFFSRE(name='dff_inst', parameters={'WIDTH': 4, 'RST_POLARITY': Signal.LOW, 'CLR_POLARITY': Signal.LOW}, module=None)
     simple_module.add_instance(ff)
 
     assert ff.name == 'dff_inst'
@@ -3554,7 +3557,8 @@ def test_dffsre_structure(simple_module: Module) -> None:
 
 
 def test_dffsre_behaviour(simple_module: Module) -> None:
-    ff = DFFSRE(name='dff_inst', parameters={'WIDTH': 4, 'SET_POLARITY': Signal.LOW, 'CLR_POLARITY': Signal.LOW})
+    with pytest.warns(FutureWarning):
+        ff = DFFSRE(name='dff_inst', parameters={'WIDTH': 4, 'SET_POLARITY': Signal.LOW, 'CLR_POLARITY': Signal.LOW})
     simple_module.add_instance(ff)
     _init_dff_structure(ff, init_all_in=True)
     simple_module.connect(simple_module.wires['clr'], ff.ports['CLR'])

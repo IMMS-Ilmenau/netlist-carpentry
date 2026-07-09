@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import warnings
 from collections import defaultdict
 from typing import TYPE_CHECKING, Callable, DefaultDict, Dict, Iterable, Literal, Optional, Tuple, Union
 
-from pydantic import BaseModel, NonNegativeInt, PositiveInt
+from pydantic import BaseModel, NonNegativeInt, PositiveInt, model_validator
 from typing_extensions import Self
 
 from netlist_carpentry import LOG, WIRE_SEGMENT_X, Direction, Port, Signal
@@ -319,6 +320,22 @@ class Instance(NetlistElement, BaseModel):
             str: The generated Verilog wire name.
         """
         return "1'bz" if seg.is_unconnected else f'{seg.ws_path.parent.name}[{seg.ws_path.name}]'
+
+    @model_validator(mode='after')
+    def _link_parent(self) -> Self:
+        if self.module is None:
+            warnings.warn(
+                "From v1.0.0, parameter 'module' is strictly required for Instance objects and must be a 'Module', and must not be None! "
+                + "You may also use 'Module.create_instance()' instead.",
+                FutureWarning,
+                stacklevel=3,  # Ensures the warning points to the user's code (one layer above pydantic), not this line
+            )
+            return self
+        if self.name not in self.parent.instances:
+            self.parent.add_instance(self)
+        elif self.parent.instances[self.name] is not self:
+            raise IdentifierConflictError(f'An instance {self.name} already exists in parent {self.parent.type.value} {self.parent.name}!')
+        return self
 
     def model_post_init(self, context: object) -> None:
         self.parameters._parent = self
@@ -636,8 +653,6 @@ class Instance(NetlistElement, BaseModel):
                 inst.ports.pop(p.name)
             new_p = Port(name=p.name, direction=p.direction, module_or_instance=inst)
             new_p.create_port_segments(p.width, p.offset or 0)
-        if self.has_parent:
-            self.parent.add_instance(inst)
         return inst
 
     def normalize_metadata(

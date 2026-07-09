@@ -146,7 +146,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                     self.circuit.add_module(interface_definition)
         else:
             inst = interface_definition(name=name, module=self, parameters=dict(params))  # type: ignore
-        return self.add_instance(inst)
+        return inst
 
     def _get_generic_inst_name(self, module_or_inst_cls: Union[Module, Type[Instance]]) -> str:
         """Returns a generic name for a given module or instance class, which is used for instantiating said object.

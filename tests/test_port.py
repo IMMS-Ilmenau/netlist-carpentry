@@ -336,7 +336,8 @@ def test_port_is_driver(standard_port_in: Port[Instance], standard_port_out: Por
     assert not standard_port_out.is_driver
 
     standard_port_in.module_or_instance = Module(name='a')
-    standard_port_out.module_or_instance = Instance(name='abc', instance_type='c', module=None)
+    with pytest.warns(FutureWarning):
+        standard_port_out.module_or_instance = Instance(name='abc', instance_type='c', module=None)
     assert standard_port_in.is_driver
     assert standard_port_out.is_driver
 
@@ -346,7 +347,8 @@ def test_port_is_load(standard_port_in: Port[Instance], standard_port_out: Port[
     assert standard_port_out.is_load
 
     standard_port_in.module_or_instance = Module(name='a')
-    standard_port_out.module_or_instance = Instance(name='abc', instance_type='c', module=None)
+    with pytest.warns(FutureWarning):
+        standard_port_out.module_or_instance = Instance(name='abc', instance_type='c', module=None)
     assert not standard_port_in.is_load
     assert not standard_port_out.is_load
 
@@ -751,7 +753,8 @@ def test_copy_object_module(standard_port_out: Port[Module]) -> None:
 
 
 def test_copy_object_instance(standard_port_in: Port[Instance]) -> None:
-    new_p = standard_port_in.copy_object('new_port')
+    with pytest.warns(FutureWarning):
+        new_p = standard_port_in.copy_object('new_port')
     assert isinstance(new_p, Port)
     assert new_p.raw_path == 'some_test_inst.new_port'
     assert new_p.is_unconnected

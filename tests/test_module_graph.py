@@ -53,7 +53,8 @@ def test_set_data(mgraph: ModuleGraph) -> None:
     assert mgraph.get_data('in1', 'ntype') == 'INSTANCE'
     mgraph.set_data('in1', '§and', 'nsubtype')
     assert mgraph.get_data('in1', 'nsubtype') == '§and'
-    mgraph.set_data('and_inst', AndGate(name='a.b.c'), 'ndata')
+    with pytest.warns(FutureWarning):
+        mgraph.set_data('and_inst', AndGate(name='a.b.c'), 'ndata')
     assert mgraph.get_data('and_inst', 'ndata').name == 'a.b.c'
 
 

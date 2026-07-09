@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Tuple, Type, Union
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
-from netlist_carpentry import CFG, Direction, Instance, Port, Signal
+from netlist_carpentry import CFG, Direction, Instance, Module, Port, Signal
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
 from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.gate_lib_base_classes import (
@@ -1317,7 +1317,7 @@ class Multiplexer(PrimitiveGate, BaseModel):
         self.update_parameters()
         for idx in range(self.data_width):
             self.parameters.WIDTH = 1
-            inst: Self = super_module.add_instance(self.__class__(name=f'{self.name}_{idx}', parameters=self.parameters))
+            inst: Self = self.__class__(name=f'{self.name}_{idx}', parameters=self.parameters, module=super_module)
             for pname in list(inst.ports.keys()):
                 p = inst.ports[pname]
                 if pname != 'S':
@@ -1558,7 +1558,7 @@ class Demultiplexer(PrimitiveGate, BaseModel):
         self.update_parameters()
         for idx in range(self.data_width):
             self.parameters.WIDTH = 1
-            inst: Self = super_module.add_instance(self.__class__(name=f'{self.name}_{idx}', parameters=self.parameters))
+            inst: Self = self.__class__(name=f'{self.name}_{idx}', parameters=self.parameters, module=super_module)
             for pname in list(inst.ports.keys()):
                 p = inst.ports[pname]
                 if pname != 'S':
@@ -2080,7 +2080,7 @@ def _build_gate_lib_map() -> None:
         # filter out all classes not being gates
         try:
             # Only works if a class extends _Primitive gate and will raise an exception otherwise
-            c_inst: Instance = c(name='', module=None)
+            c_inst: Instance = c(name='', module=Module(name=''))
 
             # Add the found class to the gate_lib_map
             _gate_lib_map[c_inst.instance_type] = c

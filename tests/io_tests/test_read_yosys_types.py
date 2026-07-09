@@ -37,29 +37,29 @@ def test_build_metadata() -> None:
 
 
 def test_get_inst() -> None:
-    inst = CellData()._get_inst({}, '§nonexisting_cell', 'inst')
-    inst.module = Circuit(name='c').create_module('m')
+    m = Circuit(name='c').create_module('m')
+    inst = CellData()._get_inst(m, {}, '§nonexisting_cell', 'inst')
+    assert inst.module == m
     assert inst.name == 'inst'
     assert inst.instance_type == '§nonexisting_cell'
     assert not inst.is_primitive
     assert inst.is_blackbox
     assert not inst.is_module_instance
 
-    inst = CellData()._get_inst({}, '§and', 'inst')
-    inst.module = Circuit(name='c').create_module('m')
+    inst = CellData()._get_inst(m, {}, '§and', 'inst2')
     assert isinstance(inst, AndGate)
-    assert inst.name == 'inst'
+    assert inst.name == 'inst2'
     assert inst.instance_type == '§and'
     assert inst.is_primitive
     assert not inst.is_blackbox
     assert not inst.is_module_instance
 
-    inst = CellData()._get_inst({'someModule'}, 'someModule', 'inst')
+    inst = CellData()._get_inst(m, {'someModule'}, 'someModule', 'inst3')
     c = Circuit(name='c')
     c.create_module('someModule')
     inst.module = c.create_module('m')
     assert isinstance(inst, Instance)
-    assert inst.name == 'inst'
+    assert inst.name == 'inst3'
     assert inst.instance_type == 'someModule'
     assert not inst.is_primitive
     assert not inst.is_blackbox

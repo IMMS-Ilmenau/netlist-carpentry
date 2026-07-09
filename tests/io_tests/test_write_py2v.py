@@ -35,7 +35,7 @@ def standard_module() -> Module:
 
     m = esm()
     m.connect(m.create_wire('test_wire'), m.create_port('test_port', Direction.IN))
-    m.add_instance(AndGate(name='test_instance', module=m))
+    AndGate(name='test_instance', module=m)
     return m
 
 

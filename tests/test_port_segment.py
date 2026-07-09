@@ -69,7 +69,8 @@ def test_port_segment_basics(port_segment: PortSegment, const_port_segment: Port
     assert const_port_segment.wire_name == ''
     assert const_port_segment.port is None
 
-    super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
+    with pytest.warns(FutureWarning):
+        super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
     const_port_segment.port = super_port
     assert const_port_segment.path.raw == 'inst.abc.1'
     assert const_port_segment.signal is Signal.HIGH
@@ -136,7 +137,8 @@ def test_port_segment_parent_port() -> None:
 
 
 def test_signal(port_segment: PortSegment) -> None:
-    super_port = Port(name='ac', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
+    with pytest.warns(FutureWarning):
+        super_port = Port(name='ac', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
     port_segment.port = super_port
     assert port_segment.signal == Signal.UNDEFINED
     port_segment.set_ws_path('0')
@@ -152,7 +154,8 @@ def test_signal(port_segment: PortSegment) -> None:
 
 
 def test_signal_int(port_segment: PortSegment) -> None:
-    super_port = Port(name='ac', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
+    with pytest.warns(FutureWarning):
+        super_port = Port(name='ac', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
     port_segment.port = super_port
     assert port_segment.signal_int is None
     port_segment.set_ws_path('0')
@@ -257,7 +260,8 @@ def test_port_is_driver(standard_port_in: Port[Instance], standard_port_out: Por
     assert not standard_port_out[0].is_driver
 
     standard_port_in.module_or_instance = Module(name='a')
-    standard_port_out.module_or_instance = Instance(name='inst', instance_type='c', module=None)
+    with pytest.warns(FutureWarning):
+        standard_port_out.module_or_instance = Instance(name='inst', instance_type='c', module=None)
     assert standard_port_in[0].is_driver
     assert standard_port_out[0].is_driver
 
@@ -267,7 +271,8 @@ def test_port_is_load(standard_port_in: Port[Instance], standard_port_out: Port[
     assert standard_port_out[0].is_load
 
     standard_port_in.module_or_instance = Module(name='a')
-    standard_port_out.module_or_instance = Instance(name='inst', instance_type='c', module=None)
+    with pytest.warns(FutureWarning):
+        standard_port_out.module_or_instance = Instance(name='inst', instance_type='c', module=None)
     assert not standard_port_in[0].is_load
     assert not standard_port_out[0].is_load
 
@@ -322,7 +327,8 @@ def test_set_ws_path(port_segment: PortSegment) -> None:
 
 
 def test_tie_signal(port_segment: PortSegment) -> None:
-    super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
+    with pytest.warns(FutureWarning):
+        super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
     port_segment.port = super_port
     port_segment.set_ws_path('')
     assert port_segment.raw_ws_path == ''
@@ -417,15 +423,25 @@ def test_change_connection(port_segment: PortSegment) -> None:
 
 
 def test_port_segment_str(port_segment: PortSegment) -> None:
-    super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
+    with pytest.warns(FutureWarning):
+        super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
     port_segment.port = super_port
     assert str(port_segment) == 'PortSegment "0" with path inst.abc.0'
 
+    super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=Module(name='m')))
+    port_segment.port = super_port
+    assert str(port_segment) == 'PortSegment "0" with path m.inst.abc.0'
+
 
 def test_port_segment_repr(port_segment: PortSegment) -> None:
-    super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
+    with pytest.warns(FutureWarning):
+        super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=None))
     port_segment.port = super_port
     assert repr(port_segment) == 'PortSegment(inst.abc.0, Signal:x)'
+
+    super_port = Port(name='abc', direction=Direction.IN, module_or_instance=Instance(name='inst', instance_type='c', module=Module(name='m')))
+    port_segment.port = super_port
+    assert repr(port_segment) == 'PortSegment(m.inst.abc.0, Signal:x)'
 
 
 if __name__ == '__main__':

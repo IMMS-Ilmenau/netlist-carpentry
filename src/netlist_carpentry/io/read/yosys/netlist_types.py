@@ -198,19 +198,19 @@ class CellData(NetlistContent):
         if self.type in self._type_replacement_map:
             self.type = self._type_replacement_map[self.type]
 
-        inst = module.add_instance(self._get_inst(module_definitions, self.type, inst_name))
+        inst = self._get_inst(module, module_definitions, self.type, inst_name)
         self._build_instance_ports(net_number_map, module, inst)
         self._build_parameters(inst)
         self.build_metadata(inst)
         return inst
 
-    def _get_inst(self, module_definitions: Set[str], type_str: str, inst_name: str) -> Instance:
+    def _get_inst(self, module: Module, module_definitions: Set[str], type_str: str, inst_name: str) -> Instance:
         if type_str[0] == CFG.id_internal and type_str not in module_definitions:
             inst_cls = get(type_str)
             if inst_cls is not None:
-                return inst_cls(name=inst_name, is_primitive=True, module=None)  # type:ignore
+                return inst_cls(name=inst_name, is_primitive=True, module=module)  # type:ignore
             LOG.warn(f'No matching gate found for seemingly primitive instance type {type_str}! Creating a blackbox instead...')
-        return Instance(name=inst_name, instance_type=type_str, module=None)
+        return Instance(name=inst_name, instance_type=type_str, module=module)
 
     def _build_instance_ports(self, net_number_map: Dict[PositiveInt, WireSegmentPath], module: Module, inst: Instance) -> None:
         for pname, ptuple in self.ports.items():

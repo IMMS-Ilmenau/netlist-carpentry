@@ -56,7 +56,6 @@ def standard_instance_with_ports(init_module: bool = True) -> Instance:
     inst.connect('PortB', WireSegmentPath(raw='test_module1.wire4b.2'), index=2)
     inst.connect('PortB', WireSegmentPath(raw='test_module1.wire4b.1'), direction=Direction.OUT, index=3)
     inst.connect('PortC', WireSegmentPath(raw='test_module1.wire4b.4'), direction=Direction.OUT, index=0)
-    m.add_instance(inst)
     if not init_module:
         inst.module = None
     return inst
@@ -68,8 +67,9 @@ def locked_instance() -> Instance:
 
 
 def standard_port_in(init_module: bool = True) -> Port[Instance]:
-    inst = Instance(name='some_test_inst', instance_type='some_type')
-    p = Port(name='test_port1', direction=Direction.IN, module_or_instance=inst)
+    with pytest.warns(FutureWarning):
+        inst = Instance(name='some_test_inst', instance_type='some_type')
+        p = Port(name='test_port1', direction=Direction.IN, module_or_instance=inst)
     inst.ports[p.name] = p
     p.create_port_segment(0)
     if not init_module:
@@ -97,8 +97,10 @@ def locked_port() -> Port[Module]:
 
 
 def standard_wire() -> Wire:
-    p1 = Port(name='c.p1', direction=Direction.OUT, module_or_instance=Instance(name='c', instance_type='foo'))
-    p2 = Port(name='d.p2', direction=Direction.IN, module_or_instance=Instance(name='d', instance_type='foo'))
+    with pytest.warns(FutureWarning):
+        p1 = Port(name='c.p1', direction=Direction.OUT, module_or_instance=Instance(name='c', instance_type='foo'))
+    with pytest.warns(FutureWarning):
+        p2 = Port(name='d.p2', direction=Direction.IN, module_or_instance=Instance(name='d', instance_type='foo'))
     p3 = Port(name='p3', direction=Direction.OUT, module_or_instance=Module(name='test_module1'))
     ps1 = p1.create_port_segment(0).set_ws_path('test_module1.wire1')
     ps2 = p2.create_port_segment(0).set_ws_path('test_module1.wire1')
@@ -168,7 +170,7 @@ def empty_module() -> Module:
 
 def locked_module() -> Module:
     m = Module(name='locked_module')
-    m.add_instance(Instance(name='test_inst', instance_type='test_type'))
+    Instance(name='test_inst', instance_type='test_type', module=m)
     m.create_port('test_port', direction=Direction.IN_OUT)
     m.create_wire('test_wire')
     return m.change_mutability(True)
@@ -201,11 +203,11 @@ def connected_module() -> Module:
     m.connect(WirePath(raw=f'{m.name}.out'), m.create_port('out', Direction.OUT))
     m.connect(WirePath(raw=f'{m.name}.out_ff'), m.create_port('out_ff', Direction.OUT))
 
-    m.add_instance(AndGate(name='and_inst', module=m))
-    m.add_instance(OrGate(name='or_inst', module=m))
-    m.add_instance(XorGate(name='xor_inst', module=m))
-    m.add_instance(NotGate(name='not_inst', module=m))
-    m.add_instance(ADFFE(name='dff_inst', parameters={'RST_POLARITY': Signal.LOW}, module=m))
+    AndGate(name='and_inst', module=m)
+    OrGate(name='or_inst', module=m)
+    XorGate(name='xor_inst', module=m)
+    NotGate(name='not_inst', module=m)
+    ADFFE(name='dff_inst', parameters={'RST_POLARITY': Signal.LOW}, module=m)
 
     m.connect(m.wires['in1'][0], m.instances['and_inst'].ports['A'][0])
     m.connect(m.wires['in2'][0], m.instances['and_inst'].ports['B'][0])
@@ -231,8 +233,10 @@ def modified_module() -> Module:
 
     module.create_wire('wire_xor2')
     module.create_wire('wire_not2')
-    module.add_instance(XorGate(name='xor2_inst'))
-    module.add_instance(NotGate(name='not2_inst'))
+    with pytest.warns(FutureWarning):
+        module.add_instance(XorGate(name='xor2_inst'))
+    with pytest.warns(FutureWarning):
+        module.add_instance(NotGate(name='not2_inst'))
 
     module.connect(module.wires['out'][0], module.instances['xor2_inst'].ports['A'][0])
     module.connect(module.wires['wire_xor2'][0], module.instances['xor2_inst'].ports['Y'][0])
@@ -240,8 +244,10 @@ def modified_module() -> Module:
 
     # Dangling, not connected to inputs or outputs
     module.create_wire('wire_xor3')
-    module.add_instance(XorGate(name='xor3_inst'))
-    module.add_instance(NotGate(name='not3_inst'))
+    with pytest.warns(FutureWarning):
+        module.add_instance(XorGate(name='xor3_inst'))
+    with pytest.warns(FutureWarning):
+        module.add_instance(NotGate(name='not3_inst'))
 
     module.connect(module.wires['wire_xor3'][0], module.instances['xor3_inst'].ports['Y'][0])
     module.connect(module.wires['wire_xor3'][0], module.instances['not3_inst'].ports['A'][0])

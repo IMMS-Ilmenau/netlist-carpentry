@@ -51,8 +51,8 @@ def standard_pattern() -> Pattern:
 @pytest.fixture()
 def standard_pattern_replacement() -> Pattern:
     g = _pattern_graph()
-
-    xnor_inst = XnorGate(name='abc', module=None)
+    with pytest.warns(FutureWarning):
+        xnor_inst = XnorGate(name='abc', module=None)
 
     g_rep = ModuleGraph()
     g_rep.add_node('new_inst', ntype='INSTANCE', nsubtype='§xnor', ndata=xnor_inst, n_input_inst=True, n_output_inst=True)

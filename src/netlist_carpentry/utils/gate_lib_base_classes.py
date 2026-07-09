@@ -289,7 +289,7 @@ class PrimitiveGate(Instance, BaseModel):
         super_module = self.parent
         super_module.remove_instance(self.name)
         for idx in range(self.data_width):
-            inst: Self = super_module.add_instance(self.__class__(name=f'{self.name}_{idx}'))
+            inst: Self = self.__class__(name=f'{self.name}_{idx}', module=super_module)
             for pname in list(inst.ports.keys()):
                 p = inst.ports[pname]
                 super_module.connect(connections[pname][idx], p[0])
@@ -800,7 +800,7 @@ class StorageGate(PrimitiveGate, BaseModel):
         super_module = self.parent
         super_module.remove_instance(self.name)
         for idx in range(self.data_width):
-            inst: Self = super_module.add_instance(self.__class__(name=f'{self.name}_{idx}'))
+            inst: Self = self.__class__(name=f'{self.name}_{idx}', module=super_module)
             for pname in list(inst.ports.keys()):
                 p = inst.ports[pname]
                 if pname == 'D' or pname == 'Q':

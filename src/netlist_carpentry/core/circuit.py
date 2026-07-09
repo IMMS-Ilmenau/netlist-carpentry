@@ -552,7 +552,8 @@ class Circuit(BaseModel):
             self.instances[old_type].remove(instance.path)
             if not self.instances[old_type]:
                 self.instances.pop(old_type)
-        self.instances[instance.instance_type].append(instance.path)
+        if instance.path not in self.instances[instance.instance_type]:
+            self.instances[instance.instance_type].append(instance.path)
 
     def uniquify(self, module: Optional[Union[ModuleName, Module]] = None, *, keep_original_module: bool = False) -> Dict[InstancePath, ModuleName]:
         """Ensure that every module instance in the circuit has its own unique definition.

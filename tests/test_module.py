@@ -448,7 +448,8 @@ def test_refine_instance(dff_module: Module) -> None:
 
 
 def test_substitute_instance(dff_module: Module) -> None:
-    adffe = ADFFE(name='adffe_inst')
+    with pytest.warns(FutureWarning):
+        adffe = ADFFE(name='adffe_inst')
     with pytest.raises(ObjectNotFoundError):
         dff_module.substitute_instance('lulz no instance', adffe)
 
@@ -458,7 +459,8 @@ def test_substitute_instance(dff_module: Module) -> None:
     with pytest.raises(WidthMismatchError):
         dff_module.substitute_instance(dff, adffe)
 
-    adffe = ADFFE(name='adffe_inst', parameters={'WIDTH': 4})
+    with pytest.warns(FutureWarning):
+        adffe = ADFFE(name='adffe_inst', parameters={'WIDTH': 4})
     assert dff.name in dff_module.instances
     assert adffe.name not in dff_module.instances
     for p in dff.ports.values():
@@ -491,7 +493,8 @@ def test_substitute_instance(dff_module: Module) -> None:
 def test_add_instance_multi_type(standard_module: Module) -> None:
     assert len(standard_module.instances_by_types['§and']) == 1
 
-    is_added = standard_module.add_instance(Instance(name='test_instance2', instance_type='§and', module=None))
+    with pytest.warns(FutureWarning):
+        is_added = standard_module.add_instance(Instance(name='test_instance2', instance_type='§and', module=None))
 
     assert is_added
     assert len(standard_module.instances) == 2
@@ -566,7 +569,8 @@ def test_get_instance(standard_module: Module) -> None:
 def test_get_instances(standard_module: Module) -> None:
     c = Circuit(name='c')
     c.add_module(standard_module)
-    standard_module.add_instance(Instance(name='test_instance2', instance_type='$and', module=None))
+    with pytest.warns(FutureWarning):
+        standard_module.add_instance(Instance(name='test_instance2', instance_type='$and', module=None))
 
     i1 = standard_module.get_instances(name='test_instance')
     assert i1 == [standard_module.instances['test_instance']]
@@ -1912,8 +1916,9 @@ def test_evaluate(connected_module: Module) -> None:
 
 def test_evaluate_corner_cases(standard_module: Module) -> None:
     with pytest.raises(EvaluationError):
-        # Add dummy instance without evaluate method
-        inst = Instance(name='test', instance_type='LOL', module=None)
+        with pytest.warns(FutureWarning):
+            # Add dummy instance without evaluate method
+            inst = Instance(name='test', instance_type='LOL', module=None)
         standard_module.add_instance(inst)
         inst.connect('A', WireSegmentPath(raw='test_module1.test_wire.0'), direction=Dir.IN)
         wseg = standard_module.wires['test_wire'][0]

@@ -500,10 +500,12 @@ def test_update_instance(connected_circuit: Circuit) -> None:
 
 def test_update_instance_none(connected_circuit: Circuit) -> None:
     m = connected_circuit['test_module1']
-    inst = AndGate(name='and_inst2', module=m)
     assert len(connected_circuit.instances['§and']) == 1
-    assert connected_circuit.instances['§and'] == [InstancePath(raw='test_module1.and_inst')]
+    inst = AndGate(name='and_inst2', module=m)
+    assert len(connected_circuit.instances['§and']) == 2  # Updates automatically when instance is created
+    assert connected_circuit.instances['§and'] == [InstancePath(raw='test_module1.and_inst'), inst.path]
 
+    # Call to update_instance is now redundant, since instance now automatically updates the circuit's instances dictionary
     connected_circuit.update_instance(inst)
     assert len(connected_circuit.instances['§and']) == 2
     assert connected_circuit.instances['§and'] == [InstancePath(raw='test_module1.and_inst'), inst.path]

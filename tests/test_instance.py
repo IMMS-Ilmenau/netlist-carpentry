@@ -174,9 +174,11 @@ def test_signals(standard_instance_with_ports: Instance) -> None:
 def test_is_primitive(standard_instance_with_ports: Instance) -> None:
     assert not standard_instance_with_ports.is_primitive
 
-    assert Instance(name='', instance_type='§mux', module=None).is_primitive
+    with pytest.warns(FutureWarning):
+        assert Instance(name='', instance_type='§mux', module=None).is_primitive
 
-    assert not Instance(name='', instance_type='§some_other_instance', module=None).is_primitive
+    with pytest.warns(FutureWarning):
+        assert not Instance(name='', instance_type='§some_other_instance', module=None).is_primitive
 
 
 def test_verilog_template(standard_instance_with_ports: Instance) -> None:

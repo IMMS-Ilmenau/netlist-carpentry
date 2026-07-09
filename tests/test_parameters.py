@@ -34,7 +34,8 @@ def test_parameters() -> None:
 def test_instance_params() -> None:
     p = InstanceParams()
     assert p._parent is None
-    i = Instance(name='i', parameters=p, instance_type='inst')
+    with pytest.warns(FutureWarning):
+        i = Instance(name='i', parameters=p, instance_type='inst')
     assert p._parent is i
 
 
