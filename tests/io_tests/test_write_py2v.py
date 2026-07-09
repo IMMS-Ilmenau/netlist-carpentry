@@ -181,7 +181,6 @@ def test_port2v(writer: P2VTransformer) -> None:
     p = Port(name='test_port3', direction=Direction.OUT, msb_first=False, module_or_instance=m)
     p.create_port_segment(2).set_ws_path('test_module.test_port3.0')
     p.create_port_segment(3).set_ws_path('test_module.test_port3.0')
-    m.add_port(p)
 
     # Wire not correctly connect to port with same name
     with pytest.raises(VerilogSyntaxError):

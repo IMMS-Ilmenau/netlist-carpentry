@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import (
     TYPE_CHECKING,
     Callable,
@@ -18,7 +19,7 @@ from typing import (
     overload,
 )
 
-from pydantic import BaseModel, NonNegativeInt, PositiveInt
+from pydantic import BaseModel, NonNegativeInt, PositiveInt, model_validator
 from typing_extensions import Self
 
 from netlist_carpentry import LOG, Direction, Signal
@@ -503,6 +504,27 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
                 return False
         return True
 
+    @model_validator(mode='after')
+    def _link_parent(self) -> Self:
+        from netlist_carpentry import Module
+
+        if self.module_or_instance is None:
+            warnings.warn(
+                "From v1.0.0, parameter 'module_or_instance' is strictly required for Port objects and must be either a 'Module' or 'Instance', and must not be None! "
+                + "For easier instantiation, use 'Module.create_port()'. ",
+                DeprecationWarning,
+                stacklevel=2,  # Ensures the warning points to the user's code, not this line
+            )
+            return self
+        if self.name not in self.parent.ports:
+            if isinstance(self.parent, Module):
+                self.parent.add_port(self)  # type: ignore[arg-type]
+            else:
+                self.parent.ports[self.name] = self  # type: ignore[assignment]
+        else:
+            raise IdentifierConflictError(f'A port {self.name} already exists in parent {self.parent.type.value} {self.parent.name}!')
+        return self
+
     def set_name(self, new_name: str) -> None:
         old_name = self.name
         self.parent.ports[new_name] = self.parent.ports.pop(old_name)  # type: ignore[assignment]
@@ -782,11 +804,6 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
                 raise IdentifierConflictError(f'An object with name {new_name} already exists in {type_str} {self.parent.raw_path}!')
         p = Port(name=new_name, direction=self.direction, module_or_instance=self.module_or_instance)
         p.create_port_segments(self.width, self.offset or 0)
-        if self.has_parent:
-            if isinstance(self.parent, Module):
-                self.parent.add_port(p)  # type: ignore[arg-type]
-            else:
-                self.parent.ports.add(p.name, p)  # type: ignore[arg-type]
         return p
 
     def normalize_metadata(

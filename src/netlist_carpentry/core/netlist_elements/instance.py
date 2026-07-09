@@ -349,7 +349,7 @@ class Instance(NetlistElement, BaseModel):
             port = self.ports[port_name]
         else:
             port = Port(name=port_name, direction=direction, module_or_instance=self)
-            self.ports.add(port_name, port, locked=self.locked)
+            port.change_mutability(is_now_locked=self.locked)
         ws_path_raw = ws_path.raw if ws_path is not None else ''
         try:
             return port.create_port_segment(index).set_ws_path(ws_path_raw)
@@ -631,10 +631,11 @@ class Instance(NetlistElement, BaseModel):
         if self.has_parent and self.parent.name_occupied(new_name):
             raise IdentifierConflictError(f'An object with name {new_name} already exists in module {self.parent.name}!')
         inst = type(self)(name=new_name, module=self.module, instance_type=self.instance_type, parameters=self.parameters)
-        for p in self.ports.values():
-            new_p = Port(name=p.name, direction=p.direction, module_or_instance=self)
+        for p in list(self.ports.values()):
+            if p.name in inst.ports:
+                inst.ports.pop(p.name)
+            new_p = Port(name=p.name, direction=p.direction, module_or_instance=inst)
             new_p.create_port_segments(p.width, p.offset or 0)
-            inst.ports.update({new_p.name: new_p})
         if self.has_parent:
             self.parent.add_instance(inst)
         return inst

@@ -429,7 +429,6 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             Optional[Port]: The port if the port was successfully created and added, None otherwise (if a port with this name already exists).
         """
         p = Port(name=name, direction=self._get_direction(direction), module_or_instance=self)
-        self.add_port(p)
         p.create_port_segments(width, offset)
         p.change_mutability(is_now_locked=is_locked)
         LOG.debug(f'Created port {p.raw_path}, {width} bit wide.')

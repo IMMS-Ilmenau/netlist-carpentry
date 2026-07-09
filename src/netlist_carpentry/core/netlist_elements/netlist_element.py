@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from typing_extensions import Self
 
 from netlist_carpentry import CFG, LOG
@@ -170,6 +170,11 @@ class NetlistElement(HooksMixin, BaseModel):
         `False` for instances and modules.
         """
         return hasattr(self, 'signal')
+
+    @model_validator(mode='after')
+    def _link_parent(self) -> Self:
+        """Creates bi-directional links between this object and its parent directly after instantiation."""
+        return self
 
     def set_name(self, new_name: str) -> None:
         """

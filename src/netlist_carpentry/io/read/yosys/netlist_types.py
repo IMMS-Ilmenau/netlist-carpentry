@@ -98,7 +98,7 @@ class PortData(NetlistContent):
         direction = Direction.get(self.direction or '')
         msb_first = not bool(self.upto)  # upto=1 represents port[0:7], upto=0/None represents port[7:0]
         params = PortParams(upto=self.upto, offset=self.offset, signed=self.signed)
-        p = module.add_port(Port(name=port_name, direction=direction, msb_first=msb_first, parameters=params, module_or_instance=module))
+        p = Port(name=port_name, direction=direction, msb_first=msb_first, parameters=params, module_or_instance=module)
         self._build_connections(net_number_map, module, p)
         self.build_metadata(p)
         return p
@@ -215,14 +215,15 @@ class CellData(NetlistContent):
     def _build_instance_ports(self, net_number_map: Dict[PositiveInt, WireSegmentPath], module: Module, inst: Instance) -> None:
         for pname, ptuple in self.ports.items():
             direction, bits = ptuple
-            inst.ports[pname] = Port(name=pname, direction=direction, module_or_instance=inst)
+            p = inst.ports[pname] if pname in inst.ports else Port(name=pname, direction=direction, module_or_instance=inst)
+            p.segments.clear()  # Clear any existing segments, as we are rebuilding them from the Yosys data
             for i, b in enumerate(bits):
                 b_int = self._try_get_int(b)
                 if b_int in net_number_map:
                     w_path = net_number_map[int(b_int)]
                     inst.connect(pname, w_path, index=i)
                     w_seg = module.get_from_path(w_path)
-                    w_seg.add_port_segment(inst.ports[pname][i])
+                    w_seg.add_port_segment(p[i])
                 elif b in CONST_MAP_YOSYS2OBJ.keys() and isinstance(b, str):
                     inst.connect(pname, CONST_MAP_YOSYS2OBJ[b].path, index=i)
                 else:
