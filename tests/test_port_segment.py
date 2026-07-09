@@ -349,7 +349,7 @@ def test_tie_signal(port_segment: PortSegment) -> None:
 
 
 def test_tie_signal_driver_segment(port_segment: PortSegment) -> None:
-    port_segment.port = Port(name='p', direction=Direction.OUT, module_or_instance=None)
+    port_segment.port = Port(name='p', direction=Direction.OUT, module_or_instance=Module(name='m'))
     assert port_segment.raw_ws_path == 'a.b.wire1.wire_seg1'
 
     with pytest.raises(AlreadyConnectedError):

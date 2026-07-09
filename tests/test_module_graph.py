@@ -3,6 +3,7 @@ import os
 import pytest
 from networkx import MultiDiGraph
 
+from netlist_carpentry import Module
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.graph.module_graph import ModuleGraph
 from netlist_carpentry.core.netlist_elements.port import Port
@@ -45,7 +46,7 @@ def test_set_data(mgraph: ModuleGraph) -> None:
     assert mgraph.get_data('and_inst', 'ntype') == 'PORT'
     mgraph.set_data('and_inst', 'input', 'nsubtype')
     assert mgraph.get_data('and_inst', 'nsubtype') == 'input'
-    mgraph.set_data('in1', Port(name='a.b.c', direction=Direction.IN, module_or_instance=None), 'ndata')
+    mgraph.set_data('in1', Port(name='a.b.c', direction=Direction.IN, module_or_instance=Module(name='test_module')), 'ndata')
     assert mgraph.get_data('in1', 'ndata').name == 'a.b.c'
 
     mgraph.set_data('in1', 'INSTANCE', 'ntype')

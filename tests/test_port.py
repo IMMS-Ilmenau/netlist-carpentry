@@ -82,7 +82,8 @@ def test_port_creation(standard_port_in: Port[Instance], standard_port_out: Port
     assert standard_port_in.can_carry_signal
 
     with pytest.raises(ParentNotFoundError):
-        Port(name='abc', direction=Direction.IN, module_or_instance=None).is_module_port
+        with pytest.warns(FutureWarning):
+            Port(name='abc', direction=Direction.IN, module_or_instance=None).is_module_port
 
 
 def test_port_len(standard_port_in: Port[Instance], standard_port_out: Port[Module]) -> None:
@@ -104,7 +105,7 @@ def test_eq(standard_port_in: Port[Instance]) -> None:
     p1 = standard_port_in.model_copy(deep=True)
     assert standard_port_in == p1
 
-    p2 = Port(name='wrong_path', direction=Direction.IN, module_or_instance=None)
+    p2 = Port(name='wrong_path', direction=Direction.IN, module_or_instance=Module(name='test_module'))
     assert standard_port_in != p2
 
     p3 = 'wrong_type'
@@ -369,7 +370,7 @@ def test_connected_wire_segments(standard_port_in: Port[Instance], standard_port
     assert len(dict3) == 1
     assert dict3[1] == standard_port_in[1].ws_path
 
-    p = Port(name='', direction=Direction.IN_OUT, module_or_instance=None)
+    p = Port(name='', direction=Direction.IN_OUT, module_or_instance=Module(name='m'))
     dict4 = p.connected_wire_segments
     assert dict4 == {}
 
@@ -743,7 +744,8 @@ def test_copy_object_module(standard_port_out: Port[Module]) -> None:
         standard_port_out.copy_object('new_port')
 
     standard_port_out.module_or_instance = None
-    new_p2 = standard_port_out.copy_object('new_port')
+    with pytest.warns(FutureWarning):
+        new_p2 = standard_port_out.copy_object('new_port')
     assert new_p2.module_or_instance is None
     assert new_p2.module_or_instance is standard_port_out.module_or_instance
 
@@ -762,7 +764,8 @@ def test_copy_object_instance(standard_port_in: Port[Instance]) -> None:
         standard_port_in.copy_object('new_port')
 
     standard_port_in.module_or_instance = None
-    new_p2 = standard_port_in.copy_object('new_port')
+    with pytest.warns(FutureWarning):
+        new_p2 = standard_port_in.copy_object('new_port')
     assert new_p2.module_or_instance is None
     assert new_p2.module_or_instance is standard_port_in.module_or_instance
 
@@ -822,6 +825,14 @@ def test_port_str(standard_port_in: Port[Instance]) -> None:
 def test_port_repr(standard_port_in: Port[Instance]) -> None:
     # Test the representation of a port
     assert repr(standard_port_in) == 'Port(test_port1 at some_test_inst.test_port1)'
+
+
+def test_deprecation_warnings() -> None:
+    # Test that using the constructor without a module_or_instance raises a FutureWarning
+    with pytest.warns(FutureWarning):
+        p = Port(name='abc', direction=Direction.IN, module_or_instance=None)
+        assert p.name == 'abc'
+        assert p.has_parent is False
 
 
 if __name__ == '__main__':

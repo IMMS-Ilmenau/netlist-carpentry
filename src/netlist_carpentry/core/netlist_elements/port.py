@@ -511,9 +511,9 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         if self.module_or_instance is None:
             warnings.warn(
                 "From v1.0.0, parameter 'module_or_instance' is strictly required for Port objects and must be either a 'Module' or 'Instance', and must not be None! "
-                + "For easier instantiation, use 'Module.create_port()'. ",
-                DeprecationWarning,
-                stacklevel=2,  # Ensures the warning points to the user's code, not this line
+                + "For instantiation of module ports, use 'Module.create_port()'.",
+                FutureWarning,
+                stacklevel=3,  # Ensures the warning points to the user's code (one layer above pydantic), not this line
             )
             return self
         if self.name not in self.parent.ports:

@@ -6,6 +6,7 @@ import pstats
 from pathlib import Path
 from typing import Callable, Union
 
+import pytest
 from typing_extensions import TypeAlias
 
 from netlist_carpentry import CFG, Circuit, Direction, Instance, Module, Port, Wire, read
@@ -149,7 +150,8 @@ def locked_wire() -> Wire:
 
 
 def locked_wire_segment() -> WireSegment:
-    p = Port(name='p1', direction=Direction.IN_OUT, module_or_instance=None)
+    with pytest.warns(FutureWarning):
+        p = Port(name='p1', direction=Direction.IN_OUT, module_or_instance=None)
     p.create_port_segment(0)
     ports = [p[0]]
     w = WireSegment(name='0', wire=None)
