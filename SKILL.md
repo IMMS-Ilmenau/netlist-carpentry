@@ -4,7 +4,7 @@
 
 **NetlistCarpentry** is a Python library for loading, navigating, analyzing, modifying, and exporting digital circuits (Verilog/VHDL netlists). It converts RTL descriptions into a rich, Pythonic object model backed by a [NetworkX MultiDiGraph](https://networkx.org), enabling graph algorithms, pattern matching, optimization, and equivalence checking.
 
-**Key stack:** Python 3.9+, [Yosys](https://github.com/YosysHQ/yosys) (via `yowasp-yosys`) for RTL→JSON conversion, Pydantic models, NetworkX, Z3 solver.
+**Key stack:** Python 3.9+, [Yosys](https://github.com/YosysHQ/yosys) (via `yowasp-yosys`) for RTL→JSON conversion, Pydantic models, NetworkX.
 
 ---
 
@@ -88,13 +88,19 @@ module.get_wires(name="data_bus", fuzzy=True)
 
 # Submodules (instances that reference other modules in the circuit)
 module.submodules               # List of Instance objects that are submodules
+module.primitives               # List of primitive gate instances
+module.instances_by_types       # DefaultDict[str, List[Instance]] — instances grouped by type
 
-# BFS/DFS traversal
-for inst in module.bfs_instances(): ...
-for inst in module.dfs_instances(): ...
+# BFS/DFS path finding between elements
+paths = module.bfs_paths_between(start_path, end_path)  # Find paths via BFS
+paths = module.dfs_paths_between(start_path, end_path)  # Find paths via DFS
 
 # Evaluation (signal propagation simulation)
 module.evaluate()               # Propagate signals through the module
+module.optimize()               # Run constant propagation, remove driverless/loadless elements
+
+# Graph access
+graph = module.graph()          # ModuleGraph — NetworkX MultiDiGraph for graph algorithms
 ```
 
 ### Instance — A Gate or Submodule Instantiation
@@ -109,7 +115,9 @@ inst.ports                      # CustomDict[str, Port[Instance]] — instance p
 # Port access
 inst.input_ports                # List of input Port[Instance]
 inst.output_ports               # List of output Port[Instance]
-inst.port["clk"]                # Get a specific port
+inst.ports["clk"]               # Get a specific port (CustomDict subscripting)
+inst.connections                # Dict[str, Dict[int, WireSegmentPath]] — port → wire mappings
+inst.module_definition          # Module — the module this instance references (for submodules)
 ```
 
 ### Port — Module or Instance I/O
@@ -140,11 +148,17 @@ wire.connected_port_segments    # Dict mapping port segments connected to this w
 The lowest level: individual bits of wires and ports.
 
 ```python
-seg.raw                         # Signal value: '0', '1', 'x', 'z'
+seg.signal                      # Signal value: LOW/HIGH/UNDEFINED/FLOATING (NOT .raw)
 seg.ws_path                     # WireSegmentPath — what this segment connects to
 seg.is_connected / seg.is_unconnected
-seg.loads()                     # PortSegments that load from this wire segment
-seg.driver()                    # The driver of this segment
+seg.is_tied                     # True if tied to a constant (0, 1, x, or z)
+
+# Both PortSegment and WireSegment have these methods:
+seg.driver()                    # The driver(s) of this segment
+seg.loads()                     # Segments that load from this segment
+
+# On Wire (aggregate):
+wire.connected_port_segments    # Dict mapping port segments connected to this wire
 ```
 
 ---
@@ -253,51 +267,51 @@ The `gate_lib` module provides primitive gate classes, all prefixed with `§` (c
 | `XnorGate` | `§xnor` | XNOR |
 | `NorGate` | `§nor` | NOR |
 | `NandGate` | `§nand` | NAND |
-| `BitwiseCaseEquality` | `§caseeq` | Case equality (handles x/z) |
+| `BitwiseCaseEquality` | `§bweqx` | Bitwise case equality (`===`) |
 
 ### Shift Gates
 | Class | Instance Type | Description |
 |-------|--------------|-------------|
-| `ShiftLeft` | `§sll` | Shift left logical |
-| `ShiftRight` | `§srl` | Shift right logical |
-| `ArithmeticShiftLeft` | `§asl` | Arithmetic shift left |
-| `ArithmeticShiftRight` | `§asr` | Arithmetic shift right |
-| `ShiftSigned` | `§ssll` | Signed shift left |
-| `ShiftX` | `§sxl` | Shift with x fill |
+| `ShiftLeft` | `§shl` | Shift left logical (`<<`) |
+| `ShiftRight` | `§shr` | Shift right logical (`>>`) |
+| `ArithmeticShiftLeft` | `§sshl` | Arithmetic shift left (`<<<`) |
+| `ArithmeticShiftRight` | `§sshr` | Arithmetic shift right (`>>>`) |
+| `ShiftSigned` | `§shift` | Signed shift (direction based on sign of B) |
+| `ShiftX` | `§shiftx` | Indexed part-select shift (`[+:width]`) |
 
 ### Reduction Gates
 | Class | Instance Type | Description |
 |-------|--------------|-------------|
 | `ReduceAnd` | `§reduce_and` | AND of all bits |
 | `ReduceOr` | `§reduce_or` | OR of all bits |
-| `ReduceBool` | `§reduce_bool` | NOR of all bits |
+| `ReduceBool` | `§reduce_bool` | Boolean reduction (non-zero → 1) |
 | `ReduceXor` | `§reduce_xor` | XOR of all bits |
 | `ReduceXnor` | `§reduce_xnor` | XNOR of all bits |
-| `LogicNot` | `§logic_not` | Logical NOT (non-zero → 1) |
+| `LogicNot` | `§logic_not` | Logical NOT (non-zero → 0, all-zero → 1) |
 
 ### Comparison Gates (Binary N-to-1)
 | Class | Instance Type | Description |
 |-------|--------------|-------------|
-| `LogicAnd` | `§logic_and` | Logical AND of two operands |
-| `LogicOr` | `§logic_or` | Logical OR of two operands |
-| `LessThan` | `§lt` | Less than |
-| `LessEqual` | `§le` | Less or equal |
-| `Equal` | `§eq` | Equality |
-| `CaseEqual` | `§caseeq_cmp` | Case equality comparison |
-| `NotEqual` | `§ne` | Not equal |
-| `CaseNotEqual` | `§caseneq` | Case not-equal comparison |
-| `GreaterThan` | `§gt` | Greater than |
-| `GreaterEqual` | `§ge` | Greater or equal |
+| `LogicAnd` | `§logic_and` | Logical AND (`&&`) of two operands |
+| `LogicOr` | `§logic_or` | Logical OR (`||`) of two operands |
+| `LessThan` | `§lt` | Less than (`<`) |
+| `LessEqual` | `§le` | Less or equal (`<=`) |
+| `Equal` | `§eq` | Equality (`==`) |
+| `CaseEqual` | `§eqx` | Case equality comparison (`===`) |
+| `NotEqual` | `§ne` | Not equal (`!=`) |
+| `CaseNotEqual` | `§nex` | Case not-equal comparison (`!==`) |
+| `GreaterThan` | `§gt` | Greater than (`>`) |
+| `GreaterEqual` | `§ge` | Greater or equal (`>=`) |
 
 ### Arithmetic Gates
 | Class | Instance Type | Description |
 |-------|--------------|-------------|
-| `Adder` | `§add` | Adder |
-| `Subtractor` | `§sub` | Subtractor |
-| `Multiplier` | `§mul` | Multiplier |
-| `Divider` | `§div` | Divider |
-| `Modulo` | `§mod` | Modulo |
-| `Exponentiator` | `§exp` | Exponentiation |
+| `Adder` | `§add` | Adder (`+`) |
+| `Subtractor` | `§sub` | Subtractor (`-`) |
+| `Multiplier` | `§mul` | Multiplier (`*`) |
+| `Divider` | `§div` | Divider (`/`) |
+| `Modulo` | `§mod` | Modulo (`%`) |
+| `Exponentiator` | `§pow` | Exponentiation (`**`) |
 
 ### Multiplexer / Demultiplexer
 | Class | Instance Type | Description |
@@ -317,8 +331,8 @@ The `gate_lib` module provides primitive gate classes, all prefixed with `§` (c
 | `SDFFE` | `§sdffe` | DFF with sync reset + enable (alt.) |
 | `ALDFF` | `§aldff` | DFF with async load (CLK, LD, D, Q) |
 | `ALDFFE` | `§aldffe` | DFF with async load + enable |
-| `DFFSR` | `§sdffsr` | DFF with set/reset (CLK, S, R, Q) |
-| `DFFSRE` | `§sdffsre` | DFF with set/reset + enable |
+| `DFFSR` | `§dffsr` | DFF with set/reset (CLK, S, R, Q) |
+| `DFFSRE` | `§dffsre` | DFF with set/reset + enable |
 | `DLatch` | `§dlatch` | D latch (EN, D, Q) |
 
 ### Scan Flip-Flops
@@ -366,7 +380,7 @@ Every module has an associated `ModuleGraph` (a `networkx.MultiDiGraph`) for gra
 ```python
 from netlist_carpentry import ModuleGraph
 
-graph = module.graph  # ModuleGraph instance
+graph = module.graph()  # Call as method, not property
 
 # Node types: 'INSTANCE' or 'PORT'
 graph.node_type("u_and")           # 'INSTANCE'
@@ -385,32 +399,32 @@ cycles = nx.simple_cycles(graph)
 
 ## Pattern Matching & Replacement
 
-Define a pattern as a subgraph and find/replace it in the circuit:
+Define a pattern as a module and find/replace it in the circuit:
 
 ```python
-from netlist_carpentry import Pattern, ModuleGraph
+from netlist_carpentry import Pattern, Module
 
-# Build a pattern graph (the subgraph to search for)
-pattern_graph = ModuleGraph()
-# ... add nodes and edges representing the pattern ...
+# Build a pattern module (the subgraph to search for)
+pattern_module = Module("pattern")
+# ... add instances and wires representing the pattern ...
 
-# Optionally define a replacement graph
-replacement_graph = ModuleGraph()
+# Optionally define a replacement module
+replacement_module = Module("replacement")
 # ... the simplified/replacement circuit ...
 
-pattern = Pattern(pattern_graph, replacement_graph)
+pattern = Pattern(pattern_module, replacement_module)
 
-# Find all matches in a module
-matches = pattern.match(module)
+# Find all matches in a target module
+matches = pattern.match(target_module)
 print(f"Found {matches.count} occurrences")
 
 # Replace all matches
-pattern.replace(module)
+pattern.replace(target_module)
 ```
 
 Constraints can filter matches:
 ```python
-from netlist_carpentry import CASCADING_OR_CONSTRAINT
+from netlist_carpentry.core.graph.constraint import CASCADING_OR_CONSTRAINT
 # Constraints ensure structural properties of matches
 ```
 
@@ -453,8 +467,10 @@ clean_circuit(circuit)
 ### Design-For-Test
 
 ```python
-from netlist_carpentry.routines.dft import scan_chain_insertion
-# Automatic scan-chain insertion for testability
+# The DFT routines module exists but has no public exports yet (__all__ is empty)
+# Scan chain insertion functionality is under development
+from netlist_carpentry.routines import dft
+# Check for available functions: dir(dft)
 ```
 
 ---
@@ -534,7 +550,7 @@ port.set_signal(Signal.HIGH, index=0) # Set bit 0 of port to HIGH
 port.set_signal(Signal.LOW, index=1)  # Set bit 1 of port to LOW
 
 port.set_signals(0b1010)              # Set all bits from integer (LSB=bit 0)
-port.set_signals("1010")              # Set all bits from binary string
+port.set_signals("1010")              # Set all bits from binary string (MSB first)
 port.set_signals({0: '1', 2: '1'})    # Set specific bits from dict
 
 # ✅ WRITE on Wire (multi-bit) — same as Port
@@ -790,19 +806,31 @@ write(circuit, "design_modified.v", overwrite=True)
 from netlist_carpentry import CFG
 
 CFG.id_internal       # Internal identifier prefix (default: §) — distinguishes primitives from modules
-CFG.nc_identifier_internal  # Same as id_internal
+CFG.id_external       # External identifier prefix (default: __)
+CFG.log_level         # Logging level
+CFG.print_source_module  # Whether to print source module info
+CFG.allow_detached_segments  # Allow wire segments without connections
+CFG.yosys_executable  # Path to yosys executable (default: 'yosys')
 ```
 
 ---
 
 ## Notes for AI Agents
 
-- **Always start with `read()`** — this is the single entry point to load any circuit
+- **Always start with `read()`** — this is the single entry point to load any circuit (Verilog, VHDL, or JSON)
 - **Use `circuit.set_top()`** after loading if the top module isn't automatically detected
 - **Path strings** like `"top.inst.port.0"` (dot-separated, NOT bracket notation) are convenient but use typed `ElementPath` objects for robustness
 - **Connections require matching widths** — multi-bit connections need segment-by-segment wiring or equal-width ports
 - **Elements are locked after certain operations** — check `element.locked` before modifying
-- **The gate library uses `§` prefix** — primitive gates have types like `"§and"`, `"§dff"`, etc.
+- **The gate library uses `§` prefix** — primitive gates have types like `"§and"`, `"§dff"`, etc. (see gate table above for exact mappings)
 - **Signal propagation via `module.evaluate()`** performs one-step simulation; call iteratively for multi-level propagation
 - **Pattern matching operates on ModuleGraph** — build pattern graphs with the same node/edge structure as circuit graphs
 - **Modifications are tracked internally** — the library maintains consistency across changes
+- **`module.graph()` is a method call**, not a property — always use parentheses: `module.graph()`
+- **`seg.signal`** returns the signal value, NOT `seg.raw` (which doesn't exist)
+- **`Wire` objects don't have `set_signal()`** — only Port and PortSegment support signal setting
+- **`Pattern` constructor takes Module objects**, not raw ModuleGraph objects
+- **DFT routines** (`netlist_carpentry.routines.dft`) have no public exports yet — scan chain insertion is under development
+- **`Circuit.read()`** is a class method; the module-level `read()` function accepts strings, paths, or ReadConfig
+- **`Circuit.prove_equivalence(gold_design, out_dir)`** exists on Circuit for equivalence checking
+- **`Module.check()`** returns a CheckReport with structural validation results
