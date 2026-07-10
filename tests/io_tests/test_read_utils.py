@@ -44,6 +44,25 @@ def test_read_via_cfg() -> None:
     assert circuit.name == 'tmp'
 
 
+def test_read_via_cfg_slang() -> None:
+    rc = ReadConfig(files=[Path('tests/files/simpleAdder.v')], top='simpleAdder', yosys_plugins=['slang'])
+    circuit = read_via_cfg(rc, circuit_name='Circuit', verbose=True)
+    assert circuit is not None
+    assert isinstance(circuit, Circuit)
+    assert circuit.name == 'Circuit'
+    assert len(circuit.modules) == 1
+    assert 'simpleAdder' in circuit.modules
+    adder = circuit['simpleAdder']
+    assert len(adder.metadata['yosys']) == 2
+    assert len(adder.ports) == 5
+    assert len(adder.instances) == 2
+    assert len(adder.wires) == 6
+    assert circuit.top_name == 'simpleAdder'
+
+    circuit = read_via_cfg(ReadConfig(files=[Path('tests/files/simpleAdder.v')], top='simpleAdder'), verbose=True)
+    assert circuit.name == 'tmp'
+
+
 def test_static_read_verilog() -> None:
     circuit = read(Path('tests/files/simpleAdder.v'), 'simpleAdder')
     assert circuit is not None

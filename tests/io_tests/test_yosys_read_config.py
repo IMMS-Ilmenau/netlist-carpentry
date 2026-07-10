@@ -29,19 +29,19 @@ def test_default() -> None:
 
 def test_yosys_executable() -> None:
     rc = ReadConfig(files=[Path('tests/files/simpleAdder.v')])
-    assert rc.yosys_executable == 'yowasp-yosys'
+    assert rc.yosys_executable == 'yosys'
     assert rc.shell_script()[0] == 'bash'
     assert rc.shell_script()[1] == '-c'
     assert rc.shell_script()[2].splitlines()[0] == 'set -e'
     assert rc.shell_script()[2].splitlines()[1] == ''
-    assert rc.shell_script()[2].splitlines()[2] == 'yowasp-yosys  -p "'
+    assert rc.shell_script()[2].splitlines()[2] == 'yosys  -p "'
     tmp = CFG.yosys_executable
-    CFG.yosys_executable = 'yosys'
+    CFG.yosys_executable = 'yowasp-yosys'
     rc = ReadConfig(files=[Path('tests/files/simpleAdder.v')])
-    assert rc.yosys_executable == 'yosys'
+    assert rc.yosys_executable == 'yowasp-yosys'
     assert rc.shell_script()[0] == 'bash'
     assert rc.shell_script()[1] == '-c'
-    assert rc.shell_script()[2].splitlines()[2] == 'yosys  -p "'
+    assert rc.shell_script()[2].splitlines()[2] == 'yowasp-yosys  -p "'
     CFG.yosys_executable = tmp
 
 
@@ -148,9 +148,11 @@ def test_environment_activation() -> None:
 
 
 def test_yosys_modules() -> None:
-    rc = ReadConfig(files=[], yosys_plugins=['ghdl', 'slang'])
+    rc = ReadConfig(files=['tests/files/simpleAdder.v'], yosys_plugins=['ghdl', 'slang'])
     assert rc.yosys_plugins == ['ghdl', 'slang']
     assert rc.yosys_plugin_str == '-m ghdl -m slang'
+    assert 'read_slang ' in rc.read_pass
+    assert 'tests/files/simpleAdder.v' in rc.read_pass
     rc.yosys_plugins.clear()
     assert rc.yosys_plugin_str == ''
     rc.yosys_plugins = None
@@ -179,7 +181,7 @@ def test_shell_script() -> None:
     # In bash script, everything is 2 (resp. 3) lines further down because of the script's startup stuff
     assert found_cmds[0] == 'set -e'
     assert found_cmds[1] == ''
-    assert found_cmds[2] == 'yowasp-yosys  -p "'
+    assert found_cmds[2] == 'yosys  -p "'
 
     assert 'read_verilog' in found_cmds[0 + 3] and 'tests/files/simpleAdder.v' in found_cmds[0 + 3]
     assert found_cmds[1 + 3] == 'hierarchy -auto-top'
@@ -213,7 +215,7 @@ def test_shell_script_write() -> None:
     assert cmd_lst[1] == ''
     assert cmd_lst[2] == 'set -e'
     assert cmd_lst[3] == ''
-    assert cmd_lst[4] == 'yowasp-yosys  -p "'
+    assert cmd_lst[4] == 'yosys  -p "'
 
     assert 'read_verilog' in cmd_lst[0 + 5] and 'tests/files/simpleAdder.v' in cmd_lst[0 + 5]
     assert cmd_lst[1 + 5] == 'hierarchy -auto-top'
@@ -257,7 +259,7 @@ def test_shell_script_write_windows() -> None:
     # In windows powershell script, everything is 3 lines further down because of the script's startup stuff
     assert found_cmds[0] == "$ErrorActionPreference = 'Stop'"
     assert found_cmds[1] == ''
-    assert found_cmds[2] == 'yowasp-yosys  -p "'
+    assert found_cmds[2] == 'yosys  -p "'
 
     assert 'read_verilog' in found_cmds[0 + 3] and 'tests/files/simpleAdder.v' in found_cmds[0 + 3]
     assert found_cmds[1 + 3] == 'hierarchy -auto-top'
@@ -307,14 +309,14 @@ write_verilog -sv {p4}
 """
     found_str = rc.yosys_commands()
 
-    assert rc.yosys_executable == 'yowasp-yosys'
+    assert rc.yosys_executable == 'yosys'
     assert target_str == found_str
     tmp = CFG.yosys_executable
-    CFG.yosys_executable = 'yosys'
+    CFG.yosys_executable = 'yowasp-yosys'
     found_str = rc.yosys_commands()
-    assert rc.yosys_executable == 'yosys'
-    CFG.yosys_executable = tmp
     assert rc.yosys_executable == 'yowasp-yosys'
+    CFG.yosys_executable = tmp
+    assert rc.yosys_executable == 'yosys'
     assert target_str == found_str
 
 

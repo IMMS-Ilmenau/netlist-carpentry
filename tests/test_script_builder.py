@@ -10,7 +10,7 @@ from netlist_carpentry.scripts.script_builder import build_and_execute, build_sc
 
 
 def test_build_script_simple() -> None:
-    assert CFG.yosys_executable == 'yowasp-yosys'
+    assert CFG.yosys_executable == 'yosys'
     warn_str = "'build_script()' is deprecated and will be removed in v1.0.0. Create a `ReadConfig` object with the corresponding data and call `shell_script(script_path)` on it instead!"
     with pytest.warns(DeprecationWarning, match=re.escape(warn_str)):
         build_script(Path('tests/files/test_script'), [Path('tests/files/thermo_enc.v')], Path('thermo_enc.json'), no_hierarchy=True)

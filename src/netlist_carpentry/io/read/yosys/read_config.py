@@ -91,6 +91,9 @@ opt; clean
 
     def _read_files(self, f: Path) -> List[str]:
         ext_dict = {'.v': 'read_verilog', '.sv': 'read_verilog -sv', '.json': 'read_json', '.vhd': 'ghdl -read', '.vhdl': 'ghdl -read'}
+        if self.yosys_plugins is not None and 'slang' in self.yosys_plugins:
+            ext_dict['.sv'] = 'read_slang'
+            ext_dict['.v'] = 'read_slang'
         if os.path.isdir(f):
             fs = []
             for file in sorted(os.listdir(f)):
