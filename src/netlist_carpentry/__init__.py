@@ -3,7 +3,6 @@
 import os
 import platform
 import shutil
-import warnings
 
 try:
     import pywellen  # noqa: F401
@@ -96,16 +95,7 @@ __all__ = [
 if not LOG._init_finished:
     initialize_logging()
 
-
-def __getattr__(name: str) -> object:
-    if name == 'yosys_path':
-        warnings.warn(
-            "The 'yosys_path' attribute is deprecated and will be removed in v1.0.0. "
-            + "The path to the Yosys executable is now stored in 'CFG.yosys_executable'. "
-            + "By default, 'yowasp-yosys' is used now. ",
-            DeprecationWarning,
-            stacklevel=2,  # Ensures the warning points to the user's code, not this line
-        )
-        return shutil.which('yowasp-yosys')
-    # Standard behavior for missing attributes
-    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+yosys_path = shutil.which('yosys')
+if not yosys_path:
+    CFG.yosys_executable = 'yowasp-yosys'
+    LOG.warn("Unable to locate default Yosys command 'yosys'. Falling back to 'yowasp-yosys'!")
