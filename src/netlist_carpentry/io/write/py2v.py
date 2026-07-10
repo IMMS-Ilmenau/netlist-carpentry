@@ -111,28 +111,27 @@ class P2VTransformer:
         return param_str[:-1] + '\n\t)' if module.parameters else ''
 
     def _module_ports2v(self, module: Module) -> str:
-        return '\n\t(' + ','.join(f'\n\t\t{self.port2v(module, p)}' for p in module.ports.values()) + '\n\t)' if module.ports else '()'
+        return '\n\t(' + ','.join(f'\n\t\t{self.port2v(p)}' for p in module.ports.values()) + '\n\t)' if module.ports else '()'
 
     def _module_wires2v(self, module: Module) -> str:
         place_holder = '\t// Wire Definitions'
         return (
-            place_holder + ''.join(f'\n\t\t{self.wire2v(module, w)}' for w in module.wires.values() if w.name not in module.ports) + '\n'
+            place_holder + ''.join(f'\n\t\t{self.wire2v(w)}' for w in module.wires.values() if w.name not in module.ports) + '\n'
             if module.wires
             else ''
         )
 
     def _module_instances2v(self, module: Module) -> str:
         place_holder = '\t// Primitive Gates and Submodule Instances'
-        return place_holder + '\n' + ''.join(self.instance2v(module, i) for i in module.instances.values()) if module.instances else ''
+        return place_holder + '\n' + ''.join(self.instance2v(i) for i in module.instances.values()) if module.instances else ''
 
-    def instance2v(self, module: Module, instance: Instance) -> str:
+    def instance2v(self, instance: Instance) -> str:
         """
         Transform a Python object into a Verilog instance.
 
         This method takes a Module and an Instance as input, and returns the corresponding Verilog instance.
 
         Args:
-            module (Module): The parent module of the instance.
             instance (Instance): The instance to be transformed into Verilog.
 
         Returns:
@@ -142,17 +141,17 @@ class P2VTransformer:
             LOG.warn(f'Instance {instance.raw_path} has unconnected port segments!')
         if instance.is_primitive:
             return self._instance_primitive2v(instance)
-        ports_str = self._instance_ports2v(module, instance)
+        ports_str = self._instance_ports2v(instance)
         inst_base = f'{instance.instance_type} {instance._verilog_parameters()}{instance.name}({ports_str});'
         return '\n' + ''.join('\t\t' + line + '\n' for line in inst_base.splitlines())
 
     def _instance_primitive2v(self, instance: Instance) -> str:
         return ''.join('\t\t' + line + '\n' for line in instance.verilog.splitlines())
 
-    def _instance_ports2v(self, module: Module, instance: Instance) -> str:
+    def _instance_ports2v(self, instance: Instance) -> str:
         ports_strs = []
         for pname in instance.connections:
-            verilog_port_str = self._instance_port_connections2v(module, instance.connections[pname])
+            verilog_port_str = self._instance_port_connections2v(instance.parent, instance.connections[pname])
             if instance.ports[pname].is_unconnected:
                 verilog_port_str = ''
             ports_strs.append(f'\n\t.{pname}({verilog_port_str})')
@@ -311,12 +310,11 @@ class P2VTransformer:
             return place_holder + '\n' + '\n'.join(port_wire_strs) + '\n\n'
         return ''
 
-    def wire2v(self, module: Module, wire: Wire) -> str:
+    def wire2v(self, wire: Wire) -> str:
         """
         Converts a netlist wire to a wire or reg in Verilog syntax, depending on its driving instance.
 
         Args:
-            module (Module): The module to which this wire belongs to.
             wire (Wire): The netlist wire to convert.
 
         Returns:
@@ -330,7 +328,7 @@ class P2VTransformer:
             >>> wire = Wire(name='wire1', width=8)
             >>> module.add_wire(wire)
             >>> transformer = P2VTransformer()
-            >>> print(transformer.wire2v(module, wire))
+            >>> print(transformer.wire2v(wire))
             'wire [7:0] wire1;'
             ```
 
@@ -346,23 +344,23 @@ class P2VTransformer:
             >>> module.add_instance(dff1)
             >>> module.connect(dff.ports['Q'].path, wire[0].path)  # Connect wire to a Flip-Flop -> wire becomes a reg
             >>> transformer = P2VTransformer()
-            >>> print(transformer.wire2v(module, wire))
+            >>> print(transformer.wire2v(wire))
             'reg [7:0] wire1;'
             ```
         """
-        wire_prefix = self._net_type(module, wire)
+        wire_prefix = self._net_type(wire)
         offset = min(wire.segments.keys())
         correct_indexing = f' [{wire.width + offset - 1}:{offset}]' if wire.msb_first else f' [{offset}:{wire.width + offset - 1}]'
         width_str = correct_indexing if wire.width > 1 else '\t'
         for index, segment in wire:
             if self._get_const_from_wseg_path(segment.raw_path):
-                if module.name not in self._constant_wire_segments:
-                    self._constant_wire_segments[module.name] = {}
-                seg_path = f'{module.name}.{wire.name}.{index}'
-                self._constant_wire_segments[module.name][seg_path] = CONST_MAP_VAL2OBJ[segment.raw_path]
+                if wire.parent.name not in self._constant_wire_segments:
+                    self._constant_wire_segments[wire.parent.name] = {}
+                seg_path = f'{wire.parent.name}.{wire.name}.{index}'
+                self._constant_wire_segments[wire.parent.name][seg_path] = CONST_MAP_VAL2OBJ[segment.raw_path]
         return f'{wire_prefix}{width_str}\t{wire.name};'
 
-    def _net_type(self, module: Module, wire: Wire) -> str:
+    def _net_type(self, wire: Wire) -> str:
         """
         Determine whether a netlist wire should be instantiated as 'reg' or 'wire' in Verilog syntax.
 
@@ -372,7 +370,6 @@ class P2VTransformer:
         Otherwise, it returns 'wire'.
 
         Args:
-            module (Module): The parent module of the wire.
             wire (Wire): The netlist wire to check.
 
         Returns:
@@ -382,23 +379,22 @@ class P2VTransformer:
             return str(wire.metadata.general['net_type'])
         for s in wire.segments.values():
             if not s.is_constant:
-                for dr in module.get_driving_ports(s.path):
+                for dr in wire.parent.get_driving_ports(s.path):
                     inst_name = dr.path.nth_parent(2).name
-                    if inst_name in module.instances:  # Otherwise, driving node is a module port
-                        inst = module.instances[inst_name]
+                    if inst_name in wire.parent.instances:  # Otherwise, driving node is a module port
+                        inst = wire.parent.instances[inst_name]
                         matching_type = 'dff' in inst.instance_type or 'dlatch' in inst.instance_type
                         if inst.is_primitive and matching_type:
                             return 'reg '
         return 'wire'
 
-    def port2v(self, module: Module, port: Port[Module]) -> str:
+    def port2v(self, port: Port[Module]) -> str:
         """
         Converts a Python Port object into its corresponding Verilog string, representing a module port.
 
         This method takes into account the direction and width of the port to generate the correct Verilog syntax.
 
         Args:
-            module (Module): The module to which this port belongs to.
             port (Port): The Port object to be converted.
 
         Returns:
@@ -411,13 +407,13 @@ class P2VTransformer:
             >>> print(transformer.port2v(port))
             'input [7:0] port1'
         """
-        if port.name in module.wires:
-            w = module.wires[port.name]
+        if port.name in port.parent.wires:
+            w = port.parent.wires[port.name]
             if any(ws.path not in port.connected_wire_segments.values() for ws in w.segments.values()):
                 raise VerilogSyntaxError(
                     f'Encountered a wire {w.raw_path} that has the same name as a module port, but is not connected fully to said port!'
                 )
-        net_type = 'wire' if port.name not in module.wires else self._net_type(module, module.wires[port.name])
+        net_type = 'wire' if port.name not in port.parent.wires else self._net_type(port.parent.wires[port.name])
         offset = min(port.segments.keys())
         correct_indexing = f'[{port.width + offset - 1}:{offset}]' if port.msb_first else f'[{offset}:{port.width + offset - 1}]'
         width_str = correct_indexing if port.width > 1 else '\t'

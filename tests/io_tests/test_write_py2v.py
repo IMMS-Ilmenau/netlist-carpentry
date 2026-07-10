@@ -76,24 +76,24 @@ def test_wire2v(writer: P2VTransformer) -> None:
     m.add_wire(sw)
     m.add_wire(w4)
     target_wcode = 'wire\t\twire1;'
-    found_wcode = writer.wire2v(m, sw)
+    found_wcode = writer.wire2v(sw)
     assert target_wcode == found_wcode
 
     sw.segments[1] = WIRE_SEGMENT_X
-    writer.wire2v(m, sw)
+    writer.wire2v(sw)
     assert writer._constant_wire_segments == {'test_module1': {'test_module1.wire1.1': WIRE_SEGMENT_X}}
 
     w4.segments[1] = WIRE_SEGMENT_0
-    writer.wire2v(m, w4)
+    writer.wire2v(w4)
     assert writer._constant_wire_segments == {'test_module1': {'test_module1.wire1.1': WIRE_SEGMENT_X, 'test_module1.wire4b.1': WIRE_SEGMENT_0}}
 
     target_wcode = 'wire [1:4]\twire4b;'
-    found_wcode = writer.wire2v(m, w4)
+    found_wcode = writer.wire2v(w4)
     assert target_wcode == found_wcode
 
     wreg = m.wires['out_ff']
     target_wcode = 'reg \t\tout_ff;'
-    found_wcode = writer.wire2v(m, wreg)
+    found_wcode = writer.wire2v(wreg)
     assert target_wcode == found_wcode
 
 
@@ -105,7 +105,7 @@ def test_net_type_edge_cases(writer: P2VTransformer) -> None:
     inst = m.create_instance(reg_m, 'dff_reg_inst')
     w = m.create_wire('w')
     m.connect(w, inst.ports['Y'])
-    ntype = writer._net_type(m, w)
+    ntype = writer._net_type(w)
     assert ntype == 'wire'
 
 
@@ -162,18 +162,18 @@ def test_port2v(writer: P2VTransformer) -> None:
     p = m.create_port('test_port1', direction=Direction.IN)
 
     with pytest.raises(VerilogSyntaxError):
-        writer.port2v(m, p)
+        writer.port2v(p)
 
     target_pcode = 'input\twire\t\t\ttest_port1'
     m.connect(w, p)
-    found_pcode = writer.port2v(m, p)
+    found_pcode = writer.port2v(p)
 
     assert target_pcode == found_pcode
 
     p = m.create_port('test_port2', Direction.OUT, width=2)
     p.msb_first = False
     target_pcode = 'output\twire\t[0:1]\ttest_port2'
-    found_pcode = writer.port2v(m, p)
+    found_pcode = writer.port2v(p)
 
     assert target_pcode == found_pcode
 
@@ -184,7 +184,7 @@ def test_port2v(writer: P2VTransformer) -> None:
 
     # Wire not correctly connect to port with same name
     with pytest.raises(VerilogSyntaxError):
-        found_pcode = writer.port2v(m, p)
+        found_pcode = writer.port2v(p)
 
 
 def test_module2v_empty(writer: P2VTransformer) -> None:
@@ -306,7 +306,7 @@ def test_instance2v(writer: P2VTransformer, standard_module: Module) -> None:
     standard_module.create_wire('wireB')
     standard_module.create_wire('wireC')
     target_mod_inst_str = '\n\t\tsome_module test_module_instance();\n'
-    found_mod_inst_str = writer.instance2v(standard_module, standard_module.instances['test_module_instance'])
+    found_mod_inst_str = writer.instance2v(standard_module.instances['test_module_instance'])
     assert target_mod_inst_str == found_mod_inst_str
 
     standard_module.instances['test_instance'].ports.clear()
@@ -315,7 +315,7 @@ def test_instance2v(writer: P2VTransformer, standard_module: Module) -> None:
     standard_module.instances['test_instance'].connect('Y', WSPath(raw='test_module1.wireC.0'))
 
     target_mod_inst_str = '\t\tassign\twireC = wireA & wireB;\n'
-    found_mod_inst_str = writer.instance2v(standard_module, standard_module.instances['test_instance'])
+    found_mod_inst_str = writer.instance2v(standard_module.instances['test_instance'])
     assert target_mod_inst_str == found_mod_inst_str
 
 
