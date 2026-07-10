@@ -817,20 +817,28 @@ CFG.yosys_executable  # Path to yosys executable (default: 'yosys')
 
 ## Notes for AI Agents
 
-- **Always start with `read()`** — this is the single entry point to load any circuit (Verilog, VHDL, or JSON)
-- **Use `circuit.set_top()`** after loading if the top module isn't automatically detected
-- **Path strings** like `"top.inst.port.0"` (dot-separated, NOT bracket notation) are convenient but use typed `ElementPath` objects for robustness
-- **Connections require matching widths** — multi-bit connections need segment-by-segment wiring or equal-width ports
-- **Elements are locked after certain operations** — check `element.locked` before modifying
-- **The gate library uses `§` prefix** — primitive gates have types like `"§and"`, `"§dff"`, etc. (see gate table above for exact mappings)
-- **Signal propagation via `module.evaluate()`** performs one-step simulation; call iteratively for multi-level propagation
-- **Pattern matching operates on ModuleGraph** — build pattern graphs with the same node/edge structure as circuit graphs
-- **Modifications are tracked internally** — the library maintains consistency across changes
-- **`module.graph()` is a method call**, not a property — always use parentheses: `module.graph()`
-- **`seg.signal`** returns the signal value, NOT `seg.raw` (which doesn't exist)
-- **`Wire` objects don't have `set_signal()`** — only Port and PortSegment support signal setting
-- **`Pattern` constructor takes Module objects**, not raw ModuleGraph objects
-- **DFT routines** (`netlist_carpentry.routines.dft`) have no public exports yet — scan chain insertion is under development
-- **`Circuit.read()`** is a class method; the module-level `read()` function accepts strings, paths, or ReadConfig
-- **`Circuit.prove_equivalence(gold_design, out_dir)`** exists on Circuit for equivalence checking
-- **`Module.check()`** returns a CheckReport with structural validation results
+- **Loading circuits**: Use `Circuit.read(config)` or the module-level `read()` function to load Verilog, VHDL, or JSON. Circuits can also be built from scratch via `Circuit(name="...")` and `circuit.create_module("name")`.
+- **Setting top module**: Use `circuit.set_top("module_name")` after loading if the top isn't auto-detected. Access it via `circuit.top` or `circuit.top_name`.
+- **Path strings** use dot-separated hierarchical notation (e.g., `"top.u_adder.sum.4"`), NOT bracket/Verilog-style paths. Use typed `ElementPath` objects for robustness.
+- **Connections require matching widths** — multi-bit connections need segment-by-segment wiring or equal-width ports.
+- **Elements can be locked** — check `element.locked` before modifying; some operations lock elements to prevent inconsistent state.
+- **Gate library uses `§` prefix** — primitive gates have instance types like `"§and"`, `"§dff"`, `"§or"`, etc. (see gate table above for full mappings). Configure with `CFG.id_internal`.
+- **Signal propagation**: `module.evaluate()` performs breadth-first evaluation from input ports through the entire module. Call iteratively for multi-level or recursive circuits.
+- **Pattern matching**: `Pattern` constructor takes a `ModuleGraph` (not a `Module`). Use `module.graph()` to build the graph, then `pattern.find_matches(circuit_graph)` to search. Use `Pattern.get_mapping(pattern_module, replacement_module)` to map ports between modules.
+- **Modifications are tracked internally** — the library maintains consistency across changes.
+- **`module.graph()` is a method call**, not a property — always use parentheses: `module.graph()`. Returns a `ModuleGraph` (NetworkX MultiDiGraph).
+- **Signal access**: Use `seg.signal` on PortSegment/WireSegment to get the current signal value. There is NO `seg.raw` property.
+- **Wire objects DO have `set_signal()` and `set_signals()`** methods — both Wire and Port support signal setting. PortSegment and WireSegment both have `.driver()` and `.loads()` methods.
+- **SignalArray.create()** accepts list, dict, int, or str to create signal arrays.
+- **DFT routines** (`netlist_carpentry.routines.dft`) have no public exports (`__all__` is empty) — scan chain insertion is under development.
+- **`Circuit.read()`** is a class method; the module-level `read()` function accepts strings, paths, or ReadConfig.
+- **`Circuit.prove_equivalence(gold_design, out_dir)`** exists on Circuit for equivalence checking via Yosys EQY. Accepts either a list of gold Verilog file paths or another Circuit object.
+- **`Module.check()`** returns a CheckReport with structural validation results.
+- **`Circuit.check()`** also exists for circuit-level validation.
+- **`Circuit.optimize()`** and **`Module.optimize()`** both exist for circuit/module optimization.
+- **`Circuit.evaluate()`** performs evaluation across the entire circuit hierarchy.
+- **ModuleGraph access**: Use `module.graph()` (method call). ModuleGraph has `.nodes` and `.edges` attributes.
+- **Instance access**: Use `inst.ports["clk"]` (CustomDict subscripting), NOT `inst.port["clk"]`.
+- **BFS/DFS traversal**: Use `module.bfs_paths_between()` and `module.dfs_paths_between()` — there are NO `bfs_instances()` or `dfs_instances()` methods.
+- **Module properties**: `module.submodules`, `module.instances_by_types`, and `module.primitives` are all available as properties.
+- **`module.show()`** renders the module graph with optional `interactive=True` or `figpath` parameters.
