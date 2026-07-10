@@ -16,10 +16,11 @@
 | 10 | [Pattern Matching](#pattern-matching) | `Pattern`, `Match` |
 | 11 | [Signal Model](#signal-model) | `Signal` enum, `SignalArray` |
 | 12 | [Direction Enum](#direction-enum) | Port directions |
-| 13 | [Configuration](#configuration) | `CFG` global settings |
-| 14 | [Built-in Routines](#built-in-routines) | Optimization, checking |
-| 15 | [Gate Library](#gate-library) | Primitive gate classes |
-| 16 | [Equivalence Checking](#equivalence-checking) | `run_eqy`, `run_equiv`, `run_equiv_miter` |
+| 13 | [EType Enum](#etype-enum) | Element type classification |
+| 14 | [Configuration](#configuration) | `CFG` global settings |
+| 15 | [Built-in Routines](#built-in-routines) | Optimization, checking |
+| 16 | [Gate Library](#gate-library) | Primitive gate classes |
+| 17 | [Equivalence Checking](#equivalence-checking) | `run_eqy`, `run_equiv`, `run_equiv_miter` |
 
 ---
 
@@ -1287,6 +1288,60 @@ Direction.get('OUT')     # Direction.OUT
 Direction.get('InOut')   # Direction.IN_OUT
 Direction.get('invalid') # Direction.UNKNOWN
 ```
+
+---
+
+## EType Enum
+
+An enumeration of all possible netlist element types. Used throughout the codebase to classify elements, drive path resolution, and determine behavior (e.g., whether an element can carry signals).
+
+### Values
+
+| Value | String | Corresponding Class | Can Carry Signal | Is Segment |
+|-------|--------|---------------------|-------------------|------------|
+| `EType.UNSPECIFIED` | `'unspecified'` | `NetlistElement` (base) | No | No |
+| `EType.MODULE` | `'module'` | `Module` | No | No |
+| `EType.INSTANCE` | `'instance'` | `Instance` | No | No |
+| `EType.PORT` | `'port'` | `Port` | **Yes** | No |
+| `EType.PORT_SEGMENT` | `'port_segment'` | `PortSegment` | **Yes** | **Yes** |
+| `EType.WIRE` | `'wire'` | `Wire` | **Yes** | No |
+| `EType.WIRE_SEGMENT` | `'wire_segment'` | `WireSegment` | **Yes** | **Yes** |
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `can_carry_signal` | `bool` | True for PORT, PORT_SEGMENT, WIRE, WIRE_SEGMENT. False for MODULE, INSTANCE, UNSPECIFIED. |
+| `is_segment` | `bool` | True for PORT_SEGMENT, WIRE_SEGMENT. False for all others. |
+
+### Usage
+
+EType is used in three key places:
+
+1. **Path type discrimination** — Each `ElementPath` subclass returns its corresponding `EType` from `.type`. Used to route path resolution:
+   ```python
+   from netlist_carpentry.core.enums.element_type import EType
+
+   if path.type == EType.PORT_SEGMENT:
+       # resolve to PortSegment
+   ```
+
+2. **Class lookup** — The `get_class()` function maps `EType` → Python class:
+   ```python
+   from netlist_carpentry.core.enums.element_type import get_class
+
+   cls = get_class(EType.PORT)      # returns Port
+   cls = get_class(EType.WIRE)      # returns Wire
+   cls = get_class("instance")      # returns Instance (string lookup)
+   ```
+
+3. **Path type registry** — `TYPES2PATHS` maps `EType` → path class for internal resolution:
+   ```python
+   from netlist_carpentry.core.netlist_elements.element_path import TYPES2PATHS
+
+   path_cls = TYPES2PATHS[EType.PORT]    # returns PortPath
+   path_cls = TYPES2PATHS[EType.WIRE]    # returns WirePath
+   ```
 
 ---
 
