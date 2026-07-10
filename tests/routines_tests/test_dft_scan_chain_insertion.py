@@ -60,7 +60,8 @@ def test_replace_ff_with_scan_ff(dff_circuit: Circuit) -> None:
     scans = top.get_instances(type='scan', fuzzy=True)
     assert len(dffs) == 2 * 2 + 1 + 1 + 3  # 2*M1 + M2 + M21 + 3 in M22
     assert len(scans) == 0
-    return_scans = replace_ff_with_scan_ff(top)  # Also splits n-bit FF into n 1-bit FF
+    with pytest.warns(FutureWarning):
+        return_scans = replace_ff_with_scan_ff(top)  # Also splits n-bit FF into n 1-bit FF
 
     dffs = top.get_instances(type='dff', fuzzy=True)
     scans = top.get_instances(type='scan', fuzzy=True)
@@ -83,7 +84,8 @@ def test_skip_module(empty_module: Module, dff_circuit: Circuit) -> None:
 
 def test_implement_scan_chain(dff_circuit: Circuit) -> None:
     top = dff_circuit.top
-    implement_scan_chain(top)
+    with pytest.warns(FutureWarning):
+        implement_scan_chain(top)
     dff = top.get_instances(type='§dff', recursive=True)
     adff = top.get_instances(type='§adff', recursive=True)
     dffe = top.get_instances(type='§dffe', recursive=True)
@@ -105,7 +107,8 @@ def test_implement_scan_chain_corner_case(dff_circuit: Circuit) -> None:
     top = dff_circuit.top
     m4 = dff_circuit.create_module('M4')
     top.create_instance(m4, 'm4')
-    implement_scan_chain(top)
+    with pytest.warns(FutureWarning):
+        implement_scan_chain(top)
     assert 'SE' not in m4.ports
     assert 'SI' not in m4.ports
     assert 'SO' not in m4.ports

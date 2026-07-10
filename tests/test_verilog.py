@@ -92,7 +92,8 @@ def test_verilog_init_thermo_enc() -> None:
 
 def test_scan_chains() -> None:
     c = netlist_carpentry.read('tests/files/dff_circuit.v', top='Top')
-    implement_scan_chain(c.top)
+    with pytest.warns(FutureWarning):
+        implement_scan_chain(c.top)
     _setup_run_circuit('scan_chains', c)
 
 

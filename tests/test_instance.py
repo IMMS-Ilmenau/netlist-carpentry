@@ -532,7 +532,8 @@ def test_copy_object(standard_instance_with_ports: Instance) -> None:
         standard_instance_with_ports.copy_object('new_inst')
 
     standard_instance_with_ports.module = None
-    new_i2 = standard_instance_with_ports.copy_object('new_inst')
+    with pytest.warns(FutureWarning):
+        new_i2 = standard_instance_with_ports.copy_object('new_inst')
     assert new_i2.module is None
     assert new_i2.module is standard_instance_with_ports.module
 

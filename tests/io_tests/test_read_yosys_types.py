@@ -70,7 +70,7 @@ def test_build_instance_port_edge_cases() -> None:
     net_number_mapping = {2: WireSegmentPath(raw='test.w.0')}
     m = Module(name='test')
     m.create_wire('w')
-    inst = Instance(name='instance', instance_type='§and', module=None)
+    inst = Instance(name='instance', instance_type='§and', module=m)
     inst_dict = {'connections': {'A': [2]}, 'port_directions': {}}
 
     CellData(**inst_dict)._build_instance_ports(net_number_mapping, m, inst)
@@ -81,7 +81,8 @@ def test_build_instance_port_edge_cases() -> None:
 
     m.wires['w'][0].port_segments.clear()
     inst_dict.pop('port_directions')
-    inst = Instance(name='instance', instance_type='§and', module=None)
+    m.remove_instance(inst)
+    inst = Instance(name='instance', instance_type='§and', module=m)
     CellData(**inst_dict)._build_instance_ports(net_number_mapping, m, inst)
     assert len(inst.ports) == 1
     assert inst.ports['A'].direction == Direction.UNKNOWN
@@ -92,7 +93,7 @@ def test_build_instance_port_edge_cases() -> None:
 def test_build_instance_port_consts() -> None:
     net_number_mapping = {2: WireSegmentPath(raw='test.w.0')}
     m = Module(name='test')
-    inst = Instance(name='instance', instance_type='§and', module=None)
+    inst = Instance(name='instance', instance_type='§and', module=m)
     inst_dict = {'connections': {'A': ['0', '1', 'x']}, 'port_directions': {'A': 'input'}}
 
     CellData(**inst_dict)._build_instance_ports(net_number_mapping, m, inst)
@@ -136,7 +137,8 @@ def test_ports_mux() -> None:
 
 
 def test_instance_post_processing() -> None:
-    inst = ADFF(name='abc', instance_type='§adff', module=None)
+    with pytest.warns(FutureWarning):
+        inst = ADFF(name='abc', instance_type='§adff', module=None)
     inst_data = CellData(**{'parameters': {'ARST_VALUE': '001100'}})  # 12
     inst_data._update_all_param_types(inst)
     assert inst.rst_val_int == 12
@@ -149,7 +151,8 @@ def test_instance_post_processing() -> None:
     inst_data = CellData(**{'parameters': {'CLK_POLARITY': '0'}})
     inst_data._update_all_param_types(inst)
     assert inst.clk_polarity == Signal.LOW
-    inst = DFFE(name='abc', instance_type='§dffe', module=None)
+    with pytest.warns(FutureWarning):
+        inst = DFFE(name='abc', instance_type='§dffe', module=None)
     with pytest.raises(ValidationError):
         inst_data = CellData(**{'parameters': {'EN_POLARITY': False}})
         inst_data._update_all_param_types(inst)

@@ -181,13 +181,10 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         if isinstance(instance, str):
             instance = self.instances[instance]
-        tmp_m = instance.module
-        instance.module = None  # Temporarily set to None, so no IdentifierConflicts arise when copying
         new_instance = instance.copy_object(new_name)
-        instance.module = tmp_m
-        new_instance.module = None
-
-        self.add_instance(new_instance)
+        if self is not new_instance.module:  # Added to another module
+            new_instance.parent.remove_instance(new_instance)
+            self.add_instance(new_instance)
         prev_module_name = new_instance.path.parts[0]
         for p in new_instance.ports.values():
             p.module_or_instance = new_instance
@@ -760,12 +757,12 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if not w.is_constant:
             w.port_segments.add(p)
         # Connect Port -> Wire
-        if p.grandparent.name == self.name:
+        if p.parent.module.name == self.name:
             # Connect a module port segment to a wire segment
             p.set_ws_path(w.raw_path)
         else:
             # Connect an instance port segment to a wire segment
-            inst = self.instances[p.grandparent.name]
+            inst = p.parent.module.instances[p.grandparent.name]
             inst.modify_connection(p.parent.name, w.path, index=p.index)
 
     def disconnect(self, port_like: Union[PortSegmentPath, PortPath, PortSegment, T_PORT]) -> None:
@@ -1250,7 +1247,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         for wire in m_inst.wires.values():
             new_wire = self.create_wire(inst_name + '_' + wire.name, width=wire.width, offset=wire.offset or 0)
             w_paths[wire.path] = new_wire.path
-        for mi_inst in m_inst.instances.values():
+        for mi_inst in list(m_inst.instances.values()):
             new_inst = self.copy_instance(mi_inst, inst_name + '_' + mi_inst.name)
             for pname, conns in mi_inst.connections.items():
                 for idx, ws_path in conns.items():

@@ -113,8 +113,10 @@ def standard_wire() -> Wire:
 
 
 def wire_1b() -> Wire:
-    p1 = Port(name='a.p1', direction=Direction.OUT, module_or_instance=Instance(name='a', instance_type='foo'))
-    p2 = Port(name='b.p2', direction=Direction.IN, module_or_instance=Instance(name='b', instance_type='foo'))
+    with pytest.warns(FutureWarning):
+        p1 = Port(name='a.p1', direction=Direction.OUT, module_or_instance=Instance(name='a', instance_type='foo'))
+    with pytest.warns(FutureWarning):
+        p2 = Port(name='b.p2', direction=Direction.IN, module_or_instance=Instance(name='b', instance_type='foo'))
     p1.create_port_segment(0)
     p2.create_port_segment(0)
     with pytest.warns(FutureWarning):

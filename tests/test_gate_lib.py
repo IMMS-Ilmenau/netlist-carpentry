@@ -2753,7 +2753,8 @@ def test_dff_behaviour(simple_module: Module) -> None:
 def test_dff_to_scan(simple_module: Module) -> None:
     ff = DFF(name='dff_inst', parameters={'WIDTH': 4}, module=simple_module)
 
-    scan_ff = ff.get_scanff()
+    with pytest.warns(FutureWarning):
+        scan_ff = ff.get_scanff()
     assert scan_ff.name == 'dff_inst_scan'
     assert scan_ff.parameters == ff.parameters
 
