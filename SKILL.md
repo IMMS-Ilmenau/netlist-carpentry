@@ -1,5 +1,30 @@
 # NetlistCarpentry — Digital Circuit Analysis & Modification Library
 
+## Table of Contents
+
+| # | Section | Description |
+|---|---------|-------------|
+| 1 | [What It Is](#what-it-is) | Overview, key stack, and design philosophy |
+| 2 | [Entry Point — Loading a Circuit](#entry-point--loading-a-circuit) | `read()`, `read_json()`, `ReadConfig` |
+| 3 | [Core Data Model](#core-data-model) | Circuit, Module, Instance hierarchy |
+| 4 | [Element Paths — Hierarchical Navigation](#element-paths--hierarchical-navigation) | Dot-separated paths, `ElementPath`, `get_from_path()` |
+| 5 | [Modifying Circuits](#modifying-circuits) | Adding/removing instances, ports, wires; locking |
+| 6 | [Built-in Gate Library](#built-in-gate-library) | Primitive gates (§ prefix), lookup via `get()`, gate table |
+| 7 | [ModuleGraph — NetworkX Integration](#modulegraph--networkx-integration) | Building graphs, node/edge structure, traversal |
+| 8 | [Pattern Matching & Replacement](#pattern-matching--replacement) | `Pattern`, `Match`, `find_matches()`, replacement |
+| 9 | [Built-in Routines](#built-in-routines) | Optimization, DFT, scan chains, constant propagation |
+| 10 | [Equivalence Checking](#equivalence-checking) | `prove_equivalence()`, Yosys EQY integration |
+| 11 | [Writing Output](#writing-output) | Exporting to Verilog/VHDL/JSON |
+| 12 | [Signal Model](#signal-model) | 4-value logic (LOW, HIGH, UNDEFINED, FLOATING), Signal, SignalDict |
+| 13 | [Signal Handling & Evaluation](#signal-handling--evaluation) | `set_signal()`, `evaluate()`, signal propagation |
+| 14 | [Typical Workflow](#typical-workflow) | Step-by-step usage examples |
+| 15 | [Where It's Helpful](#where-its-helpful) | Use cases and strengths |
+| 16 | [Key Files Reference](#key-files-reference) | Important source files and their roles |
+| 17 | [Configuration](#configuration) | `CFG` global settings |
+| 18 | [Notes for AI Agents](#notes-for-ai-agents) | Anti-patterns, gotchas, and best practices |
+
+---
+
 ## What It Is
 
 **NetlistCarpentry** is a Python library for loading, navigating, analyzing, modifying, and exporting digital circuits (Verilog/VHDL netlists). It converts RTL descriptions into a rich, Pythonic object model backed by a [NetworkX MultiDiGraph](https://networkx.org), enabling graph algorithms, pattern matching, optimization, and equivalence checking.
