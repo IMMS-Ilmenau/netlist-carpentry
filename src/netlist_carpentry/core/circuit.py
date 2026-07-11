@@ -546,6 +546,7 @@ class Circuit(BaseModel):
                 so that the previous reference does not point to an invalid path.
                 If None, nothing is removed. Defaults to None.
         """
+        # TODO not necessary anymore, since instances dictionary is now already synchronized when adding/removing modules and instances
         if isinstance(instance, InstancePath):
             instance = self.get_from_path(instance)
         if old_type is not None:
@@ -591,17 +592,18 @@ class Circuit(BaseModel):
         mapdict = {}
         for m in modules:
             idx = 0
-            mapping = {}
-            for m_instpath in self.instances[m.name]:
+            # Iterate over a copy to avoid modifying the list during iteration,
+            # since update_instance removes paths from self.instances[m.name].
+            for m_instpath in list(self.instances[m.name]):
                 while f'{m.name}_{idx}' in self:
                     idx += 1
                 new_inst_type = f'{m.name}_{idx}'
                 self.copy_module(m.name, new_inst_type)
-                self.get_from_path(m_instpath).instance_type = new_inst_type
-                mapping[new_inst_type] = [m_instpath]
+                inst = self.get_from_path(m_instpath)
+                old_type = inst.instance_type
+                inst.instance_type = new_inst_type
+                self.update_instance(inst, old_type)
                 mapdict[m_instpath] = new_inst_type
-            self.instances.update(mapping)
-            self.instances.pop(m.name)
             if not keep_original_module:
                 self.remove_module(m)
         return mapdict
