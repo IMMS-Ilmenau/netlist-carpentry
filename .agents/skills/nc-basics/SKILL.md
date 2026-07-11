@@ -1,3 +1,10 @@
+---
+name: nc-basics
+description: Teaches the basics of Netlist Carpentry, how it is used, what the use cases are, and shows some simple examples.
+---
+
+<!-- Tip: Use /create-skill in chat to generate content with agent assistance -->
+
 # NetlistCarpentry — Digital Circuit Analysis & Modification Library
 
 ## Table of Contents

@@ -1,3 +1,10 @@
+---
+name: nc-api
+description: The API of Netlist Carpentry with all relevant classes, properties, functions and methods.
+---
+
+<!-- Tip: Use /create-skill in chat to generate content with agent assistance -->
+
 # NetlistCarpentry — Complete API Reference
 
 ## Table of Contents
