@@ -78,9 +78,9 @@ class PortSegment(_Segment, BaseModel):
     @property
     def raw_ws_path(self) -> str:
         """
-        Returns the raw wire segment path of the port connected to this wire segment.
+        Returns the raw wire segment path that this port segment is connected to.
 
-        The wire segment path indicates to which wire this port segment is connected.
+        The wire segment path indicates which wire this port segment is connected to.
         The schema follows the common structure, consisting of the different hierarchy levels,
         separated by the separation character.
 
@@ -143,7 +143,13 @@ class PortSegment(_Segment, BaseModel):
 
     @property
     def wire_name(self) -> str:
-        """Returns the name of the wire segment connected to this port segment."""
+        """
+        Returns the name of the wire segment connected to this port segment.
+
+        Returns the second-to-last component of the wire segment path, which corresponds
+        to the wire name. Returns an empty string if the port segment is unconnected
+        or if the path does not have enough components.
+        """
         return self.ws_path[-2] if self.ws_path.hierarchy_level >= 1 else ''
 
     @property
@@ -168,16 +174,19 @@ class PortSegment(_Segment, BaseModel):
         """
         Checks if the port segment is connected to a wire segment.
 
+        A port segment is considered connected if its wire segment path is neither empty nor 'X'.
+        Note that tied states ('0', '1', 'Z') are considered connected.
+
         Returns:
-            bool: Whether the port segment is connected to a wire segment.
+            bool: True if the port segment is connected to a wire segment, False otherwise.
 
         Examples:
             ```python
-            >>> port_seg = PortSegment(raw_element_path='module1.port1.0', port=Port(...)).set_ws_path('module1.wire1.0')
-            >>> print(port_seg.is_connected)
+            >>> port_seg = PortSegment(name='0', port=Port(...)).set_ws_path('module1.wire1.0')
+            >>> port_seg.is_connected
             True
-            >>> port_seg = PortSegment(raw_element_path='module1.port1.0', port=Port(...))
-            >>> print(port_seg.is_connected)
+            >>> port_seg = PortSegment(name='0', port=Port(...))
+            >>> port_seg.is_connected
             False
             ```
         """
@@ -188,36 +197,41 @@ class PortSegment(_Segment, BaseModel):
         """
         Checks if the port segment is unconnected.
 
+        A port segment is considered unconnected if its wire segment path is empty ('') or 'X'.
+        Note that 'X' is treated as an undefined/unconnected state.
+
         Returns:
-            bool: Whether the port segment is unconnected.
+            bool: True if the port segment is unconnected, False otherwise.
 
         Examples:
             ```python
-            >>> port_seg = PortSegment(raw_element_path='module1.port1.0', port=Port(...)).set_ws_path('module1.wire1.0')
-            >>> print(port_seg.is_unconnected)
+            >>> port_seg = PortSegment(name='0', port=Port(...)).set_ws_path('module1.wire1.0')
+            >>> port_seg.is_unconnected
             False
-            >>> port_seg = PortSegment(raw_element_path='module1.port1.0', port=Port(...))
-            >>> print(port_seg.is_unconnected)
+            >>> port_seg = PortSegment(name='0', port=Port(...))
+            >>> port_seg.is_unconnected
             True
             ```
         """
-        return self.raw_ws_path == '' or self.raw_ws_path == 'X'  # Empty is treated as unconnected
+        return self.raw_ws_path == '' or self.raw_ws_path == 'X'
 
     @property
     def is_floating(self) -> bool:
         """
-        Checks if the port segment is floating.
+        Checks if the port segment is floating (tied to high-impedance 'Z').
+
+        A port segment is considered floating if its wire segment path is 'Z'.
 
         Returns:
-            bool: Whether the port segment is floating.
+            bool: True if the port segment is floating, False otherwise.
 
         Examples:
             ```python
-            >>> port_seg = PortSegment(raw_element_path='module1.port1.0', port=Port(...)).tie_signal("Z")
-            >>> print(port_seg.is_floating)
+            >>> port_seg = PortSegment(name='0', port=Port(...)).tie_signal('Z')
+            >>> port_seg.is_floating
             True
-            >>> port_seg = PortSegment(raw_element_path='module1.port1.0', port=Port(...))
-            >>> print(port_seg.is_floating)
+            >>> port_seg = PortSegment(name='0', port=Port(...))
+            >>> port_seg.is_floating
             False
             ```
         """
@@ -226,12 +240,13 @@ class PortSegment(_Segment, BaseModel):
     @property
     def is_tied(self) -> bool:
         """
-        Checks if the port segment is a constant.
+        Checks if the port segment is tied to a constant value.
 
-        A port segment is considered a constant if it is tied to either `0`, `1`, `Z` or `X`.
+        A port segment is considered tied if it is connected to a constant wire ('0', '1', 'Z', 'X')
+        or is unconnected (empty path, treated as undefined).
 
         Returns:
-            bool: Whether the port segment is a constant.
+            bool: True if the port segment is tied to a constant, False otherwise.
         """
         return self.is_tied_undefined or self.is_tied_defined
 
@@ -240,23 +255,29 @@ class PortSegment(_Segment, BaseModel):
         """
         Checks if the port segment is tied to a defined constant wire.
 
-        A port segment is considered as tied to a defined constant wire if its raw wire segment path is either `0` or `1`.
-        This means, this wire segment always either carries the signal value `0` or `1`.
+        A port segment is considered tied to a defined constant if its raw wire segment path is either `'0'` or `'1'`.
+        This means the wire segment always carries a defined signal value (logic 0 or logic 1).
 
         Returns:
-            bool: Whether the port segment is tied to a defined constant wire.
+            bool: True if the port segment is tied to a defined constant ('0' or '1'), False otherwise.
         """
         return self.raw_ws_path == '0' or self.raw_ws_path == '1'
 
     @property
     def is_tied_undefined(self) -> bool:
         """
-        Checks if the port segment is tied to an undefined constant wire.
+        Checks if the port segment is tied to an undefined or floating state.
 
-        A port segment is considered as tied to an undefined constant wire if its raw wire segment path is either `Z`, `X` or ` ` (empty).
+        A port segment is considered tied to an undefined state if it is either:
+        - Floating (tied to `'Z'`, high-impedance)
+        - Unconnected (raw wire segment path is empty `''` or `'X'`)
+
+        Note: An unconnected port segment (empty path) is included here because it behaves
+        like a floating input in signal evaluation. It is NOT truly "tied" in the hardware sense,
+        but is grouped with undefined states for signal propagation purposes.
 
         Returns:
-            bool: Whether the port segment is tied to an undefined constant wire.
+            bool: True if the port segment is floating or unconnected, False otherwise.
         """
         return self.is_floating or self.is_unconnected
 
@@ -393,26 +414,19 @@ class PortSegment(_Segment, BaseModel):
         """
         Sets the signal of the port segment and notifies all listeners of the change.
 
-        **Does only work for NON-CONSTANT port segments!** This method is intended to be used in
+        **Only works for NON-CONSTANT port segments!** This method is intended to be used in
         the signal evaluation process, where constant signals should be treated accordingly.
         Accordingly, it should be avoided that constant inputs are accidentally modified during signal evaluation.
         To change the signal of a port segment to be a constant value, use the `tie_signal` method instead.
 
         Args:
-            signal (Signal): The new signal to be set.
-
-        Example:
-            ```python
-            >>> port_seg = PortSegment(name='0')
-            >>> port_seg.set_signal(Signal.HIGH)
-            True
-            >>> port_seg.signal
-            Signal.HIGH
-            ```
+            signal (SignalOrLogicLevel): The new signal to be set. Can be a ``Signal`` enum value
+                or a logic level string ('0', '1').
 
         Raises:
-            SignalAssignmentError: If this port segment is tied to a constant value (e.g. 0 or 1, but x/z also count as constants in this context).
-            To change the signal value of a tied port segment, use the `tie_signal()` method instead.
+            SignalAssignmentError: If this port segment is tied to a constant value (e.g. '0' or '1',
+                or is floating/unconnected). To change the signal of a tied port segment,
+                use the ``tie_signal()`` method instead.
         """
         if not isinstance(signal, Signal):
             signal = Signal.get(signal)
@@ -424,32 +438,39 @@ class PortSegment(_Segment, BaseModel):
         self._signal = signal
 
     def driver(self) -> Optional[PortSegment]:
-        """Returns the driver of this port segment if it has one, otherwise None.
+        """
+        Returns the driver of this port segment if it has one, otherwise None.
 
-        Can only be retrieved if this port segment belongs to a load port.
+        Can only be retrieved if this port segment belongs to a load port and is connected to a wire.
 
         Raises:
-            InvalidDirectionError: If this port is a signal driving port (e.g. instance output or module input).
+            InvalidDirectionError: If this port segment is a signal-driving port
+                (e.g. instance output or module input).
 
         Returns:
             Optional[PortSegment]: The opposing port segment that drives signal values onto this port segment.
-                Can only be retrieved if this port segment belongs to a load port.
+                Returns None if this port segment is unconnected.
         """
         if self.is_driver:
             raise InvalidDirectionError(
                 f'Cannot get driving port of port segment {self.raw_path}: This port segment is a driver and thus does not have a driver!'
             )
+        if self.is_unconnected:
+            return None
         return self.parent.module.wires[self.ws_path.parent.name].driver()[self.index]
 
     def loads(self) -> List[PortSegment]:
-        """Returns the loads of this port segment as a list of port segments.
+        """
+        Returns the loads of this port segment as a list of port segments.
 
-        If this port segment itself belongs to a load port, it is also included into the list of loads.
+        If this port segment itself belongs to a load port, it is also included in the list of loads.
 
         Returns:
             List[PortSegment]: A list of all port segments that receive the same signal via the same wire.
-                If this port segment belongs to a load port, it is also included into the list of loads.
+                Returns an empty list if this port segment is unconnected.
         """
+        if self.is_unconnected:
+            return []
         return self.parent.module.wires[self.ws_path.parent.name].loads()[self.index]
 
     def change_connection(self, new_wire_segment_path: WireSegmentPath = WireSegmentPath(raw='')) -> None:

@@ -385,10 +385,14 @@ def test_driver() -> None:
     m = Module(name='m')
     in1 = m.create_port('in1', Direction.IN)
     out = m.create_port('out', Direction.OUT)
+    out2 = m.create_port('out2', Direction.OUT)
     m.connect(in1, out)
 
     dr = out[0].driver()
     assert dr == in1[0]
+
+    dr = out2[0].driver()
+    assert dr is None
 
     with pytest.raises(InvalidDirectionError):
         in1[0].driver()
@@ -397,6 +401,7 @@ def test_driver() -> None:
 def test_loads() -> None:
     m = Module(name='m')
     in1 = m.create_port('in1', Direction.IN)
+    in2 = m.create_port('in2', Direction.IN)
     out = m.create_port('out', Direction.OUT)
     m.connect(in1, out)
 
@@ -405,6 +410,9 @@ def test_loads() -> None:
 
     lds = in1[0].loads()
     assert lds == [out[0]]
+
+    lds = in2[0].loads()
+    assert lds == []
 
 
 def test_change_connection(port_segment: PortSegment) -> None:
