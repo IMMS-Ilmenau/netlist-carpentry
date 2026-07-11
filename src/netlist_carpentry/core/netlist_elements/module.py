@@ -624,43 +624,80 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
     def connect(self, source: ANY_SIGNAL_SOURCE, target: ANY_SIGNAL_TARGET, new_wire_name: Optional[str] = None) -> None:
         """Connects the target (a portlike object) to the source (a portlike or a wirelike object).
 
-        This method takes the objects and establishes a connection between them, taking source as the origin for the connection.
-        There are several requirements:
-        - The target object must be an unconnected port (or port segment).
-        - If the source is a wire (or wire segment), the target port is connected to the given wire.
-        - If the source is an unconnected port (or port segment), a new wire will be created, so that the target port
-        will be connected to the source port via this newly created wire wire.
-        - If the source is a port (or port segment), which is already connected to a wire (or wire segment), then
-        target port will be connected to the source port via this wire.
-        - Both the source and the target must be from the same object group, i.e. both must either be individual segments,
-        or at least have the same width!
-        - Both the source and the target may also be path objects (PortPath, PortSegmentPath for both source and target;
-        or WirePath, WireSegmentPath but only for the source).
+        This method establishes a connection between *source* and *target*, where *source* is the origin of the signal.
+        The following connection patterns are supported:
+
+        =========================  ===================================  ==================================
+        Source                     Target                               Behavior
+        =========================  ===================================  ==================================
+        Wire / WireSegment         Port / PortSegment                   Connect target to the given wire
+        Port (unconnected)         Port (unconnected)                   Create a new wire, connect both
+        Port (connected)           Port (unconnected)                   Connect target to source's wire
+        PortSegment                PortSegment                          Connect via source's wire or new wire
+        =========================  ===================================  ==================================
+
+        **Requirements:**
+
+        * The **target** must be unconnected (no existing wire attachment).
+        * Source and target must be compatible: either both are segments, or both have matching widths.
+        * Path objects (``PortPath``, ``WirePath``, ``PortSegmentPath``, ``WireSegmentPath``) are accepted for all arguments.
 
         Args:
-            source (ANY_SIGNAL_SOURCE): The source for the connection. May be a Wire, WireSegment, Port, PortSegment or any corresponding path.
-                Think of it as the originator.
-            target (ANY_SIGNAL_TARGET): The target for the connection. May be a Port, PortSegment or any corresponding path.
-                Think of it as the object that "copies" the connection from the source.
-            new_wire_name (Optional[str], optional): A wire name which is used if a new wire must be created (source and target are portlike objects,
-                and source is unconnected). If None, a generic name is created for this case. Defaults to None.
+            source: The signal source. May be a ``Wire``, ``WireSegment``, ``Port``, ``PortSegment``, or any
+                corresponding path type.
+            target: The signal target (must be a port-like object). May be a ``Port``, ``PortSegment``, or any
+                corresponding path type.
+            new_wire_name: Optional name for a newly created wire (used when source and target are both
+                unconnected ports/segments). If ``None``, a generic name is generated.
+
+        Raises:
+            AlreadyConnectedError: If the target port/segment is already connected to a wire.
+            InvalidDirectionError: If the target is a driver port (both source and target cannot drive).
+            WidthMismatchError: If source and target have incompatible widths.
+            UnsupportedOperationError: If mixing segment-level and non-segment-level objects.
         """
-        # First, get objects from path
+        # Resolve any path objects to their underlying NetlistElement
         source_obj = self._get_from_path_or_object(source)
         target_obj = self._get_from_path_or_object(target)
+
+        # Validate: target must be unconnected
         if not target_obj.is_unconnected:
             raise AlreadyConnectedError(f'{target_obj.type.value} {target_obj.raw_path} must be unconnected before attempting to connect it!')
+
+        # Dispatch based on source/target types
         if isinstance(source_obj, (WireSegment, Wire)):
-            return self._connect_p2w(source_obj, target_obj)
-        if isinstance(source_obj, Port) and isinstance(target_obj, Port):
-            return self._connect_ports_full(source_obj, target_obj, new_wire_name=new_wire_name)
-        if source_obj.type.is_segment != target_obj.type.is_segment:
+            self._connect_wire_to_port(source_obj, target_obj)
+        elif isinstance(source_obj, Port) and isinstance(target_obj, Port):
+            self._connect_ports_full(source_obj, target_obj, new_wire_name=new_wire_name)
+        elif source_obj.type.is_segment != target_obj.type.is_segment:
             raise UnsupportedOperationError(
                 f'Cannot connect {source_obj.type.value} to {target_obj.type.value}: Can only connect segments to segments!'
             )
-        w: WireSegment = self.create_wire(new_wire_name)[0] if source_obj.is_unconnected else source_obj.ws  # type: ignore[union-attr, misc]
-        self.connect(w, source_obj)
-        self.connect(w, target_obj)
+        else:
+            self._connect_segments(source_obj, target_obj, new_wire_name)
+
+    def _connect_segments(
+        self,
+        source_seg: Union[PortSegment, WireSegment],
+        target_seg: Union[PortSegment, WireSegment],
+        new_wire_name: Optional[str] = None,
+    ) -> None:
+        """Connect two segments via a wire segment.
+
+        If the source is an unconnected port segment, a new wire is created.
+        Otherwise the source's existing wire is reused.
+        Both segments are connected directly to the wire segment, bypassing
+        the full dispatch chain for efficiency.
+        """
+        # Determine the wire segment: new if source port is unconnected, else reuse
+        if isinstance(source_seg, PortSegment) and source_seg.is_unconnected:
+            wire_seg = self.create_wire(new_wire_name)[0]
+        else:
+            wire_seg = source_seg.ws  # type: ignore[union-attr]
+
+        # Connect both segments directly to the wire segment
+        self._connect_to_wire_segment(source_seg, wire_seg)
+        self._connect_to_wire_segment(target_seg, wire_seg)
 
     @overload
     def _get_from_path_or_object(self, path_or_object: InstancePath) -> Instance: ...
@@ -693,55 +730,84 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         return path_or_object
 
     def _connect_ports_full(self, driver: T_PORT, load: T_PORT, new_wire_name: Optional[str] = None) -> None:
-        if load.is_driver:
-            raise InvalidDirectionError(f'Received a signal driving port {load.raw_path}, but expected a load!')
-        if driver.width != load.width:
-            raise WidthMismatchError(
-                f'Connection failed: Port {driver.raw_path} is {driver.width} bit wide and port {load.raw_path} is {load.width} bit wide. '
-                + 'Consider explicit bitwise connection of each port_segment:port_segment instead of port:port in such cases. '
-                + 'Example:\n\tconnect(port.segment[0], port.segment[3])\n\tconnect(port.segment[1], port.segment[4])'
-            )
+        """Connect two full ports bit-by-bit.
 
-        if driver.is_unconnected_partly:
-            w = self.create_wire(new_wire_name, width=driver.width)
-        for idx, dr_seg in driver:
-            ws = dr_seg.ws_path if dr_seg.is_connected else w[idx]
-            if dr_seg.is_unconnected:
-                self.connect(ws, dr_seg)  # Only if a new wire was created
-            self.connect(ws, load[idx + (load.offset or 0)])
-
-    def _connect_p2w(self, wire_like: Union[WireSegment, Wire], port_like: Union[PortSegment, T_PORT]) -> None:
-        """
-        Connects a wire segment and a port segment.
+        Each bit of the *driver* port is connected to the corresponding bit of the *load* port.
+        If the driver port is unconnected, a new wire of matching width is created.
+        If the driver port is already connected to a wire, that wire is reused.
+        All connections are made directly via ``_connect_to_wire_segment`` to avoid
+        the overhead of re-dispatching through ``connect()``.
 
         Args:
-            wire_like (Union[WireSegment, Wire]): The wire segment to be connected.
-                Also accepts wires, but then requires an equally wide port as counterpart.
-            port_like (Union[PortSegment, Port]): The port segment to be connected.
-                Also accepts ports, but then requires an equally wide wire as counterpart.
+            driver: The driving port (must not itself be a driver).
+            load: The loaded port (will receive signals from *driver*).
+            new_wire_name: Optional name for a newly created wire.
+
+        Raises:
+            InvalidDirectionError: If the target port is also a driver.
+            WidthMismatchError: If the two ports have different widths.
         """
+        if load.is_driver:
+            raise InvalidDirectionError(f'Received a signal driving port {load.raw_path}, but expected a load!')
+
+        if driver.width != load.width:
+            raise WidthMismatchError(
+                f'Connection failed: Port {driver.raw_path} is {driver.width} bit wide '
+                f'and port {load.raw_path} is {load.width} bit wide. '
+                'Consider explicit bitwise connection of each port_segment:port_segment instead of port:port '
+                'in such cases. Example:\n\tconnect(port.segment[0], port.segment[3])\n'
+                '\tconnect(port.segment[1], port.segment[4])'
+            )
+
+        # Create a new wire only if the driver is unconnected
+        wire = self.create_wire(new_wire_name, width=driver.width) if driver.is_unconnected_partly else None
+
+        load_offset = load.offset or 0
+        for idx, dr_seg in driver:
+            # Pick the wire segment: reuse existing or use newly created
+            ws = dr_seg.ws if dr_seg.is_connected else wire[idx]
+
+            # Connect driver segment (if unconnected) and load segment to the same wire
+            if dr_seg.is_unconnected:
+                self._connect_to_wire_segment(dr_seg, ws)
+            self._connect_to_wire_segment(load[idx + load_offset], ws)
+
+    def _connect_wire_to_port(
+        self,
+        wire_like: Union[WireSegment, Wire],
+        port_like: Union[PortSegment, T_PORT],
+    ) -> None:
+        """Connect a wire (or wire segment) to a port (or port segment).
+
+        Handles full wire→port (bit-by-bit via ``_connect_to_wire_segment``),
+        or normalizes to segment-level and connects directly.
+        """
+        # Full wire → full port: connect bit-by-bit directly
         if isinstance(wire_like, Wire) and isinstance(port_like, Port):
             if wire_like.width != port_like.width:
                 raise WidthMismatchError(
-                    f'Connection failed: Wire {wire_like.raw_path} is {wire_like.width} bit wide and port {port_like.raw_path} is {port_like.width} bit wide. '
-                    + 'Consider explicit bitwise connection of each wire_segment:port_segment instead of wire:port in such cases. '
-                    + 'Example:\n\tconnect(wire.segment[0], port.segment[3])\n\tconnect(wire.segment[1], port.segment[4])'
+                    f'Connection failed: Wire {wire_like.raw_path} is {wire_like.width} bit wide '
+                    f'and port {port_like.raw_path} is {port_like.width} bit wide. '
+                    'Consider explicit bitwise connection of each wire_segment:port_segment instead of wire:port '
+                    'in such cases. Example:\n\tconnect(wire.segment[0], port.segment[3])\n'
+                    '\tconnect(wire.segment[1], port.segment[4])'
                 )
             for idx in wire_like.segments:
-                self.connect(wire_like[idx], port_like[idx])
+                self._connect_to_wire_segment(port_like[idx], wire_like[idx])
             return
-        if isinstance(wire_like, Wire) and wire_like.width == 1:
-            w = wire_like[wire_like.offset or 0]  # equal to wire[0] in most cases
-        else:
-            w = wire_like
-        if isinstance(port_like, Port) and port_like.width == 1:
-            p = port_like[port_like.offset or 0]  # equal to port[0] in most cases
-        else:
-            p = port_like
-        if p.locked or (w.locked and not w.is_constant) or self.locked:
-            LOG.error(f'Unable to connect port segment at {p.raw_path} to wire segment {w.raw_path} in module {self.name}: locked object!')
+
+        # Normalize to segment-level objects
+        wire_seg = wire_like[wire_like.offset or 0] if isinstance(wire_like, Wire) else wire_like
+        port_seg = port_like[port_like.offset or 0] if isinstance(port_like, Port) else port_like
+
+        # Check lock status before proceeding
+        if port_seg.locked or (wire_seg.locked and not wire_seg.is_constant) or self.locked:
+            LOG.error(
+                f'Unable to connect port segment at {port_seg.raw_path} to wire segment {wire_seg.raw_path} in module {self.name}: locked object!'
+            )
             return
-        self._connect_to_wire_segment(p, w)
+
+        self._connect_to_wire_segment(port_seg, wire_seg)
 
     def _connect_to_wire_segment(self, p: PortSegment, w: WireSegment) -> None:
         """
