@@ -20,14 +20,19 @@ description: The API of Netlist Carpentry with all relevant classes, properties,
 | 7 | [PortSegment / WireSegment](#portsegment--wiresegment) | Per-bit elements |
 | 8 | [Element Paths](#element-paths) | Hierarchical navigation types |
 | 9 | [ModuleGraph](#modulegraph) | NetworkX integration |
-| 10 | [Pattern Matching](#pattern-matching) | `Pattern`, `Match` |
+| 10 | [Pattern Matching](#pattern-matching) | `Pattern`, `Match`, `Constraint` |
 | 11 | [Signal Model](#signal-model) | `Signal` enum, `SignalArray` |
 | 12 | [Direction Enum](#direction-enum) | Port directions |
 | 13 | [EType Enum](#etype-enum) | Element type classification |
 | 14 | [Configuration](#configuration) | `CFG` global settings |
 | 15 | [Built-in Routines](#built-in-routines) | Optimization, checking |
-| 16 | [Gate Library](#gate-library) | Primitive gate classes |
+| 16 | [Gate Library](#gate-library) | Primitive gates, mixins, parameters |
 | 17 | [Equivalence Checking](#equivalence-checking) | `run_eqy`, `run_equiv`, `run_equiv_miter` |
+| 18 | [Base Classes](#base-classes) | `NetlistElement` — base for all elements |
+| 19 | [Custom Collections](#custom-collections) | `CustomDict`, `CustomList` |
+| 20 | [Metadata Types](#metadata-types) | `METADATA_DICT`, `NESTED_DICT` |
+| 21 | [Type Aliases & Protocols](#type-aliases--protocols) | Signal types, gate protocols |
+| 22 | [Constants & Utilities](#constants--utilities) | Wire constants, exports, logging |
 
 ---
 
@@ -213,6 +218,24 @@ result = generate_json(ReadConfig(files=["design.v"]))  # With config
 
 ---
 
+### `generate_json_netlist()` — Generate JSON Netlist
+
+```python
+from netlist_carpentry import generate_json_netlist
+
+result = generate_json_netlist(["design.v"], top="my_top")
+```
+
+**Parameters:**
+- `files` (List[str | Path]): Input RTL files.
+- `top` (str, optional): Top module name.
+- `output` (str | Path, optional): Output file path.
+- `overwrite` (bool): Overwrite existing file.
+
+**Returns:** `subprocess.CompletedProcess[str]` — Yosys execution result.
+
+---
+
 ## Circuit
 
 The root container holding all modules and the top-level module.
@@ -297,19 +320,10 @@ imported = circuit.add_from_circuit("other_design.v")
 ```
 
 #### `get_from_path(path: str | ElementPath) -> NetlistElement`
-Resolve a hierarchical path to a circuit element.
-```python
-elem = circuit.get_from_path("top.u_adder.sum.4")  # PortSegment
-elem = circuit.get_from_path("top.data_in")          # Port
-elem = circuit.get_from_path("top.wire_a")           # Wire
-```
+Resolve a hierarchical path to a circuit element. See [Element Paths](#element-paths) for full type resolution details.
 
 #### `get_path_from_str(path_str: str, sep: str = '.') -> ElementPath`
-Convert a path string to the appropriate ElementPath type.
-```python
-path = circuit.get_path_from_str("top.inst.port.0")
-# Returns PortSegmentPath
-```
+Convert a path string to the appropriate ElementPath type. See [Element Paths](#element-paths) for auto-detection details.
 
 #### `sync_instances() -> None`
 Rebuild the `instances` dictionary from all modules. O(N*M) complexity.
@@ -360,9 +374,6 @@ result = circuit.prove_equivalence(gold_design, out_dir=Path("eqy_out"))
 
 #### `export_metadata(path: str | Path, include_empty: bool = False, sort_by: Literal['path', 'category'] = 'path', filter: Callable[[str, NESTED_DICT], bool] = ...) -> None`
 Export all metadata to a JSON file.
-
-#### `Circuit.read(cfg_or_files: ReadConfig | List[Path], circuit_name: str | None = None, verbose: bool = False) -> Circuit` *(classmethod)*
-Class method to read RTL files into a Circuit.
 
 ---
 
@@ -531,9 +542,6 @@ and_gates = module.get_instances(type="§and")
 all_dffs = module.get_instances(type="dff", fuzzy=True, recursive=True)
 ```
 
-#### `get_from_path(path: str | ElementPath) -> NetlistElement`
-Resolve a path within this module.
-
 #### `graph() -> ModuleGraph`
 Get the NetworkX MultiDiGraph for this module. **Must call as method.**
 ```python
@@ -547,9 +555,6 @@ Run constant propagation, remove driverless/loadless elements.
 
 #### `check() -> CheckReport`
 Check for combinational loops and fanout issues.
-
-#### `evaluate() -> None`
-Propagate signals through the module (breadth-first from inputs).
 
 #### `show(interactive: bool = False, figpath: str | None = None, **fwd_params) -> Dash | None`
 Visualize the module graph. Interactive mode returns a Dash app.
@@ -596,6 +601,9 @@ A gate or submodule instantiation within a module.
 | `signals` | `Dict[str, SignalArray]` | All port signals |
 | `verilog` | `str` | Generated Verilog instantiation string |
 | `verilog_template` | `str` | Template: `{inst_type} {inst_name} {parameters}({ports});` |
+
+#### `all_connections(include_unconnected: bool) -> Dict[str, Dict[int, WireSegmentPath]]`
+Get all connections including unconnected ports.
 
 ### Methods
 
@@ -804,6 +812,9 @@ Check if wire has no loads (dangling).
 #### `is_dangling(get_mapping: bool = False) -> bool | Dict[int, bool]`
 Check if any segment is dangling.
 
+#### `has_problems(get_mapping: bool = False) -> bool | Dict[int, bool]`
+Check for any problems (no driver, multiple drivers, no loads).
+
 #### `create_wire_segment(index: NonNegativeInt) -> WireSegment`
 Create and add a new segment.
 
@@ -855,6 +866,12 @@ The smallest addressable unit — individual bits of ports and wires.
 | `parent` | `Port[Module] \| Port[Instance]` | Parent port |
 | `grandparent` | `Module \| Instance` | Parent of parent |
 | `path` | `PortSegmentPath` | Hierarchical path |
+| `type` | `EType` | Element type (PORT_SEGMENT) |
+
+### PortSegment Methods
+
+#### `set_ws_path(ws_path: str | WireSegmentPath) -> Self`
+Set or update the wire segment path. Returns self for chaining.
 
 ### WireSegment Properties
 
@@ -863,28 +880,25 @@ The smallest addressable unit — individual bits of ports and wires.
 | `signal` | `Signal` | Current signal value |
 | `is_constant` | `bool` | True if constant (0, 1, x, z) |
 | `is_defined_constant` | `bool` | True if defined constant (0 or 1) |
+| `has_defined_signal` | `bool` | True if signal is defined (0 or 1) |
 | `port_segments` | `CustomList[PortSegment]` | Connected port segments |
 | `nr_connected_ports` | `int` | Number of connected ports |
 | `index` | `int` | Bit index in parent wire |
 | `parent` | `Wire` | Parent wire |
 | `grandparent` | `Module` | Parent module |
 | `path` | `WireSegmentPath` | Hierarchical path |
+| `type` | `EType` | Element type (WIRE_SEGMENT) |
 
-### Shared Methods (both PortSegment and WireSegment)
+### WireSegment Methods
 
-#### `set_signal(signal: LogicLevel | Signal) -> None`
-Set the signal value. **This is the only way to write signals.**
+#### `add_port_segment(port_segment: PortSegment) -> PortSegment`
+Add a port segment to this wire segment. Returns the added PortSegment.
 
-```python
-port[0].set_signal(Signal.HIGH)
-wire[3].set_signal('0')
-```
+#### `add_port_segments(port_segments: Iterable[PortSegment]) -> List[PortSegment]`
+Add multiple port segments. Returns list of added segments.
 
-#### `driver() -> List[PortSegment]` (WireSegment) / `Port | None` (Wire)
-Get the driving port segment(s).
-
-#### `loads() -> List[PortSegment]` (WireSegment) / `List[PortSegment]` (Wire)
-Get the load port segment(s).
+#### `remove_port_segment(port_segment: PortSegment) -> None`
+Remove a port segment from this wire segment.
 
 #### `has_no_driver() -> bool`
 Check if no driver.
@@ -894,6 +908,20 @@ Check for multiple drivers.
 
 #### `has_no_loads() -> bool`
 Check if no loads.
+
+#### `is_dangling() -> bool`
+Check if segment is dangling (no connections).
+
+#### `has_problems() -> bool`
+Check for any problems (no driver, multiple drivers, no loads).
+
+#### `evaluate() -> None`
+Evaluate signal propagation to/from this segment.
+
+**Note:** Both PortSegment and WireSegment share these common methods (also documented on Wire/Port):
+- `set_signal(signal: LogicLevel | Signal)` — The only way to write signals
+- `driver()` / `loads()` — Get driving/load port segments
+- `has_no_driver()` / `has_multiple_drivers()` / `has_no_loads()` — Problem detection
 
 ---
 
@@ -979,7 +1007,7 @@ assert inst.path.parent.hierarchy_level == 0      # InstancePath → ModulePath 
 | `type` | `EType` | Element type enum (`MODULE`, `INSTANCE`, `PORT`, `PORT_SEGMENT`, `WIRE`, `WIRE_SEGMENT`) |
 | `parts` | `List[str]` | Split path components: `"top.u_adder.A.0"` → `["top", "u_adder", "A", "0"]` |
 | `name` | `str` | Last component (element name): `"0"` or `"A"` or `"u_adder"` |
-| `parent` | `ElementPath` | Parent path (returns the appropriate subclass) |
+| `parent` | `ElementPath` | Parent path (returns appropriate subclass: `InstancePath.parent` → `Union[ModulePath, InstancePath]`, `PortPath.parent` → `InstancePath`, etc.) |
 | `hierarchy_level` | `int` | Number of hierarchy levels: top-level instance = 1, submodule instance = 2 |
 | `is_empty` | `bool` | True if raw path is empty string |
 | `type_mapping` | `List[Tuple[str, EType]]` | Heuristic mapping of each component to its element type |
@@ -1035,6 +1063,24 @@ path.get_subseq(0, 2)   # ["top", "sub"]
 path.get_subseq(None, 1) # ["top"]
 path.get_subseq(1, None) # ["sub", "u_inst"]
 ```
+
+#### `__getitem__(index: int) -> str`
+Subscript access: `path[0]`.
+
+#### `__len__() -> int`
+Number of components.
+
+#### `__eq__(other: object) -> bool`
+Equality comparison.
+
+#### `__hash__() -> int`
+Hash for use in dicts/sets.
+
+#### `__str__() -> str`
+String representation (same as `raw`).
+
+#### `__repr__() -> str`
+Developer representation.
 
 ### Utility: `get_path_from_str()` — Auto-Detect Path Type
 
@@ -1124,50 +1170,100 @@ predecessors = list(G.predecessors("u_adder"))
 
 ## Pattern Matching
 
-### `Pattern` — Find and Replace Subgraphs
+### `Pattern` — Find and Replace Subgraphs (Namespace Class)
+
+**Important:** `Pattern` is a namespace class with only classmethods — it has no `__init__` and cannot be instantiated.
 
 ```python
 from netlist_carpentry import Pattern, ModuleGraph
 
-pattern = Pattern(
-    graph=pattern_graph,
-    replacement_graph=replacement_graph,
-    ignore_port_names=True,
-    matching_constraints=[],
-    ignore_boundary_conditions=False,
-)
+# Use classmethods directly
+mapping = Pattern.get_mapping(pattern_module, replacement_module)
 ```
 
-**Constructor Parameters:**
-- `graph` (ModuleGraph): Pattern structure to find.
-- `replacement_graph` (ModuleGraph): Replacement structure (optional).
-- `ignore_port_names` (bool): Don't check port name matching.
-- `matching_constraints` (List[Constraint]): Filtering constraints.
-- `mapping` (Dict): Port mapping between pattern and replacement.
-- `ignore_boundary_conditions` (bool): Ignore boundary checks.
+### Class Methods
 
-### Methods
+#### `Pattern._add_node_metadata(graph: ModuleGraph) -> None` *(classmethod, private)*
+Adds metadata to graph nodes: `n_input_inst` and `n_output_inst` booleans.
 
-#### `find_matches(circuit_graph: ModuleGraph, max_match_count: int | None = None) -> Match`
+#### `Pattern._remove_ports_from_pattern_graphs(graph: ModuleGraph) -> None` *(classmethod, private)*
+Removes PORT nodes from a pattern graph.
+
+#### `Pattern.get_mapping(pattern_module: Module, replacement_module: Module) -> Dict[Tuple[str, str, int], Tuple[str, str, int]]` *(classmethod)*
+Generate port mapping between pattern and replacement modules.
+
+#### `Pattern.find_matches(pattern_graph: ModuleGraph, circuit_graph: ModuleGraph, max_match_count: int | None = None) -> Match`
 Find all occurrences of the pattern in a circuit graph.
 
 ```python
-match_result = pattern.find_matches(module.graph())
+match_result = Pattern.find_matches(module.graph(), module.graph())
 print(f"Found {match_result.count} matches")
 ```
 
 **Returns:** `Match` object containing found matches.
 
-#### `count_matches(circuit_graph: ModuleGraph) -> int`
+#### `Pattern.count_matches(pattern_graph: ModuleGraph, circuit_graph: ModuleGraph) -> int`
 Count matches without returning details.
 
-#### `replace(module: Module) -> None`
+#### `Pattern.replace(pattern_module: Module, target_module: Module) -> None`
 Replace all matched patterns in a module (if replacement graph is set).
 
-### Class Methods
+---
 
-#### `Pattern.get_mapping(pattern_module: Module, replacement_module: Module) -> Dict[Tuple[str, str, int], Tuple[str, str, int]]`
-Generate port mapping between pattern and replacement modules.
+### `Match` — Pattern Match Results
+
+Returned by `Pattern.find_matches()`.
+
+```python
+from netlist_carpentry import Match
+```
+
+#### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `pattern_graph` | `ModuleGraph` | The pattern graph |
+| `matches` | `Dict[int, Dict[Tuple[str, str, int], Tuple[str, str, int]]]` | Match details (match_id → port mapping) |
+| `count` | `int` | Number of matches |
+
+#### Methods
+
+##### `get_interfaces(circuit_graph: ModuleGraph) -> Dict[int, Dict[Tuple[str, str, int], Set[Tuple[str, str, int]]]]`
+Get interface mappings for each match.
+
+---
+
+### `Constraint` — Pattern Matching Constraints
+
+Filter which matches are accepted.
+
+```python
+from netlist_carpentry import Constraint, CascadingGateConstraint
+```
+
+#### `Constraint` — Base Class
+
+##### Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `check()` | `check(potential_match_graph: ModuleGraph, circuit_graph: ModuleGraph) -> bool` | Check if constraint is satisfied |
+
+#### `CascadingGateConstraint` — Gate Type Constraint
+
+```python
+constraint = CascadingGateConstraint("§and")
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `instance_type` | `str` | Required instance type |
+
+##### Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `check()` | `check(potential_match_graph: ModuleGraph, circuit_graph: ModuleGraph) -> bool` | Check if all instances match type |
 
 ---
 
@@ -1248,6 +1344,7 @@ arr = SignalArray.create({0: '1', 2: '1'})
 | `is_undefined` | `bool` | All bits undefined (x or z) |
 | `signed` | `bool` | Whether signed |
 | `msb_first` | `bool` | MSB-first ordering |
+| `default_fill` | `Signal` | Default fill signal for undefined bits |
 
 ### Methods
 
@@ -1395,8 +1492,47 @@ Remove wires with no load (dangling nets).
 #### `clean_circuit(circuit: Circuit) -> bool`
 Remove unused modules from the circuit.
 
-#### `opt_chains(circuit: Circuit) -> ChainsResult`
+#### `opt_chains(circuit: Circuit, input_path: str | None = None, top_module: str | None = None, gates: list[str] | None = None, output_path: str | None = None, skip_modules: set[str] | None = None) -> CircuitOptimizationResult`
 Optimize chain structures (e.g., shift registers).
+
+**Parameters:**
+- `circuit` (Circuit): Circuit object to optimize.
+- `input_path` (str | None): Verilog file path (alternative to circuit object).
+- `top_module` (str | None): Top module name (required with input_path).
+- `gates` (list[str] | None): Gate types to optimize.
+- `output_path` (str | None): Output file path.
+- `skip_modules` (set[str] | None): Modules to skip.
+
+**Returns:** `CircuitOptimizationResult` — Statistics about optimization.
+
+### CircuitOptimizationResult
+
+```python
+from netlist_carpentry.routines.opt.floodfill.chain_metrics import CircuitOptimizationResult
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `modules_processed` | `int` | Number of modules processed |
+| `modules_with_chains` | `int` | Modules containing chains |
+| `total_chains_detected` | `int` | Total chains found |
+| `total_chains_replaced` | `int` | Chains successfully replaced |
+| `total_chains_skipped` | `int` | Chains skipped |
+| `total_chains_failed` | `int` | Chains that failed |
+| `module_results` | `Dict[str, ReplacementResult]` | Per-module results |
+| `module_reports` | `Dict[str, ModuleReport]` | Per-module reports |
+
+#### Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `summary()` | `summary() -> str` | Human-readable summary |
+| `all_chain_details()` | `all_chain_details() -> List[Tuple[str, ChainInfo]]` | All chain details |
+| `all_skipped()` | `all_skipped() -> List[Tuple[str, ChainInfo]]` | Skipped chains |
+| `all_degenerate()` | `all_degenerate() -> List[Tuple[str, ChainInfo]]` | Degenerate chains (constant inputs) |
+| `all_problematic()` | `all_problematic() -> List[Tuple[str, ChainInfo]]` | Problematic skips |
+| `all_failed()` | `all_failed() -> List[Tuple[str, ChainInfo]]` | Failed chains |
+| `all_with_constants()` | `all_with_constants() -> List[Tuple[str, ChainInfo]]` | Chains with constants |
 
 ### Checking
 
@@ -1459,7 +1595,7 @@ gate_class = get("§and")  # Returns AndGate class
 
 ### Gate Mixins
 
-Combine with gate classes for extended functionality:
+Combine with gate classes for extended functionality. Full method details are in the [Base Classes](#gate-mixins) section below.
 
 ```python
 from netlist_carpentry.utils.gate_mixins import ClkMixin, RstMixin, EnMixin, ScanMixin, SRMixin, LoadMixin
@@ -1504,21 +1640,267 @@ result = run_eqy(
 
 **Returns:** `subprocess.Popen[str]` — Yosys process handle.
 
-### `run_equiv()` — Generate Miter Circuit
+### `run_equiv()` — Run Equivalence Check via Yosys
 
 ```python
 from netlist_carpentry import run_equiv
 
-result = run_equiv(circuit_a, circuit_b, "top_module", out_dir=Path("miter_out"))
+# With circuit objects
+result = run_equiv(circuit_a, circuit_b, quiet=False, out_dir=Path("miter_out"))
+
+# With file paths
+result = run_equiv(["gold.v"], ["gate.v"], gold_top="gold_top", gate_top="gate_top")
 ```
 
-### `run_equiv_miter()` — Create Miter Circuit Object
+**Parameters:**
+- `gold_design` (Circuit | str | Path | List[str]): Gold design.
+- `gate_design` (Circuit | str | Path | List[str]): Gate-level design.
+- `gold_top` (str): Top module of gold design (required when using file paths).
+- `gate_top` (str): Top module of gate design (required when using file paths).
+- `quiet` (bool): Suppress Yosys output.
+- `out_dir` (str | Path | None): Output directory.
+- `no_name_matching` (bool): Disable name matching.
+
+**Returns:** `subprocess.Popen[str]` — Yosys process handle.
+
+### `run_equiv_miter()` — Run Equivalence Check with Miter/SAT Approach
 
 ```python
 from netlist_carpentry import run_equiv_miter
 
-miter_circuit = run_equiv_miter(circuit_a, circuit_b, "top")
+# With circuit objects
+result = run_equiv_miter(circuit_a, circuit_b, gold_top="top", gate_top="top")
+
+# With file paths + bounded model checking
+result = run_equiv_miter(["gold.v"], ["gate.v"], gold_top="gold_top", gate_top="gate_top", cycles=5)
 ```
+
+**Parameters:**
+- `gold_design` (Circuit | str | Path | List[str]): Gold design.
+- `gate_design` (Circuit | str | Path | List[str]): Gate-level design.
+- `gold_top` (str): Top module of gold design.
+- `gate_top` (str): Top module of gate design.
+- `quiet` (bool): Suppress Yosys output.
+- `out_dir` (str | Path | None): Output directory (creates temp dir if None).
+- `cycles` (PositiveInt | None): Number of cycles for Bounded Model Checking. None = temporal induction.
+
+**Returns:** `subprocess.Popen[str]` — Yosys process handle.
+
+---
+
+## Type Aliases & Protocols
+
+### Signal Protocol Types
+
+| Type | Definition | Description |
+|------|------------|-------------|
+| `LogicLevelInt` | `Literal[0, 1]` | Integer logic level |
+| `LogicLevel` | `Union[Literal['0', '1', 'Z', 'X'], LogicLevelInt]` | Single-bit signal value |
+| `SignalOrLogicLevel` | `Union[Signal, LogicLevel]` | Signal or raw logic level |
+| `SignalDict` | `Dict[int, Signal]` | Index → Signal mapping |
+| `SIGNAL_LIKE` | `Union[bool, int, str, Signal]` | Parseable signal value (from `signal_array.py`) |
+
+### CarriesSignal Protocol
+
+```python
+class CarriesSignal(Protocol):
+    @property
+    def signal(self) -> Signal: ...
+    @property
+    def signal_int(self) -> Optional[int]: ...
+```
+
+Used to type elements that can carry signals (Port, Wire, PortSegment, WireSegment).
+
+### Gate Protocols
+
+| Protocol | Purpose |
+|----------|---------|
+| `GateProtocol` | Base protocol for all gates |
+| `ClockMixinProtocol` | Clock port access |
+| `EnableMixinProtocol` | Enable port access |
+| `ResetMixinProtocol` | Reset port access |
+| `LoadMixinProtocol` | Load port access (for ALDFF) |
+| `SRMixinProtocol` | Set/Reset port access |
+| `ScanMixinProtocol` | Scan port access |
+
+---
+
+## Custom Collections
+
+### `CustomDict[K, V](Dict[K, V])`
+
+Extended dict with `add()` and `remove()` methods that support locking.
+
+```python
+d = CustomDict[str, Instance]()
+d.add("u_and", and_inst)           # Add with lock=False (default)
+d.add("u_or", or_inst, locked=True)  # Add with lock=True
+d.remove("u_and")                   # Remove by key
+```
+
+#### Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `add()` | `add(key: K, element: V, locked: bool = False) -> V` | Add element with optional lock |
+| `remove()` | `remove(key: K, locked: bool = False) -> None` | Remove element by key |
+
+### `CustomList[V](List[V])`
+
+Extended list with `add()`, `extend()`, and `remove()` methods that support locking and duplicate control.
+
+```python
+l = CustomList[PortSegment]()
+l.add(seg)                              # Add single element
+l.extend([seg1, seg2])                  # Add multiple elements
+l.flatten()                             # Flatten nested lists
+l.remove(seg)                           # Remove by value
+```
+
+#### Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `add()` | `add(object: V, locked: bool = False, allow_duplicates: bool = False) -> V` | Add element |
+| `extend()` | `extend(iterable: Iterable[V], locked: bool = False, allow_duplicates: bool = False, skip_duplicates: bool = False) -> None` | Add multiple elements |
+| `remove()` | `remove(object: V, locked: bool = False) -> None` | Remove by value |
+| `flatten()` | `flatten() -> List[V]` | Flatten nested iterables |
+
+---
+
+## Metadata Types
+
+```python
+from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT, NESTED_DICT
+
+# Type definitions
+NESTED_DICT = Union[BASIC_LEAF, Dict[str, 'NESTED_DICT'], List['NESTED_DICT']]
+METADATA_DICT: TypeAlias = Dict[str, Dict[str, NESTED_DICT]]
+```
+
+Used for user-defined and Yosys-generated metadata on netlist elements.
+
+---
+
+## Base Classes
+
+### `NetlistElement` — Base Class for All Elements
+
+All netlist elements inherit from `NetlistElement`. Key properties and methods:
+
+| Property/Method | Type | Description |
+|-----------------|------|-------------|
+| `path` | `ElementPath` | Hierarchical path |
+| `raw_path` | `str` | Raw path string |
+| `type` | `EType` | Element type enum |
+| `hierarchy_level` | `int` | Hierarchy depth |
+| `parent` | `NetlistElement` | Parent element |
+| `has_parent` | `bool` | Whether has parent |
+| `circuit` | `Circuit` | Parent circuit (raises if not attached) |
+| `has_circuit` | `bool` | Whether attached to a Circuit |
+| `locked` | `bool` | Structural immutability flag |
+| `is_placeholder_instance` | `bool` | Whether placeholder instance |
+| `can_carry_signal` | `bool` | Whether element can carry signals |
+
+#### Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `__eq__()` | `__eq__(value: object) -> bool` | Equality comparison |
+| `_link_parent()` | `_link_parent() -> Self` | Link to parent element |
+| `set_name()` | `set_name(new_name: str) -> None` | Change element name |
+| `_set_name_recursively()` | `_set_name_recursively(old_name: str, new_name: str) -> None` | Rename recursively |
+| `change_mutability()` | `change_mutability(is_now_locked: bool) -> Self` | Lock/unlock element |
+| `copy_object()` | `copy_object(new_name: str) -> NetlistElement` | Create a copy |
+| `evaluate()` | `evaluate() -> None` | Evaluate signal propagation |
+| `normalize_metadata()` | `normalize_metadata(include_empty: bool = False, sort_by: Literal['path', 'category'] = 'path', filter: Callable[[str, NESTED_DICT], bool] = ...) -> METADATA_DICT` | Normalize metadata |
+| `__str__()` | `__str__() -> str` | String representation |
+| `__repr__()` | `__repr__() -> str` | Developer representation |
+
+### Gate Base Classes
+
+All primitive gates inherit from these base classes:
+
+| Class | Inherits From | Description |
+|-------|--------------|-------------|
+| `PrimitiveGate` | `Instance, BaseModel` | Base for all primitive gates |
+| `UnaryGate` | `PrimitiveGate, BaseModel` | Single-input gates |
+| `BinaryGate` | `PrimitiveGate, BaseModel` | Two-input gates |
+| `ShiftGate` | `BinaryGate, BaseModel` | Shift operations |
+| `ArithmeticGate` | `BinaryGate, BaseModel` | Arithmetic operations |
+| `BinaryNto1Gate` | `_Out1BitMixin, BinaryGate, BaseModel` | N-input to 1-output gates |
+| `StorageGate` | `PrimitiveGate, BaseModel` | Storage elements (FFs, latches) |
+| `ReduceGate` | `_Out1BitMixin, UnaryGate` | Reduction gates |
+
+#### PrimitiveGate Key Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `y_width` | `PositiveInt` | Output width |
+| `a_width` | `PositiveInt` | First input width |
+| `b_width` | `PositiveInt` | Second input width (if applicable) |
+| `is_combinational` | `bool` | Whether combinational |
+| `is_sequential` | `bool` | Whether sequential |
+| `output_port` | `Port[Instance]` | Output port |
+| `is_primitive` | `bool` | Always True |
+| `data_width` | `int` | Data width |
+| `verilog_template` | `str` | Verilog instantiation template |
+| `verilog_net_map` | `Dict[str, str]` | Port name mapping for Verilog |
+
+#### PrimitiveGate Key Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `_try_update_parameters()` | `_try_update_parameters() -> None` | Try to update parameters from ports |
+| `update_parameters()` | `update_parameters() -> None` | Update parameters from ports |
+| `sync_parameters()` | `sync_parameters(warn: bool = True) -> Parameters` | Sync parameters with port widths |
+| `p2v()` | `p2v(port: ANY_PORT, exclude_indices: List[int] | None = None, include_indices: List[int] | None = None) -> str` | Convert port to Verilog net name |
+| `set()` | `set(port_name: str, new_signal: SignalOrLogicLevel, idx: Union[int, List[int]] = 0) -> None` | Set signal on port |
+| `evaluate()` | `evaluate() -> None` | Evaluate gate output |
+| `_calc_output()` | `_calc_output(idx: NonNegativeInt = 0) -> Dict[int, Signal]` | Calculate output signals |
+| `_set_output()` | `_set_output(new_signals: Dict[int, Signal]) -> None` | Set output signals |
+| `_split()` | `_split() -> Dict[NonNegativeInt, Self]` | Split into 1-bit instances |
+| `_split_sync_params()` | `_split_sync_params(slices: Iterable[Self]) -> None` | Sync params after split |
+
+### Gate Mixins (detailed)
+
+Full method details for gate mixins are in the [Gate Library](#gate-mixins) section above.
+
+| Mixin | Purpose | Key Properties/Methods |
+|-------|---------|----------------------|
+| `ClkMixin` | Clock port | `clk_port`, `clk_polarity`, `set_clk()` |
+| `EnMixin` | Enable port | `en_port`, `en_polarity`, `en_signal`, `set_en()` |
+| `RstMixin` | Reset port | `rst_port`, `rst_polarity`, `rst_val`, `set_rst()` |
+| `LoadMixin` | Load port (ALDFF) | `al_port`, `ad_port`, `load_val`, `set_al()` |
+| `SRMixin` | Set/Reset ports | `clr_port`, `set_port`, `set_clr()`, `set_set()` |
+| `ScanMixin` | Scan ports | `se_port`, `si_port`, `so_port`, `scan_ff_equivalent`, `set_se()` |
+
+---
+
+## Gate Library Dataclasses
+
+All gate parameters are defined as Pydantic models:
+
+| Class | Inherits From | Description |
+|-------|--------------|-------------|
+| `TypedParams` | `TypedDict` | Base TypedDict for params |
+| `Parameters` | `BaseModel` | Base parameter model |
+| `PortParams` | `Parameters` | Port parameters |
+| `InstanceParams` | `Parameters` | Instance parameters |
+| `GateParams` | `InstanceParams` | Gate-specific parameters |
+| `ClockParams` | `ClockParamsMixin, GateParams` | Clock parameters |
+| `EnableParams` | `EnableParamsMixin, GateParams` | Enable parameters |
+| `ResetParams` | `ResetParamsMixin, GateParams` | Reset parameters |
+| `LoadParams` | `LoadParamsMixin, GateParams` | Load parameters |
+| `SRParams` | `SRParamsMixin, GateParams` | Set/Reset parameters |
+| `WireParams` | `Parameters` | Wire parameters |
+| `UnaryParams` | `GateParams` | Unary gate parameters |
+| `BinaryParams` | `GateParams` | Binary gate parameters |
+| `MuxParams` | `GateParams` | MUX parameters |
+| `DFFParams` | `ClockParams, EnableParams, ResetParams, LoadParams, SRParams` | DFF parameters |
+| `DLatchParams` | `GateParams` | DLatch parameters |
+| `AllParams` | `UnaryParams, BinaryParams, MuxParams, DFFParams` | Union of all params |
 
 ---
 
@@ -1548,5 +1930,16 @@ from netlist_carpentry import (
 | `NC_SCRIPTS_DIR` | `Path` | Scripts directory |
 | `VERILOG_KEYWORDS` | `Set[str]` | Reserved Verilog keywords |
 | `HAS_VCD` | `bool` | VCD support available |
+| `ON_WINDOWS` | `bool` | Whether running on Windows |
 | `gate_factory` | `module` | Gate factory utilities |
 | `gate_lib` | `module` | Gate library module |
+| `initialize_logging()` | `function` | Initialize logging system |
+
+### `initialize_logging(output_dir: Optional[str] = None, custom_file_name: str = '') -> bool`
+Set up logging configuration.
+
+**Parameters:**
+- `output_dir` (str | None): Directory for log files. None = no file logging.
+- `custom_file_name` (str): Custom log file name. Empty = auto-generated from timestamp.
+
+**Returns:** `bool` — True if error occurred during initialization.
