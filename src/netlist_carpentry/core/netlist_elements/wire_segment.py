@@ -403,7 +403,7 @@ class _WireSegmentConst(WireSegment):
         return f'Constant WireSegment "{self.name}" with path {self.path.raw} and signal {self.signal.value}'
 
     def __repr__(self) -> str:
-        return f'Constant WireSegment "{self.signal.value}" WireSeg({self.path.raw})'
+        return f'Tied to "{self.signal.value}" (Constant WireSegment)'
 
 
 class WireSegmentConst0(_WireSegmentConst):

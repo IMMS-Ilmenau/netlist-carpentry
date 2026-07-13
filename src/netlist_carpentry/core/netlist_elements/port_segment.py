@@ -182,12 +182,14 @@ class PortSegment(_Segment, BaseModel):
 
         Examples:
             ```python
-            >>> port_seg = PortSegment(name='0', port=Port(...)).set_ws_path('module1.wire1.0')
-            >>> port_seg.is_connected
-            True
-            >>> port_seg = PortSegment(name='0', port=Port(...))
+            >>> from netlist_carpentry import Module
+            >>> module = Module(name='m')
+            >>> port_seg = module.create_port('p')[0]
             >>> port_seg.is_connected
             False
+            >>> port_seg.set_ws_path('module1.wire1.0').is_connected
+            True
+
             ```
         """
         return not self.is_unconnected
@@ -205,12 +207,14 @@ class PortSegment(_Segment, BaseModel):
 
         Examples:
             ```python
-            >>> port_seg = PortSegment(name='0', port=Port(...)).set_ws_path('module1.wire1.0')
-            >>> port_seg.is_unconnected
-            False
-            >>> port_seg = PortSegment(name='0', port=Port(...))
+            >>> from netlist_carpentry import Module
+            >>> module = Module(name='m')
+            >>> port_seg = module.create_port('p')[0]
             >>> port_seg.is_unconnected
             True
+            >>> port_seg.set_ws_path('module1.wire1.0').is_unconnected
+            False
+
             ```
         """
         return self.raw_ws_path == '' or self.raw_ws_path == 'X'
@@ -227,12 +231,15 @@ class PortSegment(_Segment, BaseModel):
 
         Examples:
             ```python
-            >>> port_seg = PortSegment(name='0', port=Port(...)).tie_signal('Z')
-            >>> port_seg.is_floating
-            True
-            >>> port_seg = PortSegment(name='0', port=Port(...))
+            >>> from netlist_carpentry import Module
+            >>> module = Module(name='m')
+            >>> port_seg = module.create_port('p')[0]
             >>> port_seg.is_floating
             False
+            >>> port_seg.tie_signal('Z')
+            >>> port_seg.is_floating
+            True
+
             ```
         """
         return self.raw_ws_path == 'Z'
@@ -420,8 +427,18 @@ class PortSegment(_Segment, BaseModel):
         To change the signal of a port segment to be a constant value, use the `tie_signal` method instead.
 
         Args:
-            signal (SignalOrLogicLevel): The new signal to be set. Can be a ``Signal`` enum value
-                or a logic level string ('0', '1').
+            signal (Signal): The new signal to be set.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> module = Module(name='m')
+            >>> port_seg = module.create_port('p')[0]
+            >>> port_seg.set_signal(Signal.HIGH)
+            >>> port_seg.signal
+            HIGH
+
+            ```
 
         Raises:
             SignalAssignmentError: If this port segment is tied to a constant value (e.g. '0' or '1',

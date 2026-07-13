@@ -827,7 +827,9 @@ def test_port_str(standard_port_in: Port[Instance]) -> None:
 
 def test_port_repr(standard_port_in: Port[Instance]) -> None:
     # Test the representation of a port
-    assert repr(standard_port_in) == 'Port(test_port1 at some_test_inst.test_port1)'
+    assert repr(standard_port_in) == 'Port(input test_port1, 1 bit)'
+
+    assert repr(Module(name='m').create_port('undef_dir', width=8)) == 'Port(undef_dir, 8 bit)'
 
 
 def test_deprecation_warnings() -> None:

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class EvaluationMixin(ModuleBaseMixin):
-    def get_outgoing_edges(self, instance_name: str) -> Dict[str, Dict[int, WireSegment]]:
+    def get_outgoing_edges(self, instance: Union[str, Instance]) -> Dict[str, Dict[int, WireSegment]]:
         raise NotImplementedError(f'Not implemented for mixin {self.__class__.__name__}. Any class using this mixin must implement this method.')
 
     def get_load_ports(self, ws_path: WireSegmentPath) -> List[PortSegment]:

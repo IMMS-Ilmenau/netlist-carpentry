@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union, overload
@@ -88,10 +89,32 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Returns:
             Instance: the instance that was added.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> m.instances
+            {}
+            >>> inst = Instance(name='inst', instance_type='insttype')
+            >>> m.add_instance(inst)
+            Instance(insttype: m.inst)
+            >>> m.instances
+            {'inst': Instance(insttype: m.inst)}
+            >>> m.add_instance(inst)
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.IdentifierConflictError: An object with name inst exists already in module m!
+            >>> inst2 = Instance(name='inst2', instance_type='insttype', module=Module(name='some_other_module'))
+            >>> m.add_instance(inst2)
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.SingleOwnershipError: Instance inst2 belongs to module some_other_module. Cannot add it to module m!
+
+            ```
         """
         self._raise_if_occupied(instance.name)
         if instance.has_parent and instance.module is not self:
-            raise SingleOwnershipError(f'Instance {self.raw_path} belongs to module {instance.parent.name}. Cannot add it to module {self.name}!')
+            raise SingleOwnershipError(f'Instance {instance.name} belongs to module {instance.parent.name}. Cannot add it to module {self.name}!')
         instance.module = self
         if self.has_circuit:
             self.circuit.update_instance(instance)
@@ -129,6 +152,18 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Returns:
             Instance: The instance that was created and added.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> m.instances
+            {}
+            >>> m.create_instance(Module(name='submodule'), 'inst')
+            Instance(submodule: m.inst)
+            >>> m.instances
+            {'inst': Instance(submodule: m.inst)}
+
+            ```
         """
         if params is None:
             params = Parameters()
@@ -178,6 +213,22 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             new_name (str): The new name of the copied instance. Must be a name that is not already given to another instance.
             keep_inputs (bool, optional): Whether to disconnect the input ports of the instance (so it is entirely unconnected).
                 Defaults to True.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> m.instances
+            {}
+            >>> inst = m.create_instance(Module(name='submodule'), 'inst', params={})
+            >>> m.instances
+            {'inst': Instance(submodule: m.inst)}
+            >>> m.copy_instance(inst, 'inst2')
+            Instance(submodule: m.inst2)
+            >>> m.instances
+            {'inst': Instance(submodule: m.inst), 'inst2': Instance(submodule: m.inst2)}
+
+
+            ```
         """
         if isinstance(instance, str):
             instance = self.instances[instance]
@@ -312,6 +363,23 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Args:
             instance (Union[str, Instance}): The name of the instance to be removed, or the Instance object itself.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> inst = m.create_instance(Module(name='submodule'), 'inst')
+            >>> m.instances
+            {'inst': Instance(submodule: m.inst)}
+            >>> m.remove_instance(inst)
+            >>> m.instances
+            {}
+
+            >>> m.remove_instance('nonexisting_inst')
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.ObjectNotFoundError: No object with key nonexisting_inst exists!
+
+            ```
         """
         instance_name = instance.name if isinstance(instance, Instance) else instance
         if instance_name in self.instances:
@@ -337,6 +405,17 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Returns:
             Optional[Instance]: The instance with the specified name if found, otherwise None.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> m.create_instance(Module(name='submodule'), 'inst')
+            Instance(submodule: m.inst)
+            >>> m.get_instance('inst')
+            Instance(submodule: m.inst)
+            >>> m.get_instance('nonexisting_inst')  # Returns None
+
+            ```
         """
         return self.instances.get(name, None)
 
@@ -357,6 +436,22 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Returns:
             List[Instance]: A list of instances matching the specified criteria.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> inst1 = m.create_instance(Module(name='submodule1'), 'inst1')
+            >>> inst2 = m.create_instance(Module(name='submodule2'), 'inst2')
+            >>> m.get_instances(name='inst', fuzzy=True)
+            [Instance(submodule1: m.inst1), Instance(submodule2: m.inst2)]
+            >>> m.get_instances(name='inst', fuzzy=False)
+            []
+            >>> m.get_instances(type='submodule', fuzzy=True)
+            [Instance(submodule1: m.inst1), Instance(submodule2: m.inst2)]
+            >>> m.get_instances(type='submodule', fuzzy=False)
+            []
+
+            ```
         """
         nr_set_args = sum([name is not None, type is not None])
         if nr_set_args > 1:
@@ -385,11 +480,33 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Returns:
             Port: The port that was added.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> m.ports
+            {}
+            >>> port = Port(name='port', direction=Direction.IN, module_or_instance=None)  # Create empty port, no parent object
+            >>> m.add_port(port) # Notice width of 0, as no segments are initialized this way
+            Port(input port, 0 bit)
+            >>> m.ports
+            {'port': Port(input port, 0 bit)}
+            >>> m.add_port(port)
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.IdentifierConflictError: An object with name port exists already in module m!
+            >>> port2 = Port(name='port2', direction=Direction.IN, module_or_instance=Module(name='some_other_module'))
+            >>> m.add_port(port2)
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.SingleOwnershipError: Port port2 belongs to module some_other_module. Cannot add it to module m!
+
+            ```
         """
         if port.name in self.instances or port.name in self.ports:  # Ignore wires, as ports normally have a wire with the same name
             raise IdentifierConflictError(f'An object with name {port.name} exists already in module {self.name}!')
         if port.module_or_instance is not None and port.module_or_instance is not self:
-            raise SingleOwnershipError(f'Port {self.raw_path} belongs to module {port.module.name}. Cannot add it to module {self.name}!')
+            raise SingleOwnershipError(f'Port {port.name} belongs to module {port.module.name}. Cannot add it to module {self.name}!')
         port.module_or_instance = self
         return self.ports.add(port.name, port, locked=self.locked)
 
@@ -411,8 +528,8 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         Creates a new port within the module and connects it to the specified wire segments.
 
-        Returns the port object, if it was created successfully (i.e. no port with the same name exists already), or None otherwise.
-        If the port was not created (because it already exists), the provided wire segment paths are ignored.
+        Returns the port object, if it was created successfully (i.e. no port with the same name exists already).
+        Raises an error if the port could not be created.
 
         Args:
             name (str): The name of the port to be created.
@@ -423,7 +540,22 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             is_locked (bool, optional): Whether the port should be unchangeable after creation or not. Defaults to False.
 
         Returns:
-            Optional[Port]: The port if the port was successfully created and added, None otherwise (if a port with this name already exists).
+            Port: The port that was successfully created and added.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> m.ports
+            {}
+            >>> p = m.create_port('port', 'input', width=8)
+            >>> p.direction
+            Direction.IN
+            >>> p.width
+            8
+            >>> m.ports
+            {'port': Port(input port, 8 bit)}
+
+            ```
         """
         p = Port(name=name, direction=self._get_direction(direction), module_or_instance=self)
         p.create_port_segments(width, offset)
@@ -437,6 +569,23 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Args:
             port (Union[str, Port]): The name of the port to be removed, or the Port object itself.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> port = m.create_port('port')
+            >>> m.ports
+            {'port': Port(port, 1 bit)}
+            >>> m.remove_port(port)
+            >>> m.ports
+            {}
+
+            >>> m.remove_port('nonexisting_port')
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.ObjectNotFoundError: No object with key nonexisting_port exists!
+
+            ```
         """
         port_name = port.name if isinstance(port, Port) else port
         if port_name in self.ports:
@@ -456,6 +605,17 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Returns:
             Port: The port with the specified name if found, otherwise None.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> m.create_port('port')
+            Port(port, 1 bit)
+            >>> m.get_port('port')
+            Port(port, 1 bit)
+            >>> m.get_port('nonexisting_port')  # Returns None
+
+            ```
         """
         return self.ports.get(name, None)
 
@@ -473,6 +633,18 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Returns:
             List[Port]: A list of ports matching the specified criteria.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> port1 = m.create_port('port1')
+            >>> port2 = m.create_port('port2')
+            >>> m.get_ports(name='port', fuzzy=True)
+            [Port(port1, 1 bit), Port(port2, 1 bit)]
+            >>> m.get_ports(name='port', fuzzy=False)
+            []
+
+            ```
         """
         nr_set_args = sum([name is not None, direction is not None])
         if nr_set_args > 1:
@@ -515,7 +687,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if wire.name in self.instances or wire.name in self.wires:  # Ignore wires, as wires may have a port with the same name
             raise IdentifierConflictError(f'An object with name {wire.name} exists already in module {self.name}!')
         if wire.has_parent and wire.module is not self:
-            raise SingleOwnershipError(f'Wire {self.raw_path} belongs to module {wire.parent.name}. Cannot add it to module {self.name}!')
+            raise SingleOwnershipError(f'Wire {wire.name} belongs to module {wire.parent.name}. Cannot add it to module {self.name}!')
         wire.module = self
         return self.wires.add(wire.name, wire, locked=self.locked)
 
@@ -523,7 +695,8 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         Creates a new wire within the module.
 
-        Returns the wire object, if it was created successfully (i.e. no wire with the same name exists already), or None otherwise.
+        Returns the wire object, if it was created successfully (i.e. no wire with the same name exists already).
+        Raises an error if the wire could not be created.
 
         Args:
             name (Optional[str]): The name of the wire to be created. Defaults to None, in which case a generic wire is created.
@@ -533,7 +706,20 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             offset (NonNegativeInt, optional): The offset for the segment indices. Defaults to 0.
 
         Returns:
-            Optional[Wire]: The wire if the wire was successfully created and added, None otherwise (if a wire with this name already exists).
+            Wire: The wire that was successfully created and added.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> m.wires
+            {}
+            >>> w = m.create_wire('wire', width=8)
+            >>> w.width
+            8
+            >>> m.wires
+            {'wire': Wire(wire, 8 bit)}
+
+            ```
         """
         if not name:
             return self._create_generic_wire(width, is_locked, offset)
@@ -564,6 +750,23 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Args:
             wire (Union[str, Wire]): The name of the wire to be removed, or the Wire object itself.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> wire = m.create_wire('wire')
+            >>> m.wires
+            {'wire': Wire(wire, 1 bit)}
+            >>> m.remove_wire(wire)
+            >>> m.wires
+            {}
+
+            >>> m.remove_wire('nonexisting_wire')
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.ObjectNotFoundError: No object with key nonexisting_wire exists!
+
+            ```
         """
         wire_name = wire.name if isinstance(wire, Wire) else wire
         if wire_name in self.wires:
@@ -584,6 +787,17 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Returns:
             Wire: The wire with the specified name if found, otherwise None.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> m.create_wire('wire')
+            Wire(wire, 1 bit)
+            >>> m.get_wire('wire')
+            Wire(wire, 1 bit)
+            >>> m.get_wire('nonexisting_wire')  # Returns None
+
+            ```
         """
         return self.wires.get(name, None)
 
@@ -600,6 +814,18 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Returns:
             List[Wire]: A list of wires matching the specified criteria.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> wire1 = m.create_wire('wire1')
+            >>> wire2 = m.create_wire('wire2')
+            >>> m.get_wires(name='wire', fuzzy=True)
+            [Wire(wire1, 1 bit), Wire(wire2, 1 bit)]
+            >>> m.get_wires(name='wire', fuzzy=False)
+            []
+
+            ```
         """
         if name is not None:
             return [self.wires[w_name] for w_name in self.wires if (name in w_name and fuzzy) or (name == w_name)]
@@ -618,6 +844,18 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Returns:
             True if the name is already used by an instance, port, or wire;
             False otherwise.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> m.name_occupied('wire1')
+            False
+            >>> m.create_wire('wire1')  # Now an object with name 'wire1' exists
+            Wire(wire1, 1 bit)
+            >>> m.name_occupied('wire1')
+            True
+
+            ```
         """
         return name in self.instances or name in self.ports or name in self.wires
 
@@ -655,6 +893,31 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             InvalidDirectionError: If the target is a driver port (both source and target cannot drive).
             WidthMismatchError: If source and target have incompatible widths.
             UnsupportedOperationError: If mixing segment-level and non-segment-level objects.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> submodule = Module(name='submodule')
+            >>> p_m1 = m.create_port('p_m1', 'input')
+            >>> p_m2 = m.create_port('p_m2', 'input')
+            >>> p_sub1 = submodule.create_port('p_sub1', 'input')
+            >>> p_sub2 = submodule.create_port('p_sub2', 'input')
+            >>> sub_inst = m.create_instance(submodule, 'inst')
+            >>> m.connect(p_m1, sub_inst.ports['p_sub1'], new_wire_name='some_wire')  # Connections always src->dest
+            >>> p_m1.connected_wire_segments
+            {0: WireSegmentPath m.some_wire.0}
+            >>> sub_inst.ports['p_sub1'].connected_wire_segments
+            {0: WireSegmentPath m.some_wire.0}
+            >>> m.connect(p_m1, sub_inst.ports['p_sub1'], new_wire_name='some_wire')  # Executing again yields AlreadyConnectedError
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.AlreadyConnectedError: port m.inst.p_sub1 must be unconnected before attempting to connect it!
+            >>> m.connect(sub_inst.ports['p_sub2'], p_m2)  # Does not work, since p_m is a driver and cannot be a destination
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.InvalidDirectionError: Received a signal driving port m.p_m2, but expected a load!
+
+            ```
         """
         # Resolve any path objects to their underlying NetlistElement
         source_obj = self._get_from_path_or_object(source)
@@ -838,6 +1101,23 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Args:
             port_like (Union[PortSegmentPath, PortSegment]): The path of the port segment to be disconnected, or the PortSegment itself.
                 Also accepts ports, aqd will then disconnect the complete port.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> submodule = Module(name='submodule')
+            >>> p_m = m.create_port('p_m', 'input')
+            >>> p_sub = submodule.create_port('p_sub', 'input')
+            >>> sub_inst = m.create_instance(submodule, 'inst')
+            >>> m.connect(p_m, sub_inst.ports['p_sub'], new_wire_name='some_wire')  # Connections always src->dest
+            >>> p_m.is_connected
+            True
+            >>> m.disconnect(p_m)
+            >>> p_m.is_connected
+            False
+            >>> m.disconnect(p_m)  # Disconnecting again does nothing
+
+            ```
         """
         if isinstance(port_like, Port):
             return self._disconnect_port(port_like)
@@ -976,10 +1256,27 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Each inner dictionary contains the index of a port segment as a key and the corresponding wire segment as a value.
 
         Args:
-            instance (str): The name of the instance for which to retrieve edges.
+            instance (Union[str, Instance]): The name of the instance for which to retrieve edges.
+                Alternatively, the instance object itself.
 
         Returns:
             Dict[str, Dict[int, WireSegment]]: A dictionary containing the edges connected to the given instance.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry.utils.gate_lib import AndGate
+            >>> m = Module(name='m')
+            >>> p_a = m.create_port('A', 'input')
+            >>> inst = m.create_instance(AndGate, 'inst')
+            >>> inst.ports['A'].width  # By default, only 1 bit wide
+            1
+            >>> m.get_edges(inst)
+            {'A': {0: Tied to "x" (Constant WireSegment)}, 'B': {0: Tied to "x" (Constant WireSegment)}, 'Y': {0: Tied to "x" (Constant WireSegment)}}
+            >>> m.connect(p_a, inst.ports['A'], new_wire_name='someWire')
+            >>> m.get_edges('inst')  # Also accepts instance name
+            {'A': {0: WireSegment(m.someWire.0, Signal:x, 2 port(s))}, 'B': {0: Tied to "x" (Constant WireSegment)}, 'Y': {0: Tied to "x" (Constant WireSegment)}}
+
+            ```
         """
         edges: Dict[str, Dict[int, WireSegment]] = {}
         if isinstance(instance, str):
@@ -990,53 +1287,93 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             edges[pname] = self._collect_port_edges(inst, pname)
         return edges
 
-    def get_outgoing_edges(self, instance_name: str) -> Dict[str, Dict[int, WireSegment]]:
+    def _warn_param_changed(self, instance: Union[str, Instance], name: Optional[str], fnc: str) -> Instance:
+        if name is not None:
+            warn_str = f"Parameter 'instance_name' of Module.{fnc}() is deprecated and will be removed in v1.0.0. Use 'instance' instead!"
+            warnings.warn(warn_str, DeprecationWarning, stacklevel=2)
+            instance = name
+        if instance is None:
+            raise TypeError(f"{fnc}() missing 1 required argument: 'instance'")
+        if isinstance(instance, str):
+            instance = self.instances[instance]
+        return instance
+
+    def get_outgoing_edges(self, instance: Union[str, Instance] = None, *, instance_name: Optional[str] = None) -> Dict[str, Dict[int, WireSegment]]:  # type: ignore[assignment]
         """Retrieves all connections associated with the output ports of a specific instance.
 
         This method filters all edges of the given instance to return only those
         connected to its output ports.
 
         Args:
-            instance_name (str): The name of the instance (submodule or gate) to query.
+            instance (Union[str, Instance]): The name of the instance for which to retrieve edges.
+                Alternatively, the instance object itself.
+            instance_name (str): **Deprecated! Use `instance` instead**
+                The name of the instance (submodule or gate) to query.
+
 
         Returns:
-            A dictionary mapping output port names to their connections. The structure is:
-                {
-                    port_name (str): {
-                        bit_index (int): wire_segment (WireSegment)
-                    }
-                }
+            Dict[str, Dict[int, WireSegment]]: A dictionary mapping output port names to their connections.
 
         Raises:
             KeyError: If `instance_name` does not exist in the module's instances.
-        """
-        edges = self.get_edges(instance_name)
-        inst = self.instances[instance_name]
-        return {pname: edges[pname] for pname in edges if inst.ports[pname].is_output}
 
-    def get_incoming_edges(self, instance_name: str) -> Dict[str, Dict[int, WireSegment]]:
+        Example:
+            ```python
+            >>> from netlist_carpentry.utils.gate_lib import AndGate
+            >>> m = Module(name='m')
+            >>> p_y = m.create_port('Y', 'output')
+            >>> inst = m.create_instance(AndGate, 'inst')
+            >>> inst.ports['Y'].width  # By default, only 1 bit wide
+            1
+            >>> m.get_outgoing_edges(inst)
+            {'Y': {0: Tied to "x" (Constant WireSegment)}}
+            >>> m.connect(inst.ports['Y'], p_y, new_wire_name='someWire')
+            >>> m.get_outgoing_edges('inst')  # Also accepts instance name
+            {'Y': {0: WireSegment(m.someWire.0, Signal:x, 2 port(s))}}
+
+            ```
+        """
+        instance = self._warn_param_changed(instance, instance_name, 'get_outgoing_edges')
+        edges = self.get_edges(instance)
+        return {pname: edges[pname] for pname in edges if instance.ports[pname].is_output}
+
+    def get_incoming_edges(self, instance: Union[str, Instance] = None, *, instance_name: Optional[str] = None) -> Dict[str, Dict[int, WireSegment]]:  # type: ignore[assignment]
         """Retrieves all connections associated with the input ports of a specific instance.
 
         This method filters all edges of the given instance to return only those
         connected to its input ports.
 
         Args:
-            instance_name (str): The name of the instance (submodule or gate) to query.
+            instance (Union[str, Instance]): The name of the instance for which to retrieve edges.
+                Alternatively, the instance object itself.
+            instance_name (str): **Deprecated! Use `instance` instead**
+                The name of the instance (submodule or gate) to query.
 
         Returns:
-            A dictionary mapping input port names to their connections. The structure is:
-            {
-                port_name (str): {
-                    bit_index (int): wire_segment (WireSegment)
-                }
-            }
+            Dict[str, Dict[int, WireSegment]]: A dictionary mapping input port names to their connections.
 
         Raises:
             KeyError: If `instance_name` does not exist in the module's instances.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry.utils.gate_lib import AndGate
+            >>> m = Module(name='m')
+            >>> p_a = m.create_port('A', 'input')
+            >>> inst = m.create_instance(AndGate, 'inst')
+            >>> inst.ports['A'].width  # By default, only 1 bit wide
+            1
+            >>> m.get_incoming_edges(inst)
+            {'A': {0: Tied to "x" (Constant WireSegment)}, 'B': {0: Tied to "x" (Constant WireSegment)}}
+            >>> m.connect(p_a, inst.ports['A'], new_wire_name='someWire')
+            >>> m.get_incoming_edges('inst')  # Also accepts instance name
+            {'A': {0: WireSegment(m.someWire.0, Signal:x, 2 port(s))}, 'B': {0: Tied to "x" (Constant WireSegment)}}
+
+            ```
         """
-        edges = self.get_edges(instance_name)
-        inst = self.instances[instance_name]
-        return {pname: edges[pname] for pname in edges if inst.ports[pname].is_input}
+        instance = self._warn_param_changed(instance, instance_name, 'get_incoming_edges')
+        edges = self.get_edges(instance)
+        return {pname: edges[pname] for pname in edges if instance.ports[pname].is_input}
 
     def _get_instance_from_ps_path(self, segment_path: PortSegmentPath) -> Optional[Union[Instance, Port[Module]]]:
         if segment_path.hierarchy_level >= 2:
@@ -1061,7 +1398,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         return self._get_connected_nodes(ws_path)
 
-    def get_neighbors(self, instance_name: str) -> Dict[str, Dict[int, List[PortSegment]]]:
+    def get_neighbors(self, instance: Union[str, Instance] = None, *, instance_name: Optional[str] = None) -> Dict[str, Dict[int, List[PortSegment]]]:  # type: ignore[assignment]
         """
         Retrieves the neighboring port segments of a given instance.
 
@@ -1074,22 +1411,40 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         If the instance port is an output port (.e. a signal driver), all loads are considered its neighbors.
 
         Args:
-            instance_name (str): The name of the instance for which to retrieve neighbors.
+            instance (Union[str, Instance]): The name of the instance for which to retrieve neighbors.
+                Alternatively, the instance object itself.
+            instance_name (str): **Deprecated! Use `instance` instead**
+                The name of the instance for which to retrieve neighbors.
 
         Returns:
             Dict[str, Dict[int, List[PortSegment]]]: A dictionary containing the neighboring port segments of the given instance.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry.utils.gate_lib import AndGate
+            >>> m = Module(name='m')
+            >>> p_a = m.create_port('A', 'input')
+            >>> inst = m.create_instance(AndGate, 'inst')
+            >>> inst.ports['A'].width  # By default, only 1 bit wide
+            1
+            >>> m.get_neighbors(inst)
+            {'A': {0: []}, 'B': {0: []}, 'Y': {0: []}}
+            >>> m.connect(p_a, inst.ports['A'], new_wire_name='someWire')
+            >>> m.get_neighbors('inst')  # Also accepts instance name
+            {'A': {0: [PortSegment(m.A.0, Signal:x)]}, 'B': {0: []}, 'Y': {0: []}}
+
+            ```
         """
+        instance = self._warn_param_changed(instance, instance_name, 'get_neigbors')
         neighbors: Dict[str, Dict[int, List[PortSegment]]] = {}
-        if instance_name in self.instances:
-            inst = self.instances[instance_name]
-            edges = self.get_edges(instance_name)
-            for pname in edges:
-                neighbors[pname] = {}
-                for idx in edges[pname]:
-                    if inst.ports[pname].is_load:
-                        neighbors[pname][idx] = edges[pname][idx].driver(warn_if_issue=True)
-                    if inst.ports[pname].is_driver:
-                        neighbors[pname][idx] = edges[pname][idx].loads(warn_if_issue=True)
+        edges = self.get_edges(instance)
+        for pname in edges:
+            neighbors[pname] = {}
+            for idx in edges[pname]:
+                if instance.ports[pname].is_load:
+                    neighbors[pname][idx] = edges[pname][idx].driver()
+                if instance.ports[pname].is_driver:
+                    neighbors[pname][idx] = edges[pname][idx].loads()
         return neighbors
 
     def _get_neighboring_instances_directed(self, name: str, get_outgoing: bool) -> Dict[str, Dict[int, List[Union[Instance, Port[Module]]]]]:
@@ -1126,7 +1481,12 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 )
         return insts
 
-    def get_succeeding_instances(self, instance_name: str) -> Dict[str, Dict[int, List[Union[Instance, Port[Module]]]]]:
+    def get_succeeding_instances(
+        self,
+        instance: Union[str, Instance] = None,  # type: ignore[assignment]
+        *,
+        instance_name: Optional[str] = None,
+    ) -> Dict[str, Dict[int, List[Union[Instance, Port[Module]]]]]:
         """
         Retrieves the succeeding instances of a given instance.
 
@@ -1134,14 +1494,39 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         It is needed for various graph-based analyses and algorithms, such as depth-first search or topological sorting.
 
         Args:
-            instance_name (str): The name of the instance for which to retrieve succeeding instances.
+            instance (Union[str, Instance]): The name of the instance for which to retrieve succeeding instances.
+                Alternatively, the instance object itself.
+            instance_name (str): **Deprecated! Use `instance` instead**
+                The name of the instance for which to retrieve succeeding instances.
 
         Returns:
             Dict[str, Dict[int, List[Union[Instance, Port]]]]: A dictionary containing the succeeding instances of the given instance.
-        """
-        return self._get_neighboring_instances_directed(instance_name, get_outgoing=True)
 
-    def get_preceeding_instances(self, instance_name: str) -> Dict[str, Dict[int, List[Union[Instance, Port[Module]]]]]:
+        Example:
+            ```python
+            >>> from netlist_carpentry.utils.gate_lib import AndGate
+            >>> m = Module(name='m')
+            >>> inst1 = m.create_instance(AndGate, 'inst1')
+            >>> inst2 = m.create_instance(AndGate, 'inst2')
+            >>> m.connect(inst1.ports['Y'], inst2.ports['A'])
+            >>> m.get_succeeding_instances(inst2)  # No instances following
+            {}
+            >>> m.get_succeeding_instances(inst1)
+            {'Y': defaultdict(<class 'list'>, {0: [AndGate(§and: m.inst2)]})}
+            >>> m.get_succeeding_instances(inst1)['Y'][0]
+            [AndGate(§and: m.inst2)]
+
+            ```
+        """
+        instance = self._warn_param_changed(instance, instance_name, 'get_succeeding_instances')
+        return self._get_neighboring_instances_directed(instance.name, get_outgoing=True)
+
+    def get_preceeding_instances(
+        self,
+        instance: Union[str, Instance] = None,  # type: ignore[assignment]
+        *,
+        instance_name: Optional[str] = None,
+    ) -> Dict[str, Dict[int, List[Union[Instance, Port[Module]]]]]:
         """
         Retrieves the preceeding instances of a given instance.
 
@@ -1149,12 +1534,32 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         It is needed for various graph-based analyses and algorithms, such as depth-first search or topological sorting.
 
         Args:
-            instance_name (str): The name of the instance for which to retrieve preceeding instances.
+            instance (Union[str, Instance]): The name of the instance for which to retrieve preceeding instances.
+                Alternatively, the instance object itself.
+            instance_name (str): **Deprecated! Use `instance` instead**
+                The name of the instance for which to retrieve preceeding instances.
 
         Returns:
             Dict[str, Dict[int, List[Union[Instance, Port]]]]: A dictionary containing the preceeding instances of the given instance.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry.utils.gate_lib import AndGate
+            >>> m = Module(name='m')
+            >>> inst1 = m.create_instance(AndGate, 'inst1')
+            >>> inst2 = m.create_instance(AndGate, 'inst2')
+            >>> m.connect(inst1.ports['Y'], inst2.ports['A'])
+            >>> m.get_preceeding_instances(inst1)  # No instances before it
+            {}
+            >>> m.get_preceeding_instances(inst2)
+            {'A': defaultdict(<class 'list'>, {0: [AndGate(§and: m.inst1)]})}
+            >>> m.get_preceeding_instances(inst2)['A'][0]
+            [AndGate(§and: m.inst1)]
+
+            ```
         """
-        return self._get_neighboring_instances_directed(instance_name, get_outgoing=False)
+        instance = self._warn_param_changed(instance, instance_name, 'get_preceeding_instances')
+        return self._get_neighboring_instances_directed(instance.name, get_outgoing=False)
 
     def split(self, instance: Union[str, Instance]) -> Dict[NonNegativeInt, Instance]:
         """
@@ -1174,6 +1579,21 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Returns:
             Dict[NonNegativeInt, Instance]: A dictionary, where the key is the bit index
                 and the value is the corresponding 1-bit "instance slice" for this index.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry.utils.gate_factory import and_gate
+            >>> m = Module(name='m')
+            >>> p_a = m.create_port('A', 'input', width=3)
+            >>> inst = and_gate(m, 'and_inst', A=p_a)  # 3 bit wide AND gate
+            >>> m.instances
+            {'and_inst': AndGate(§and: m.and_inst)}
+            >>> m.split(inst)
+            {0: AndGate(§and: m.and_inst_0), 1: AndGate(§and: m.and_inst_1), 2: AndGate(§and: m.and_inst_2)}
+            >>> m.instances
+            {'and_inst_0': AndGate(§and: m.and_inst_0), 'and_inst_1': AndGate(§and: m.and_inst_1), 'and_inst_2': AndGate(§and: m.and_inst_2)}
+
+            ```
         """
         if isinstance(instance, Instance):
             instance = instance.name
@@ -1181,7 +1601,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             raise ObjectNotFoundError(f'No instance {instance} exists in module {self.name}!')
         return self.instances[instance].split()
 
-    def split_all(self, type: str = '', fuzzy: bool = True, recursive: bool = False) -> int:
+    def split_all(self, type: Optional[str] = None, fuzzy: bool = True, recursive: bool = False) -> int:
         """
         Splits all n-bit instances with the given type into n 1-bit instances.
 
@@ -1192,18 +1612,40 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         This will split all DFF, ADFF, DFFE, and ADFFE.
 
         Args:
-            type (str, optional): The instance type, where all instances should be split.
-                If set to '' and fuzzy is True, all instances inside this module are split. Defaults to ''.
+            type (Optional[str], optional): The instance type, where all instances should be split.
+                If None and fuzzy is True, all instances inside this module are split. Defaults to None.
             fuzzy (bool, optional): Whether to perform fuzzy checks.
                 If True, the given type string must only be a substring of the instance type. Defaults to True.
             recursive (bool, optional): Whether to perform split operation in submodules as well. Defaults to False.
 
         Returns:
             int: The number of original instances that were split.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry.utils.gate_factory import and_gate
+            >>> m = Module(name='m')
+            >>> p_a = m.create_port('A', 'input', width=3)
+            >>> inst = and_gate(m, 'and_inst', A=p_a)  # 3 bit wide AND gate
+            >>> m.instances
+            {'and_inst': AndGate(§and: m.and_inst)}
+            >>> m.split_all(type='bad_type')  # No instance of type 'bad_type' exists, hence 0 splittings
+            0
+            >>> m.split_all(type='and', fuzzy=False)  # No instance with type string exactly 'and' exists, hence 0 splittings
+            0
+            >>> m.split_all(type='and', fuzzy=True)  # All instances with type string containing 'and' are split
+            1
+            >>> m.instances
+            {'and_inst_0': AndGate(§and: m.and_inst_0), 'and_inst_1': AndGate(§and: m.and_inst_1), 'and_inst_2': AndGate(§and: m.and_inst_2)}
+            >>> m.split_all()  # Splits all instances that can be split further -> none are left to split
+            0
+
+            ```
         """
         from netlist_carpentry.utils.gate_lib_base_classes import PrimitiveGate
 
         splits = 0
+        type = type if type is not None else ''
         for inst in self.get_instances(type=type, fuzzy=fuzzy):
             if isinstance(inst, PrimitiveGate) and inst.is_primitive and inst.splittable and inst.data_width > 1:
                 LOG.debug(

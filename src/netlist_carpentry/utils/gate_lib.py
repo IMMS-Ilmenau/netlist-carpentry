@@ -12,7 +12,7 @@ This is intended to distinguish primitive gates from user-defined module instanc
 
 import inspect
 import sys
-from typing import Dict, List, Optional, Tuple, Type, Union
+from typing import Callable, Dict, List, Optional, Tuple, Type, Union
 
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
@@ -61,13 +61,13 @@ class Buffer(UnaryGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def get_result(self, s: Signal) -> Signal:
         """
-        Calculates the gate's output signal.
+        Result of a Buffer for a given signal.
 
         For a buffer gate, the output signal is simply the input signal.
         """
-        return {idx: self.signal_in(idx) if self.signal_in(idx).is_defined else Signal.UNDEFINED}
+        return s if s.is_defined else Signal.UNDEFINED
 
 
 class NotGate(UnaryGate, BaseModel):
@@ -88,15 +88,13 @@ class NotGate(UnaryGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = ~{in1};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def get_result(self, s: Signal) -> Signal:
         """
-        Calculates the gate's output signal.
+        Result of a NotGate for a given signal.
 
         For an inverter gate, the output signal is the inverse of the input signal.
         """
-        if self.signal_in(idx).is_defined:
-            return {idx: Signal.HIGH if self.signal_in(idx) is Signal.LOW else Signal.LOW}
-        return {idx: Signal.UNDEFINED}
+        return ~s
 
 
 class PosGate(UnaryGate, BaseModel):
@@ -116,16 +114,16 @@ class PosGate(UnaryGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = +{in1};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
-        For an arithmetic negator gate, the output signal is the two's complement of the input signal.
+        For an arithmetic plus gate, the output signal is the input signal sign-extended.
         """
         if all(self.signal_in(i).is_defined for i in self.input_port.segments):
             int_val = self.input_port.signal_int or 0
-            return SignalArray.from_int(int_val, msb_first=self.output_port.msb_first, fixed_width=self.output_port.width).signals
-        return {idx: Signal.UNDEFINED}
+            return SignalArray.from_int(int_val, msb_first=self.output_port.msb_first, fixed_width=self.output_port.width)
+        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
 
 
 class NegGate(UnaryGate, BaseModel):
@@ -145,7 +143,7 @@ class NegGate(UnaryGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = -{in1};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -154,8 +152,8 @@ class NegGate(UnaryGate, BaseModel):
         if all(self.signal_in(i).is_defined for i in self.input_port.segments):
             int_val = self.input_port.signal_int or 0
             comp_str = Signal.twos_complement(int_val, width=self.output_port.width, msb_first=self.output_port.msb_first)
-            return SignalArray.from_bin(comp_str, msb_first=self.output_port.msb_first, fixed_width=self.output_port.width).signals
-        return {idx: Signal.UNDEFINED}
+            return SignalArray.from_bin(comp_str, msb_first=self.output_port.msb_first, fixed_width=self.output_port.width)
+        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
 
 
 class ReduceAnd(ReduceGate, BaseModel):
@@ -176,18 +174,18 @@ class ReduceAnd(ReduceGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = &{in1};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        """
-        Calculates the gate's output signal.
+    @property
+    def reduce_operation(self) -> Callable[[Signal, Signal], Signal]:
+        """Provides a lambda function for this gate.
+
+        The lambda function takes two signals and executes this gate's operation on both of them.
+        In junction with `functools.reduce()`, this reduces the input signal array down to a single
+        bit by concatenating the operation of this gate bit-by-bit.
 
         For a reduction AND gate, the output signal is HIGH if and only if all input signals are HIGH.
         If any input signal is LOW or undefined, the output signal will be LOW or undefined, respectively.
         """
-        if any(self.signal_in(i) is Signal.LOW for i in self.input_port.segments):
-            return {idx: Signal.LOW}
-        if any(self.signal_in(i).is_undefined for i in self.input_port.segments):
-            return {idx: Signal.UNDEFINED}
-        return {idx: Signal.HIGH}
+        return lambda s1, s2: s1 & s2
 
 
 class ReduceOr(ReduceGate, BaseModel):
@@ -208,19 +206,18 @@ class ReduceOr(ReduceGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = |{in1};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        """
-        Calculates the gate's output signal.
+    @property
+    def reduce_operation(self) -> Callable[[Signal, Signal], Signal]:
+        """Provides a lambda function for this gate.
+
+        The lambda function takes two signals and executes this gate's operation on both of them.
+        In junction with `functools.reduce()`, this reduces the input signal array down to a single
+        bit by concatenating the operation of this gate bit-by-bit.
 
         For a reduction OR gate, the output signal is HIGH if at least one input signal is HIGH.
         If all input signals are LOW or undefined, the output signal will be LOW or undefined, respectively.
         """
-        # In verilog corresponds to: '|wire_vector' (OR reduction)
-        if any(self.signal_in(i) is Signal.HIGH for i in self.input_port.segments):
-            return {idx: Signal.HIGH}
-        if any(self.signal_in(i).is_undefined for i in self.input_port.segments):
-            return {idx: Signal.UNDEFINED}
-        return {idx: Signal.LOW}
+        return lambda s1, s2: s1 | s2
 
 
 class ReduceBool(ReduceGate, BaseModel):
@@ -242,19 +239,18 @@ class ReduceBool(ReduceGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = |{in1};'  # TODO EQY unable to prove equivalence for reduce bools sometimes...
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        """
-        Calculates the gate's output signal.
+    @property
+    def reduce_operation(self) -> Callable[[Signal, Signal], Signal]:
+        """Provides a lambda function for this gate.
+
+        The lambda function takes two signals and executes this gate's operation on both of them.
+        In junction with `functools.reduce()`, this reduces the input signal array down to a single
+        bit by concatenating the operation of this gate bit-by-bit.
 
         For a reduction Boolean gate, the output signal is HIGH if at least one input signal is HIGH.
         If all input signals are LOW or undefined, the output signal will be LOW or undefined, respectively.
         """
-        # In verilog corresponds to: '!(!wire_vector)' (double negation, which has a similar effect like an OR reduction)
-        if any(self.signal_in(i) == Signal.HIGH for i in self.input_port.segments):
-            return {idx: Signal.HIGH}
-        if any(self.signal_in(i).is_undefined for i in self.input_port.segments):
-            return {idx: Signal.UNDEFINED}
-        return {idx: Signal.LOW}
+        return lambda s1, s2: s1 | s2
 
 
 class ReduceXor(ReduceGate, BaseModel):
@@ -275,16 +271,18 @@ class ReduceXor(ReduceGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = ^{in1};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        """
-        Calculates the gate's output signal.
+    @property
+    def reduce_operation(self) -> Callable[[Signal, Signal], Signal]:
+        """Provides a lambda function for this gate.
+
+        The lambda function takes two signals and executes this gate's operation on both of them.
+        In junction with `functools.reduce()`, this reduces the input signal array down to a single
+        bit by concatenating the operation of this gate bit-by-bit.
 
         For a reduction XOR gate, the output signal is HIGH if an odd number of input signals are HIGH.
         If an even number of input signals are HIGH or any input signal is undefined, the output signal will be LOW or undefined, respectively.
         """
-        if any(self.signal_in(i).is_undefined for i in self.input_port.segments):
-            return {idx: Signal.UNDEFINED}
-        return {idx: Signal.HIGH if self.input_port.count_signals(Signal.HIGH) % 2 == 1 else Signal.LOW}
+        return lambda s1, s2: s1 ^ s2
 
 
 class ReduceXnor(ReduceGate, BaseModel):
@@ -305,16 +303,18 @@ class ReduceXnor(ReduceGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = ~^{in1};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        """
-        Calculates the gate's output signal.
+    @property
+    def reduce_operation(self) -> Callable[[Signal, Signal], Signal]:
+        """Provides a lambda function for this gate.
+
+        The lambda function takes two signals and executes this gate's operation on both of them.
+        In junction with `functools.reduce()`, this reduces the input signal array down to a single
+        bit by concatenating the operation of this gate bit-by-bit.
 
         For a reduction XNOR gate, the output signal is HIGH if an even number of input signals are HIGH.
         If an odd number of input signals are HIGH or any input signal is undefined, the output signal will be LOW or undefined, respectively.
         """
-        if any(self.signal_in(i).is_undefined for i in self.input_port.segments):
-            return {idx: Signal.UNDEFINED}
-        return {idx: Signal.HIGH if self.input_port.count_signals(Signal.HIGH) % 2 == 0 else Signal.LOW}
+        return lambda s1, s2: ~(s1 ^ s2)
 
 
 class LogicNot(ReduceGate, BaseModel):
@@ -337,19 +337,24 @@ class LogicNot(ReduceGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = !{in1};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        """
-        Calculates the gate's output signal.
+    @property
+    def reduce_operation(self) -> Callable[[Signal, Signal], Signal]:
+        """**Returns the raw reduction, without the inversion**!
+
+        Provides a lambda function for this gate.
+
+        The lambda function takes two signals and executes this gate's operation on both of them.
+        In junction with `functools.reduce()`, this reduces the input signal array down to a single
+        bit by concatenating the operation of this gate bit-by-bit.
 
         For a logic not gate, the output signal is HIGH if all input signals are LOW.
         The output is LOW, if any input signal is HIGH.
         If there are undefined bits, the result is also UNDEFINED.
         """
-        if any(self.signal_in(i) is Signal.HIGH for i in self.input_port.segments):
-            return {idx: Signal.LOW}
-        if any(self.signal_in(i).is_undefined for i in self.input_port.segments):
-            return {idx: Signal.UNDEFINED}
-        return {idx: Signal.HIGH}
+        return lambda s1, s2: s1 | s2
+
+    def _calc_output(self) -> SignalArray:
+        return ~super()._calc_output()  # Inversion, since it is a logic not
 
 
 class AndGate(BinaryGate, BaseModel):
@@ -370,17 +375,12 @@ class AndGate(BinaryGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} & {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        """
-        Calculates the gate's output signal.
+    def get_result(self, s1: Signal, s2: Signal) -> Signal:
+        """Result of an AND gate for 2 given signals.
 
         For an AND gate, the output signal is HIGH only if both input signals are HIGH.
         """
-        if Signal.LOW in self.signals_in(idx):
-            return {idx: Signal.LOW}
-        if Signal.UNDEFINED in self.signals_in(idx) or Signal.FLOATING in self.signals_in(idx):
-            return {idx: Signal.UNDEFINED}
-        return {idx: Signal.HIGH}
+        return s1 & s2
 
 
 class OrGate(BinaryGate, BaseModel):
@@ -401,17 +401,12 @@ class OrGate(BinaryGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} | {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        """
-        Calculates the gate's output signal.
+    def get_result(self, s1: Signal, s2: Signal) -> Signal:
+        """Result of an OR gate for 2 given signals.
 
         For an OR gate, the output signal is HIGH if either input signal is HIGH.
         """
-        if Signal.HIGH in self.signals_in(idx):
-            return {idx: Signal.HIGH}
-        if Signal.UNDEFINED in self.signals_in(idx) or Signal.FLOATING in self.signals_in(idx):
-            return {idx: Signal.UNDEFINED}
-        return {idx: Signal.LOW}
+        return s1 | s2
 
 
 class XorGate(BinaryGate, BaseModel):
@@ -432,15 +427,12 @@ class XorGate(BinaryGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} ^ {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        """
-        Calculates the gate's output signal.
+    def get_result(self, s1: Signal, s2: Signal) -> Signal:
+        """Result of an XOR gate for 2 given signals.
 
         For an XOR gate, the output signal is HIGH if the input signals are different.
         """
-        if Signal.UNDEFINED in self.signals_in(idx) or Signal.FLOATING in self.signals_in(idx):
-            return {idx: Signal.UNDEFINED}
-        return {idx: Signal.LOW if self.signals_in(idx)[0] is self.signals_in(idx)[1] else Signal.HIGH}
+        return s1 ^ s2
 
 
 class XnorGate(BinaryGate, BaseModel):
@@ -461,15 +453,12 @@ class XnorGate(BinaryGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} ^~ {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        """
-        Calculates the gate's output signal.
+    def get_result(self, s1: Signal, s2: Signal) -> Signal:
+        """Result of an XNOR gate for 2 given signals.
 
         For an XNOR gate, the output signal is HIGH if the input signals are the same.
         """
-        if Signal.UNDEFINED in self.signals_in(idx) or Signal.FLOATING in self.signals_in(idx):
-            return {idx: Signal.UNDEFINED}
-        return {idx: Signal.HIGH if self.signals_in(idx)[0] is self.signals_in(idx)[1] else Signal.LOW}
+        return ~(s1 ^ s2)
 
 
 class NorGate(BinaryGate, BaseModel):
@@ -490,17 +479,12 @@ class NorGate(BinaryGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = ~({in1} | {in2});'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        """
-        Calculates the gate's output signal.
+    def get_result(self, s1: Signal, s2: Signal) -> Signal:
+        """Result of an NOR gate for 2 given signals.
 
         For a NOR gate, the output signal is LOW if either input signal is HIGH.
         """
-        if Signal.HIGH in self.signals_in(idx):
-            return {idx: Signal.LOW}
-        if Signal.UNDEFINED in self.signals_in(idx) or Signal.FLOATING in self.signals_in(idx):
-            return {idx: Signal.UNDEFINED}
-        return {idx: Signal.HIGH}
+        return ~(s1 | s2)
 
 
 class NandGate(BinaryGate, BaseModel):
@@ -521,17 +505,12 @@ class NandGate(BinaryGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = ~({in1} & {in2});'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        """
-        Calculates the gate's output signal.
+    def get_result(self, s1: Signal, s2: Signal) -> Signal:
+        """Result of an NAND gate for 2 given signals.
 
         For a NAND gate, the output signal is LOW only if both input signals are HIGH.
         """
-        if Signal.LOW in self.signals_in(idx):
-            return {idx: Signal.HIGH}
-        if Signal.UNDEFINED in self.signals_in(idx) or Signal.FLOATING in self.signals_in(idx):
-            return {idx: Signal.UNDEFINED}
-        return {idx: Signal.LOW}
+        return ~(s1 & s2)
 
 
 class BitwiseCaseEquality(BinaryGate, BaseModel):
@@ -553,14 +532,12 @@ class BitwiseCaseEquality(BinaryGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} === {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        """
-        Calculates the gate's output signal.
+    def get_result(self, s1: Signal, s2: Signal) -> Signal:
+        """Result of an BITWISE CASE EQUALITY gate for 2 given signals.
 
         For a BITWISE CASE EQUALITY gate, the output signal is HIGH for a certain bit only if both its input signals are HIGH.
         """
-        s1, s2 = self.signals_in(idx)
-        return {idx: Signal.HIGH if s1 is s2 else Signal.LOW}
+        return Signal.HIGH if s1 is s2 else Signal.LOW
 
 
 class ShiftSigned(ShiftGate, BaseModel):
@@ -582,7 +559,7 @@ class ShiftSigned(ShiftGate, BaseModel):
         shift_op = ' << -' if self.b_signed else ' >> '
         return 'assign\t{out} = {in1}' + shift_op + '{in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -590,12 +567,12 @@ class ShiftSigned(ShiftGate, BaseModel):
         if it is positive or unsigned, and shifted left by the number on the right side if it is negative.
         """
         if not self.ports['B'].signal_array.is_defined:
-            return {idx: Signal.UNDEFINED}
+            return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
         val_a = self.ports['A'].signal_array
         val_b = self.ports['B'].signal_array
         shift_left = self.b_signed and self.ports['B'].signal_int is not None and self.ports['B'].signal_int < 0
         out_val = val_a << -int(val_b) if shift_left else val_a >> val_b
-        return out_val.signals
+        return out_val
 
 
 class ShiftLeft(ShiftGate, BaseModel):
@@ -615,20 +592,20 @@ class ShiftLeft(ShiftGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} << {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
         For a SHIFT-LEFT gate, returns its left input shifted left by the number on the right side.
         """
         if not self.ports['B'].signal_array.is_defined:
-            return {idx: Signal.UNDEFINED}
+            return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
         val_a = self.ports['A'].signal_array
         val_b = self.ports['B'].signal_array
         val_a.signed = False
         val_b.signed = False
         out_val = val_a << val_b
-        return out_val.signals
+        return out_val
 
 
 class ShiftRight(ShiftGate, BaseModel):
@@ -648,20 +625,20 @@ class ShiftRight(ShiftGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} >> {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
         For a SHIFT-RIGHT gate, returns its left input shifted right by the number on the right side.
         """
         if not self.ports['B'].signal_array.is_defined:
-            return {idx: Signal.UNDEFINED}
+            return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
         val_a = self.ports['A'].signal_array
         val_b = self.ports['B'].signal_array
         val_a.signed = False
         val_b.signed = False
         out_val = val_a >> val_b
-        return out_val.signals
+        return out_val
 
 
 class ArithmeticShiftLeft(ShiftGate, BaseModel):
@@ -681,16 +658,16 @@ class ArithmeticShiftLeft(ShiftGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} <<< {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
         For a SHIFT-LEFT gate, returns its left input shifted left by the number on the right side.
         """
         if not self.ports['B'].signal_array.is_defined:
-            return {idx: Signal.UNDEFINED}
+            return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
         out_val = self.ports['A'].signal_array << self.ports['B'].signal_array
-        return out_val.signals
+        return out_val
 
 
 class ArithmeticShiftRight(ShiftGate, BaseModel):
@@ -710,16 +687,16 @@ class ArithmeticShiftRight(ShiftGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} >>> {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
         For a SHIFT-RIGHT gate, returns its left input shifted right by the number on the right side.
         """
         if not self.ports['B'].signal_array.is_defined:
-            return {idx: Signal.UNDEFINED}
+            return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
         out_val = self.ports['A'].signal_array >> self.ports['B'].signal_array
-        return out_val.signals
+        return out_val
 
 
 class ShiftX(ShiftGate, BaseModel):
@@ -736,7 +713,7 @@ class ShiftX(ShiftGate, BaseModel):
 
     instance_type: str = f'{CFG.id_internal}shiftx'
 
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self, __context: object) -> None:
         """
         Initializes the gate's ports and connections.
 
@@ -786,8 +763,8 @@ class ShiftX(ShiftGate, BaseModel):
             b = f'$signed({b})'
         return (a, b)
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        return super()._calc_output(idx)  # TODO implement for indexed part-select operator
+    def _calc_output(self) -> SignalArray:
+        return super()._calc_output()  # TODO implement for indexed part-select operator
 
 
 class LogicAnd(BinaryNto1Gate, BaseModel):
@@ -808,7 +785,7 @@ class LogicAnd(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} && {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -818,8 +795,8 @@ class LogicAnd(BinaryNto1Gate, BaseModel):
         sin2 = self.input_ports[1].signal_array
         if sin1.is_defined and sin2.is_defined:
             # Both int(sin1) > 0 and int(sin2) > 0
-            return {idx: Signal.HIGH if int(sin1) and int(sin2) else Signal.LOW}
-        return {idx: Signal.UNDEFINED}
+            return SignalArray(signals={idx: Signal.HIGH if int(sin1) and int(sin2) else Signal.LOW for idx in range(self.data_width)})
+        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
 
 
 class LogicOr(BinaryNto1Gate, BaseModel):
@@ -840,7 +817,7 @@ class LogicOr(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} || {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -850,8 +827,8 @@ class LogicOr(BinaryNto1Gate, BaseModel):
         sin2 = self.input_ports[1].signal_array
         if sin1.is_defined and sin2.is_defined:
             # Either int(sin1) > 0 or int(sin2) > 0
-            return {idx: Signal.HIGH if int(sin1) or int(sin2) else Signal.LOW}
-        return {idx: Signal.UNDEFINED}
+            return SignalArray(signals={idx: Signal.HIGH if int(sin1) or int(sin2) else Signal.LOW for idx in range(self.data_width)})
+        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
 
 
 class LessThan(BinaryNto1Gate, BaseModel):
@@ -872,7 +849,7 @@ class LessThan(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} < {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -881,8 +858,8 @@ class LessThan(BinaryNto1Gate, BaseModel):
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
         if sin1.is_defined and sin2.is_defined:
-            return {idx: Signal.HIGH if int(sin1) < int(sin2) else Signal.LOW}
-        return {idx: Signal.UNDEFINED}
+            return SignalArray(signals={idx: Signal.HIGH if int(sin1) < int(sin2) else Signal.LOW for idx in range(self.data_width)})
+        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
 
 
 class LessEqual(BinaryNto1Gate, BaseModel):
@@ -903,7 +880,7 @@ class LessEqual(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} <= {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -912,8 +889,8 @@ class LessEqual(BinaryNto1Gate, BaseModel):
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
         if sin1.is_defined and sin2.is_defined:
-            return {idx: Signal.HIGH if int(sin1) <= int(sin2) else Signal.LOW}
-        return {idx: Signal.UNDEFINED}
+            return SignalArray(signals={idx: Signal.HIGH if int(sin1) <= int(sin2) else Signal.LOW for idx in range(self.data_width)})
+        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
 
 
 class Equal(BinaryNto1Gate, BaseModel):
@@ -934,7 +911,7 @@ class Equal(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} == {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -944,8 +921,8 @@ class Equal(BinaryNto1Gate, BaseModel):
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
         if sin1.is_defined and sin2.is_defined:
-            return {idx: Signal.HIGH if int(sin1) == int(sin2) else Signal.LOW}
-        return {idx: Signal.UNDEFINED}
+            return SignalArray(signals={idx: Signal.HIGH if int(sin1) == int(sin2) else Signal.LOW for idx in range(self.data_width)})
+        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
 
 
 class CaseEqual(BinaryNto1Gate, BaseModel):
@@ -969,7 +946,7 @@ class CaseEqual(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} === {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -977,7 +954,7 @@ class CaseEqual(BinaryNto1Gate, BaseModel):
         """
         sigs_eq = self.input_ports[0].signal_array == self.input_ports[1].signal_array
         sign_eq = self.input_ports[0].signed == self.input_ports[1].signed
-        return {idx: Signal.HIGH if sigs_eq and sign_eq else Signal.LOW}
+        return SignalArray(signals={idx: Signal.HIGH if sigs_eq and sign_eq else Signal.LOW for idx in range(self.data_width)})
 
 
 class NotEqual(BinaryNto1Gate, BaseModel):
@@ -998,7 +975,7 @@ class NotEqual(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} != {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -1008,8 +985,8 @@ class NotEqual(BinaryNto1Gate, BaseModel):
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
         if sin1.is_defined and sin2.is_defined:
-            return {idx: Signal.HIGH if int(sin1) != int(sin2) else Signal.LOW}
-        return {idx: Signal.UNDEFINED}
+            return SignalArray(signals={idx: Signal.HIGH if int(sin1) != int(sin2) else Signal.LOW for idx in range(self.data_width)})
+        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
 
 
 class CaseNotEqual(BinaryNto1Gate, BaseModel):
@@ -1033,7 +1010,7 @@ class CaseNotEqual(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} !== {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -1041,7 +1018,7 @@ class CaseNotEqual(BinaryNto1Gate, BaseModel):
         """
         sigs_eq = self.input_ports[0].signal_array == self.input_ports[1].signal_array
         sign_eq = self.input_ports[0].signed == self.input_ports[1].signed
-        return {idx: Signal.LOW if sigs_eq and sign_eq else Signal.HIGH}
+        return SignalArray(signals={idx: Signal.LOW if sigs_eq and sign_eq else Signal.HIGH for idx in range(self.data_width)})
 
 
 class GreaterThan(BinaryNto1Gate, BaseModel):
@@ -1062,7 +1039,7 @@ class GreaterThan(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} > {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -1071,8 +1048,8 @@ class GreaterThan(BinaryNto1Gate, BaseModel):
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
         if sin1.is_defined and sin2.is_defined:
-            return {idx: Signal.HIGH if int(sin1) > int(sin2) else Signal.LOW}
-        return {idx: Signal.UNDEFINED}
+            return SignalArray(signals={idx: Signal.HIGH if int(sin1) > int(sin2) else Signal.LOW for idx in range(self.data_width)})
+        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
 
 
 class GreaterEqual(BinaryNto1Gate, BaseModel):
@@ -1093,7 +1070,7 @@ class GreaterEqual(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} >= {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -1102,8 +1079,8 @@ class GreaterEqual(BinaryNto1Gate, BaseModel):
         sin1 = self.input_ports[0].signal_array
         sin2 = self.input_ports[1].signal_array
         if sin1.is_defined and sin2.is_defined:
-            return {idx: Signal.HIGH if int(sin1) >= int(sin2) else Signal.LOW}
-        return {idx: Signal.UNDEFINED}
+            return SignalArray(signals={idx: Signal.HIGH if int(sin1) >= int(sin2) else Signal.LOW for idx in range(self.data_width)})
+        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
 
 
 class Multiplexer(PrimitiveGate, BaseModel):
@@ -1122,7 +1099,7 @@ class Multiplexer(PrimitiveGate, BaseModel):
 
     parameters: MuxParams = MuxParams()
 
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self, __context: object) -> None:
         """
         Initializes the gate's ports and connections.
 
@@ -1329,13 +1306,18 @@ class Multiplexer(PrimitiveGate, BaseModel):
             new_insts[idx] = inst
         return new_insts
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
         For a multiplexer, the output signal is the signal from the selected input port.
         """
-        return {idx: self.active_input.signal_array[idx] if self.active_input.signal_array[idx].is_defined else Signal.UNDEFINED}
+        return SignalArray(
+            signals={
+                idx: self.active_input.signal_array[idx] if self.active_input.signal_array[idx].is_defined else Signal.UNDEFINED
+                for idx in range(self.data_width)
+            }
+        )
 
 
 class Demultiplexer(PrimitiveGate, BaseModel):
@@ -1355,7 +1337,7 @@ class Demultiplexer(PrimitiveGate, BaseModel):
 
     parameters: MuxParams = MuxParams()
 
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self, __context: object) -> None:
         """
         Initializes the gate's ports and connections.
 
@@ -1525,22 +1507,22 @@ class Demultiplexer(PrimitiveGate, BaseModel):
         """
         return 'Y' in port.name and port.is_output
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
         For a demultiplexer, the output signal is the input signal.
         """
-        return {idx: self.input_port.signal_array[idx]}
+        return self.input_port.signal_array
 
-    def _set_output(self, new_signals: Dict[int, Signal]) -> None:
+    def _set_output(self, new_signals: SignalArray) -> None:
         """
         Sets the gate's output signal.
 
         For a demultiplexer, the output signal is set on the active output port.
 
         Args:
-            new_signals (Dict[int, Signal]): A dictionary mapping the new output signal values to the indices of the output port.
+            new_signals (SignalArray): A dictionary mapping the new output signal values to the indices of the output port.
         """
         # Set all undriven outputs to "z": only change the signal on the only active output path
         for y in self.y_ports:
@@ -1578,7 +1560,7 @@ class Adder(ArithmeticGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} + {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -1586,7 +1568,7 @@ class Adder(ArithmeticGate, BaseModel):
         """
         sig1_int, sig2_int = self.inputs_int()
 
-        return SignalArray.from_int(sig1_int + sig2_int, fixed_width=self.output_port.width, truncate=True).signals
+        return SignalArray.from_int(sig1_int + sig2_int, fixed_width=self.output_port.width, truncate=True)
 
 
 class Subtractor(ArithmeticGate, BaseModel):
@@ -1596,7 +1578,7 @@ class Subtractor(ArithmeticGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} - {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -1604,7 +1586,7 @@ class Subtractor(ArithmeticGate, BaseModel):
         """
         sig1_int, sig2_int = self.inputs_int()
 
-        return SignalArray.from_int(sig1_int - sig2_int, fixed_width=self.output_port.width, truncate=True).signals
+        return SignalArray.from_int(sig1_int - sig2_int, fixed_width=self.output_port.width, truncate=True)
 
 
 class Multiplier(ArithmeticGate, BaseModel):
@@ -1614,7 +1596,7 @@ class Multiplier(ArithmeticGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} * {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -1622,7 +1604,7 @@ class Multiplier(ArithmeticGate, BaseModel):
         """
         sig1_int, sig2_int = self.inputs_int()
 
-        return SignalArray.from_int(sig1_int * sig2_int, fixed_width=self.output_port.width, truncate=True).signals
+        return SignalArray.from_int(sig1_int * sig2_int, fixed_width=self.output_port.width, truncate=True)
 
 
 class Divider(ArithmeticGate, BaseModel):
@@ -1632,7 +1614,7 @@ class Divider(ArithmeticGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} / {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -1640,7 +1622,7 @@ class Divider(ArithmeticGate, BaseModel):
         """
         sig1_int, sig2_int = self.inputs_int()
 
-        return SignalArray.from_int(int(sig1_int / sig2_int), fixed_width=self.output_port.width, truncate=True).signals
+        return SignalArray.from_int(int(sig1_int / sig2_int), fixed_width=self.output_port.width, truncate=True)
 
 
 class Modulo(ArithmeticGate, BaseModel):
@@ -1650,7 +1632,7 @@ class Modulo(ArithmeticGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} % {in2};'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -1658,7 +1640,7 @@ class Modulo(ArithmeticGate, BaseModel):
         """
         sig1_int, sig2_int = self.inputs_int()
 
-        return SignalArray.from_int(sig1_int % sig2_int, fixed_width=self.output_port.width, truncate=True).signals
+        return SignalArray.from_int(sig1_int % sig2_int, fixed_width=self.output_port.width, truncate=True)
 
 
 class Exponentiator(ArithmeticGate, BaseModel):
@@ -1692,7 +1674,7 @@ class Exponentiator(ArithmeticGate, BaseModel):
             return result if result < (1 << self.y_width - 1) else result - (1 << self.y_width)
         return result
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -1704,8 +1686,8 @@ class Exponentiator(ArithmeticGate, BaseModel):
         """
         pow_sig = self._verilog_pow()
         if pow_sig is not None:
-            return SignalArray.from_int(pow_sig, fixed_width=self.output_port.width, truncate=True).signals
-        return {i: Signal.UNDEFINED for i, _ in self.output_port}
+            return SignalArray.from_int(pow_sig, fixed_width=self.output_port.width, truncate=True)
+        return SignalArray(signals={i: Signal.UNDEFINED for i, _ in self.output_port for idx in range(self.data_width)})
 
 
 class DFF(ClkMixin, StorageGate, BaseModel):
@@ -1799,8 +1781,7 @@ class DFF(ClkMixin, StorageGate, BaseModel):
     def _evaluate(self) -> None:
         if self._ff_should_update():
             for i in range(self.data_width):
-                new_signals = self._calc_output(idx=i)
-                self._set_output(new_signals=new_signals)
+                self._set_output(new_signals=self._calc_output())
 
     def _ff_should_update(self) -> bool:
         clk_corr_pol = self.clk_port.signal is self.clk_polarity
@@ -1808,7 +1789,7 @@ class DFF(ClkMixin, StorageGate, BaseModel):
         self.prev_signals = self.signals
         return should_update
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal.
 
@@ -1821,7 +1802,11 @@ class DFF(ClkMixin, StorageGate, BaseModel):
         Returns:
             Signal: The output signal value.
         """
-        return {idx: self.input_port[idx].signal if self.input_port[idx].signal.is_defined else Signal.UNDEFINED}
+        return SignalArray(
+            signals={
+                idx: self.input_port[idx].signal if self.input_port[idx].signal.is_defined else Signal.UNDEFINED for idx in range(self.data_width)
+            }
+        )
 
 
 class ADFF(RstMixin, DFF):  # type: ignore[misc]
@@ -1854,10 +1839,10 @@ class ADFFE(DFFE, ADFF):  # type: ignore[misc]
     def verilog_template(self) -> str:
         return super().verilog_template.replace('begin\n\t\tif ({en}) begin\n\t\t{set_out}\n\tend', 'if ({en}) begin\n\t\t{set_out}')
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         if self.rst_port.signal is self.rst_polarity:
-            return {idx: self.rst_val[idx]}
-        return super()._calc_output(idx)
+            return SignalArray(signals={idx: self.rst_val[idx] for idx in range(self.data_width)})
+        return super()._calc_output()
 
 
 class SDFF(RstMixin, DFF):  # type: ignore[misc]
@@ -1886,12 +1871,12 @@ class SDFFCE(EnMixin, SDFF):  # type: ignore[misc]
     def verilog_template(self) -> str:
         return 'always @({header}) begin\n\tif ({en}) begin\n\t\tif ({is_rst}) begin\n\t\t\t{rst_out}\n\t\tend else begin\n\t\t\t{set_out}\n\t\tend\n\tend\nend'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         if self.en_port.signal is self.en_polarity:
             if self.rst_port.signal is self.rst_polarity:
-                return {idx: self.rst_val[idx]}
-            return super()._calc_output(idx)
-        return {idx: self.output_port.signal_array[idx]}
+                return SignalArray(signals={idx: self.rst_val[idx] for idx in range(self.data_width)})
+            return super()._calc_output()
+        return SignalArray(signals={idx: self.output_port.signal_array[idx] for idx in range(self.data_width)})
 
 
 class SDFFE(EnMixin, SDFF):  # type: ignore[misc]
@@ -1903,12 +1888,12 @@ class SDFFE(EnMixin, SDFF):  # type: ignore[misc]
     def verilog_template(self) -> str:
         return 'always @({header}) begin\n\tif ({is_rst}) begin\n\t\t{rst_out}\n\tend else if ({en}) begin\n\t\t{set_out}\n\tend\nend'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         if self.rst_port.signal is self.rst_polarity:
-            return {idx: self.rst_val[idx]}
+            return SignalArray(signals={idx: self.rst_val[idx] for idx in range(self.data_width)})
         if self.en_port.signal is self.en_polarity:
-            return super()._calc_output(idx)
-        return {idx: self.output_port.signal_array[idx]}
+            return super()._calc_output()
+        return SignalArray(signals={idx: self.output_port.signal_array[idx] for idx in range(self.data_width)})
 
 
 class ALDFF(LoadMixin, DFF):  # type: ignore[misc]
@@ -1931,12 +1916,12 @@ class ALDFFE(EnMixin, ALDFF):  # type: ignore[misc]
     def verilog_template(self) -> str:
         return 'always @({header}) begin\n\tif ({is_al}) begin\n\t\t{ad}\n\tend else if ({en}) begin\n\t\t{set_out}\n\tend\nend'
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         if self.al_port.signal is self.load_polarity:
-            return {idx: self.load_val[idx]}
+            return SignalArray(signals={idx: self.load_val[idx] for idx in range(self.data_width)})
         if self.en_port.signal is self.en_polarity:
-            return super()._calc_output(idx)
-        return {idx: self.output_port[idx].signal}
+            return super()._calc_output()
+        return SignalArray(signals={idx: self.output_port[idx].signal for idx in range(self.data_width)})
 
 
 class DFFSR(SRMixin, DFF):  # type: ignore[misc]
@@ -1954,7 +1939,7 @@ class DFFSR(SRMixin, DFF):  # type: ignore[misc]
     def _evaluate(self) -> None:
         for i in range(self.data_width):
             if self._ff_should_update(i):
-                new_signals = self._calc_output(idx=i)
+                new_signals = {i: self._calc_output().signals[i]}
                 self._set_output(new_signals=new_signals)
         self._prev_signals_sr = self.signals
 
@@ -1975,21 +1960,25 @@ class DFFSRE(EnMixin, DFFSR):  # type: ignore[misc]
     def verilog_template(self) -> str:
         return 'always @({header}) begin\n\tif ({is_clr}) begin\n\t\t{clr_out}\n\tend else if ({is_set}) begin\n\t\t{set_out}\n\tend else if ({en}) begin\n\t\t{d_out}\n\tend\nend'
 
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self, __context: object) -> None:
         super().model_post_init(__context)
         if self.width > 1:  # EnMixin initializes EN port as 1 bit wide, so we have to extend it manually here if required
             self.connect('EN', None, direction=Direction.IN, width=self.width - 1, index=1)
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        if self.clr_port[idx].signal is self.clr_polarity:
-            return {idx: Signal.LOW}
-        if self.set_port[idx].signal is self.set_polarity:
-            return {idx: Signal.HIGH}
-        if self.en_port[idx].signal.is_undefined or (self.en_port[idx].signal is self.en_polarity and self.input_port[idx].signal.is_undefined):
-            return {idx: Signal.UNDEFINED}
-        if self.en_port[idx].signal is self.en_polarity:
-            return {idx: self.input_port[idx].signal}
-        return {idx: self.output_port[idx].signal}
+    def _calc_output(self) -> SignalArray:
+        signals = {}
+        for idx in range(self.data_width):
+            if self.clr_port[idx].signal is self.clr_polarity:
+                signals[idx] = Signal.LOW
+            elif self.set_port[idx].signal is self.set_polarity:
+                signals[idx] = Signal.HIGH
+            elif self.en_port[idx].signal.is_undefined or (self.en_port[idx].signal is self.en_polarity and self.input_port[idx].signal.is_undefined):
+                signals[idx] = Signal.UNDEFINED
+            elif self.en_port[idx].signal is self.en_polarity:
+                signals[idx] = self.input_port[idx].signal
+            else:
+                signals[idx] = self.output_port[idx].signal
+        return SignalArray(signals=signals)
 
     def set_en(self, new_signal: SignalOrLogicLevel, idx: Union[int, List[int]] = 0) -> None:
         """
@@ -2038,20 +2027,10 @@ class DLatch(EnMixin, StorageGate, BaseModel):
         assignments = f'\t\t{self.p2v(self.output_port, exclude_indices)} = {self.p2v(self.input_port, exclude_indices)};'
         return self.verilog_template.format(en=en, assignments=assignments)
 
-    def evaluate(self) -> None:
-        """
-        Evaluates the gate's output signal.
-
-        This method is called when the gate's input signals change, and it updates the gate's output signal accordingly.
-        """
-        for i in range(self.data_width):
-            new_signals = self._calc_output(idx=i)
-            self._set_output(new_signals=new_signals)
-
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         if self.en_signal == self.en_polarity:
-            return {idx: self.input_port.signal_array[idx]}
-        return {idx: self.output_port.signal_array[idx]}
+            return SignalArray(signals={idx: self.input_port.signal_array[idx] for idx in range(self.data_width)})
+        return SignalArray(signals={idx: self.output_port.signal_array[idx] for idx in range(self.data_width)})
 
 
 def get(instance_type: str) -> Union[type[PrimitiveGate], None]:

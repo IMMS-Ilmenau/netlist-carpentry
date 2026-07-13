@@ -9,7 +9,8 @@ See the gate_lib.py module for further information.
 """
 
 import warnings
-from typing import Dict, Iterable, List, Literal, Optional, Tuple, Union
+from functools import reduce
+from typing import Callable, Dict, Iterable, List, Literal, Optional, Tuple, Union
 
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
@@ -19,6 +20,7 @@ from netlist_carpentry.core.exceptions import EvaluationError, ObjectNotFoundErr
 from netlist_carpentry.core.netlist_elements.port import ANY_PORT
 from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2OBJ, WIRE_SEGMENT_X, WireSegment
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
+from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.gate_lib_dataclasses import (
     BinaryParams,
     DFFParams,
@@ -241,11 +243,18 @@ class PrimitiveGate(Instance, BaseModel):
                 Defaults to 0.
 
         Example:
+            >>> from netlist_carpentry.utils.gate_factory import and_gate
+            >>> module = Module(name='m')
+            >>> a = module.create_port('a', 'input', width=6)
+            >>> instance = and_gate(module, 'inst', A=a)
             >>> # This sets the value of bit 0 of port A to HIGH
-            >>> instance.set("A", 1, 0)
-            >>>
+            >>> instance.set('A', 1, 0)
+            >>> instance.ports['A'].signal_str
+            'xxxxx1'
             >>> # This sets the value of bits 1, 3 and 5 of port A to LOW, leaving the other bits as they already are.
-            >>> instance.set("A", 0, [1, 3, 5])
+            >>> instance.set('A', 0, [1, 3, 5])
+            >>> instance.ports['A'].signal_str
+            '0x0x01'
         """
         if isinstance(idx, int):
             idx = [idx]
@@ -258,12 +267,9 @@ class PrimitiveGate(Instance, BaseModel):
 
         This method is called when the gate's input signals change, and it updates the gate's output signal accordingly.
         """
-        new_signals = {}
-        for i in range(self.data_width):
-            new_signals.update(self._calc_output(i))
-        self._set_output(new_signals=new_signals)
+        self._set_output(new_signals=self._calc_output())
 
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self) -> SignalArray:
         """
         Calculates the gate's output signal based on its input signals.
 
@@ -271,14 +277,14 @@ class PrimitiveGate(Instance, BaseModel):
         """
         raise NotImplementedError(f'Not implemented for objects of type {type(self)}')
 
-    def _set_output(self, new_signals: Dict[int, Signal]) -> None:
+    def _set_output(self, new_signals: SignalArray) -> None:
         """
         Sets the gate's output signal.
 
         This method is called when the gate's output signal needs to be updated, and it sets the gate's output signal to the specified value.
 
         Args:
-            new_signals (Dict[int, Signal]): A dictionary mapping the new output signal values to the indices of the output port.
+            new_signals (SignalArray): A dictionary mapping the new output signal values to the indices of the output port.
         """
         for idx, sig in new_signals.items():
             self.output_port.set_signal(signal=sig, index=idx)
@@ -312,7 +318,7 @@ class UnaryGate(PrimitiveGate, BaseModel):
 
     parameters: UnaryParams = UnaryParams()
 
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self, __context: object) -> None:
         """
         Initializes the gate's ports and connections.
 
@@ -375,6 +381,32 @@ class UnaryGate(PrimitiveGate, BaseModel):
             return self.verilog_template.format(out=self.verilog_net_map['Y'], in1=self._check_signal_signed(self.verilog_net_map['A']))
         return ''
 
+    @property
+    def truth_table(self) -> Dict[Signal, Signal]:
+        """A simple truth table as a dictionary.
+
+        This dictionary contains the input-output mapping for unary gates that evaluate bitwise
+        (e.g. Buffer, NotGate). Not implemented for arithmetic gates (e.g. NegGate, PosGate).
+        """
+        return {s: self.get_result(s) for s in Signal}
+
+    def get_result(self, s: Signal) -> Signal:
+        """Returns the result of this gate's operation for given Signal s.
+
+        This method is only implemented for bitwise evaluating gates (e.g. Buffer, NotGate).
+        This method raises an UnsupportedOperationError if used on arithmetic gates (e.g. PosGate, NegGate).
+
+        Args:
+            s (Signal): The Signal, i.e. the input operand.
+
+        Raises:
+            UnsupportedOperationError: For gates that do not evaluate bitwise (e.g. arithmetic gates).
+
+        Returns:
+            Signal: The result of this gate's operation on the given signals.
+        """
+        raise UnsupportedOperationError(f'{self.__class__.__name__}.get_result() is not supported: Valid operation missing!')
+
     def update_parameters(self) -> None:
         super().update_parameters()
         self.parameters.A_WIDTH = self.ports['A'].width
@@ -398,6 +430,9 @@ class UnaryGate(PrimitiveGate, BaseModel):
             Signal: The output signal of the gate.
         """
         return self.output_port.signal_array[idx]
+
+    def _calc_output(self) -> SignalArray:
+        return SignalArray(signals={idx: self.truth_table[self.signal_in(idx)] for idx in range(self.data_width)})
 
 
 class _Out1BitMixin(PrimitiveGate):
@@ -428,7 +463,7 @@ class ReduceGate(_Out1BitMixin, UnaryGate):
 
     parameters: UnaryParams = UnaryParams()
 
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self, __context: object) -> None:
         """
         Initializes the gate's ports and connections.
 
@@ -459,9 +494,23 @@ class ReduceGate(_Out1BitMixin, UnaryGate):
         in1 = self.verilog_net_map['A']
         return self.verilog_template.format(out=out, in1=in1) if out != "1'bx" else ''
 
+    @property
+    def reduce_operation(self) -> Callable[[Signal, Signal], Signal]:
+        """Provides a lambda function for this gate.
+
+        The lambda function takes two signals and executes this gate's operation on both of them.
+        In junction with `functools.reduce()`, this reduces the input signal array down to a single
+        bit by concatenating the operation of this gate bit-by-bit.
+        """
+        raise UnsupportedOperationError(f"'{self.__class__.__name__}.reduce_operation' is not supported: Valid operation missing!")
+
     def signal_out(self) -> Signal:  # type: ignore[override]
         """The output signal of the gate."""
         return self.output_port.signal
+
+    def _calc_output(self) -> SignalArray:
+        signals = {idx: reduce(self.reduce_operation, self.input_port.signal_array.signals.values()) for idx in range(self.data_width)}
+        return SignalArray(signals=signals)
 
 
 class BinaryGate(PrimitiveGate, BaseModel):
@@ -474,7 +523,7 @@ class BinaryGate(PrimitiveGate, BaseModel):
 
     parameters: BinaryParams = BinaryParams()
 
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self, __context: object) -> None:
         """
         Initializes the gate's ports and connections.
 
@@ -547,6 +596,33 @@ class BinaryGate(PrimitiveGate, BaseModel):
             return self.verilog_template.format(out=out, in1=in1, in2=in2)
         return ''
 
+    @property
+    def truth_table(self) -> Dict[Tuple[Signal, Signal], Signal]:
+        """A simple truth table as a dictionary.
+
+        This dictionary contains the input-output mapping for unary gates that evaluate bitwise
+        (e.g. AndGate, OrGate). Not implemented for arithmetic gates (e.g. Adder).
+        """
+        return {(s1, s2): self.get_result(s1, s2) for s1 in Signal for s2 in Signal}
+
+    def get_result(self, s1: Signal, s2: Signal) -> Signal:
+        """Returns the result of this gate's operation for given Signals s1 and s2.
+
+        This method is only implemented for bitwise evaluating gates (e.g. AndGate, OrGate).
+        This method raises an UnsupportedOperationError if used on other gates (e.g. Adder).
+
+        Args:
+            s1 (Signal): The first Signal, i.e. the first operand.
+            s2 (Signal): The second Signal, i.e. the second operand.
+
+        Raises:
+            UnsupportedOperationError: For gates that do not evaluate bitwise (e.g. arithmetic gates).
+
+        Returns:
+            Signal: The result of this gate's operation on the given signals.
+        """
+        raise UnsupportedOperationError(f'{self.__class__.__name__}.get_result() is not supported: Valid operation missing!')
+
     def update_parameters(self) -> None:
         super().update_parameters()
         self.parameters.A_WIDTH = self.ports['A'].width
@@ -579,6 +655,10 @@ class BinaryGate(PrimitiveGate, BaseModel):
             Signal: The output signal of the gate.
         """
         return self.output_port.signal_array[idx]
+
+    def _calc_output(self) -> SignalArray:
+        """Calculates the gate's output signal."""
+        return SignalArray(signals={idx: self.truth_table[self.signals_in(idx)] for idx in range(self.data_width)})
 
 
 class ShiftGate(BinaryGate, BaseModel):
@@ -634,15 +714,6 @@ class ArithmeticGate(BinaryGate, BaseModel):
             b = f'$signed({b})'
         return (a, b)
 
-    def evaluate(self) -> None:
-        """
-        Evaluates the gate's output signal based on its input signals.
-
-        This method is called when the gate's input signals change, and it updates the gate's output signal accordingly.
-        """
-        new_signal_array = self._calc_output()
-        self._set_output(new_signals=new_signal_array)
-
     def _unused_idx(self) -> List[int]:
         unused_bits = []
         if any(self.ports['Y'][i].is_unconnected for i in self.ports['Y'].segments):
@@ -691,7 +762,7 @@ class ArithmeticGate(BinaryGate, BaseModel):
 class BinaryNto1Gate(_Out1BitMixin, BinaryGate, BaseModel):
     parameters: BinaryParams = BinaryParams()
 
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self, __context: object) -> None:
         """
         Initializes the gate's ports and connections.
 
@@ -720,15 +791,11 @@ class BinaryNto1Gate(_Out1BitMixin, BinaryGate, BaseModel):
         # Check whether output is connected, do not transform if output port is unconnected
         return self.verilog_template.format(out=out, in1=in1, in2=in2) if out != "1'bx" else ''
 
-    def evaluate(self) -> None:
-        new_signal = self._calc_output()
-        self._set_output(new_signals=new_signal)
-
 
 class StorageGate(PrimitiveGate, BaseModel):
     parameters: DFFParams = DFFParams()
 
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self, __context: object) -> None:
         """
         Initializes the gate's ports and connections.
 

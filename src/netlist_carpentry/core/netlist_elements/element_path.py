@@ -21,14 +21,16 @@ class ElementPath(BaseModel):
         ```python
         >>> element_path = PortPath(raw="top_module.sub_module.port1")
         >>> print(element_path)
-        "PortPath(top_module.sub_module.port1)"
+        PortPath(top_module.sub_module.port1)
+
         ```
 
     Example 2:
         ```python
-        >>> element_path = InstancePath(raw="top_module/sub_module/instance1", separator='/')
+        >>> element_path = InstancePath(raw="top_module/sub_module/instance1", sep='/')
         >>> print(element_path)
-        "InstancePath(top_module/sub_module/instance1)"
+        InstancePath(top_module/sub_module/instance1)
+
         ```
     """
 
@@ -129,13 +131,15 @@ class ElementPath(BaseModel):
             >>> element_path = PortPath(raw="top_module.sub_module.port1")
             >>> print(element_path.hierarchy_level)
             2
+
             ```
 
         Example 2:
             ```python
-            >>> element_path = InstancePath(raw="top_module/instance1", separator='/')
+            >>> element_path = InstancePath(raw="top_module/instance1", sep='/')
             >>> print(element_path.hierarchy_level)
             1
+
             ```
 
         Example 3:
@@ -143,6 +147,7 @@ class ElementPath(BaseModel):
             >>> element_path = ElementPath(raw="")
             >>> print(element_path.hierarchy_level)
             -1
+
             ```
         """
         return len(self) - 1
@@ -237,20 +242,15 @@ class ElementPath(BaseModel):
             >>> element_path = PortPath(raw="top_module.sub_module.port1")
             >>> print(element_path.get(-1))
             port1
+
             ```
 
         Example 2:
             ```python
-            >>> element_path = InstancePath(raw="top_module/instance1", separator='/')
+            >>> element_path = InstancePath(raw="top_module/instance1", sep='/')
             >>> print(element_path.get(0))
             top_module
-            ```
 
-        Example 3:
-            ```python
-            >>> element_path = InstancePath(raw="top_module/instance1", separator='/')
-            >>> print(element_path.get(-69420))
-            ""
             ```
         """
         try:

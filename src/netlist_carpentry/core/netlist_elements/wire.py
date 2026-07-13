@@ -22,7 +22,7 @@ from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DIC
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
-from netlist_carpentry.core.protocols.signals import LogicLevel, SignalDict, SignalOrLogicLevel
+from netlist_carpentry.core.protocols.signals import LogicLevel, SignalOrLogicLevel
 from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.gate_lib_dataclasses import WireParams
@@ -225,7 +225,7 @@ class Wire(NetlistElement, BaseModel):
     @property
     def signed(self) -> bool:
         # Normally, signed should only be either 0 or 1, but treat non-zero cases as signed (e.g. '1'/'0' or True/False)
-        return 'signed' in self.parameters and int(self.parameters['signed']) != 0
+        return int(self.parameters.signed or 0) != 0
 
     @property
     def unsigned(self) -> bool:
@@ -377,20 +377,22 @@ class Wire(NetlistElement, BaseModel):
     @overload
     def set_signals(self, signal: str) -> None: ...
     @overload
-    def set_signals(self, signal: SignalDict) -> None: ...
-    def set_signals(self, signal: Union[int, str, SignalDict]) -> None:
+    def set_signals(self, signal: SignalArray) -> None: ...
+    def set_signals(self, signal: Union[int, str, SignalArray]) -> None:
         if isinstance(signal, int):
-            signal = SignalArray.from_int(signal, msb_first=self.msb_first, fixed_width=self.width).signals
-        if isinstance(signal, str):
-            signal = SignalArray.from_bin(signal, msb_first=self.msb_first, fixed_width=self.width).signals
-        for idx, sig in signal.items():
+            signal_array = SignalArray.from_int(signal, msb_first=self.msb_first, fixed_width=self.width)
+        elif isinstance(signal, str):
+            signal_array = SignalArray.from_bin(signal, msb_first=self.msb_first, fixed_width=self.width)
+        else:
+            signal_array = signal
+        for idx, sig in signal_array.items():
             if self.offset is not None:
                 self[idx + self.offset].set_signal(sig)
             else:
                 raise IndexError(f'Cannot set signals on wire {self.raw_path}, since it does not have any segments!')
 
     def set_signed(self, signed: bool) -> None:
-        self.parameters['signed'] = int(signed)
+        self.parameters.signed = int(signed)
 
     def driver(self) -> Dict[int, Optional[PortSegment]]:
         """
@@ -585,4 +587,4 @@ class Wire(NetlistElement, BaseModel):
         return f'{self.__class__.__name__} "{self.name}" with path {self.path.raw} ({self.width} bit(s) wide)'
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({self.name} at {self.path.raw})'
+        return f'{self.__class__.__name__}({self.name}, {self.width} bit)'

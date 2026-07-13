@@ -27,7 +27,17 @@
   - Default Yosys command is 'yosys', which is the standard way to start Yosys in the command line
   - If 'yosys' does not start Yosys or the command is not found, Netlist Carpentry now falls back to using 'yowasp-yosys'
   - `ReadConfig.yosys_executable` returns the command used to start Yosys, which references the current `CFG.yosys_executable` - if 'yosys' does not work, `CFG.yosys_executable` now automatically references 'yowasp-yosys'
-
+- `UnaryGate.get_result(Signal)` and `BinaryGate.get_result(Signal, Sigal)`, which returns the result (i.e. the output signal) for the given signal or signal combination
+  - `UnaryGate.get_result(Signal.HIGH)` will return what happens if the input of the unary gate is 1
+  - `BinaryGate.get_result(Signal.HIGH, Signal.LOW)` will return what happens if the first input of the binary gate is 1 and the second input is 0
+  - Not yet implemented for reduction gates (UnaryGate with single-bit output) and logic gates (BinaryGate with single-bit output)
+  - Arithmetic gates (e.g. `NegGate`) raise an `UnsupportedOperationError` as they are not evaluated bitwise and a truth table does not really make sense in such case
+- `UnaryGate.truth_table` and `BinaryGate.truth_table`, which is a dictionary of signals/signal combinations
+  - `UnaryGate.truth_table[Signal.HIGH]` is equivalent to `UnaryGate.get_result(Signal.HIGH)`
+  - `BinaryGate.truth_table[(Signal.HIGH, Signal.LOW)]` is equivalent to `BinaryGate.get_result(Signal.HIGH, Signal.LOW)`
+  - Not yet implemented for reduction gates (UnaryGate with single-bit output) and logic gates (BinaryGate with single-bit output)
+- Reduction gates received a property `reduce_operation` that returns a lambda function modeling the reduction functionality of the gate
+- Added lots of code examples to the docstrings - code examples are tested via doctest (as part of the pytest run) when running tox
 
 ## FIXED
 - Fixed bug in signal evaluation process for DFFs with Enable, that arose whenever the Enable signal is undefined
@@ -37,6 +47,10 @@
   - If one port for an AND gate is given with width=4, and another is given with width=8, no assumption is made (default width of 1 is used)
   - This does not apply for gates with fixed port widths (e.g. CLK/RST port of a DFF or output of reduction gates, which always are 1 bit wide)
 - Fixed lots of issues arising when using Netlist Carpentry on Windows
+- Updated and fixed lots of docstrings
+- Fixed `repr(Port)`, now also shows the direction (if given) and port width
+- Fixed `repr(Wire)`, now also shows wire width
+- Fixed `repr(WireSegment)` for constant wire segments, now showing explicit `"Tied to <value>"`
 
 ## CHANGED
 - `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.ARST_POLARITY` → `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.RST_POLARITY`
@@ -56,6 +70,16 @@
   - `netlist_carpentry.io.read.yosys.netlist_types.YosysPortDirections` → `netlist_carpentry.io.read.yosys.netlist_types.PortDirections`
   - Moved most of `YosysNetlistReader._build_...()` methods to the corresponding classes in `netlist_carpentry.io.read.yosys.netlist_types`
   - Previous classes `PortAttributes`, `YosysCell`, `Netnames`, and `PortDirections` can still be referenced but show a deprecation warning
+- `PrimitiveGate._calc_output()` now returns `SignalArray` objects instead of `Dict[int, Signal]` for better handling
+- `PrimitiveGate._calc_output()` no longer takes an index (the array is now calculated directly)
+- `PrimitiveGate._calc_output()` now takes a `SignalArray` object instead of a `Dict[int, Signal]`
+- Adjusted parameter `instance_name` on some methods in the `Module` class, it is now called `instance` and accepts a string or an `Instance` object for these methods:
+  - `Module.get_outgoing_edges()`
+  - `Module.get_incoming_edges()`
+  - `Module.get_neighbors()`
+  - `Module.get_succeeding_instances()`
+  - `Module.get_preceeding_instances()`
+  - Previous calls with `instance_name=<value>` still work, but show a deprecation warning
 
 
 # Older Versions

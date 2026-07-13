@@ -36,7 +36,7 @@ from netlist_carpentry.core.netlist_elements.element_path import PortPath, WireP
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT, NESTED_DICT
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
-from netlist_carpentry.core.protocols.signals import LogicLevel, SignalDict, SignalOrLogicLevel
+from netlist_carpentry.core.protocols.signals import LogicLevel, SignalOrLogicLevel
 from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.gate_lib_dataclasses import PortParams
@@ -654,13 +654,15 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
     @overload
     def set_signals(self, signal: str) -> None: ...
     @overload
-    def set_signals(self, signal: SignalDict) -> None: ...
-    def set_signals(self, signal: Union[int, str, SignalDict]) -> None:
+    def set_signals(self, signal: SignalArray) -> None: ...
+    def set_signals(self, signal: Union[int, str, SignalArray]) -> None:
         if isinstance(signal, int):
-            signal = SignalArray.from_int(signal, msb_first=self.msb_first, fixed_width=self.width).signals
-        if isinstance(signal, str):
-            signal = SignalArray.from_bin(signal, msb_first=self.msb_first, fixed_width=self.width).signals
-        for idx, sig in signal.items():
+            signal_array = SignalArray.from_int(signal, msb_first=self.msb_first, fixed_width=self.width)
+        elif isinstance(signal, str):
+            signal_array = SignalArray.from_bin(signal, msb_first=self.msb_first, fixed_width=self.width)
+        else:
+            signal_array = signal
+        for idx, sig in signal_array.items():
             if self.offset is not None:
                 self[idx + self.offset].set_signal(sig)
             else:
@@ -678,13 +680,17 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Example:
             ```python
-            >>> sig_a = Signal.HIGH
-            >>> sig_b = Signal.LOW
-            >>> some_port.set_signal(sig_a, index=0)
-            >>> some_port.set_signal(sig_a, index=1)
-            >>> some_port.set_signal(sig_b, index=2)
-            >>> print(some_port.count_signals(Signal.HIGH))
+            >>> from netlist_carpentry import Module
+            >>> module = Module(name='m')
+            >>> port = module.create_port('p', direction='input', width=3)
+            >>> port.set_signal(Signal.HIGH, index=0)
+            >>> port.set_signal(Signal.HIGH, index=1)
+            >>> port.set_signal(Signal.LOW, index=2)
+            >>> port.count_signals(Signal.HIGH)
             2
+            >>> port.count_signals(Signal.LOW)
+            1
+
             ```
         """
         return len([sig for sig in self.signal_array.values() if sig == target_signal])
@@ -826,4 +832,5 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         return f'{self.__class__.__name__} "{self.name}" with path {self.path.raw} ({self.direction.value} port)'
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({self.name} at {self.path.raw})'
+        direction = str(self.direction) + ' ' if self.direction.is_defined else ''
+        return f'{self.__class__.__name__}({direction}{self.name}, {self.width} bit)'

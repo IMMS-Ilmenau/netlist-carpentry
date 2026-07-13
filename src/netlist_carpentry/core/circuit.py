@@ -166,6 +166,19 @@ class Circuit(BaseModel):
 
         Returns:
             Module: The module that was added.
+
+        Example:
+            ```python
+            >>> circuit = Circuit(name='c')
+            >>> module = Module(name='m')
+            >>> circuit.modules
+            {}
+            >>> circuit.add_module(module)  # Adds and returns the module
+            Module(m)
+            >>> circuit.modules
+            {'m': Module(m)}
+
+            ```
         """
         module._circuit = self
         self._add_module_instances(module)
@@ -196,6 +209,30 @@ class Circuit(BaseModel):
 
         Returns:
             Dict[ModuleName, Module]: A dict of all module names and modules from the given circuit that were added to this circuit.
+
+        Example:
+            ```python
+            >>> c1 = Circuit(name='c1')
+            >>> c1.create_module('m1')
+            Module(m1)
+            >>> c1.modules
+            {'m1': Module(m1)}
+            >>> c2 = Circuit(name='c2')
+            >>> c2.create_module('m2')
+            Module(m2)
+            >>> c2.modules
+            {'m2': Module(m2)}
+            >>> c1.add_from_circuit(c2)
+            {'m2': Module(m2)}
+            >>> c1.modules
+            {'m1': Module(m1), 'm2': Module(m2)}
+
+            >>> c1.add_from_circuit(c2)  # Module 'm2' already exists
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.IdentifierConflictError: An object m2 already exists!
+
+            ```
         """
         from netlist_carpentry import read
 
@@ -214,6 +251,18 @@ class Circuit(BaseModel):
 
         Returns:
             Module: The module that was created and added to this circuit.
+
+        Example:
+            ```python
+            >>> circuit = Circuit(name='c')
+            >>> circuit.modules
+            {}
+            >>> circuit.create_module('m')
+            Module(m)
+            >>> circuit.modules
+            {'m': Module(m)}
+
+            ```
         """
         return self.add_module(Module(name=name))
 
@@ -267,6 +316,23 @@ class Circuit(BaseModel):
 
         Raises:
             ObjectNotFoundError: If no such module exists in this circuit.
+
+        Example:
+            ```python
+            >>> circuit = Circuit(name='c')
+            >>> circuit.create_module('m')
+            Module(m)
+            >>> circuit.modules
+            {'m': Module(m)}
+            >>> circuit.remove_module('m') # Either module name or module object
+            >>> circuit.modules
+            {}
+            >>> circuit.remove_module('m')
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.ObjectNotFoundError: Unable to remove module m: No such module found!
+
+            ```
         """
         if isinstance(module, Module):
             module = module.name
@@ -304,6 +370,17 @@ class Circuit(BaseModel):
 
         Returns:
             Optional[Module]: The module with the given name, if it exists.
+
+        Example:
+            ```python
+            >>> circuit = Circuit(name='c')
+            >>> circuit.create_module('m')
+            Module(m)
+            >>> circuit.get_module('m')
+            Module(m)
+            >>> circuit.get_module('nonexisting_module')  # Returns None
+
+            ```
         """
         return self.modules.get(module_name, None)
 
@@ -336,6 +413,21 @@ class Circuit(BaseModel):
 
         Raises:
             ObjectNotFoundError: If no module exists with the given name.
+
+        Example:
+            ```python
+            >>> circuit = Circuit(name='c')
+            >>> circuit.create_module('m')
+            Module(m)
+            >>> circuit.set_top('m')
+            >>> circuit.top
+            Module(m)
+            >>> circuit.set_top('nonexisting_module')
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.ObjectNotFoundError: Cannot set top module: No module with name "nonexisting_module" exists in the circuit!
+
+            ```
         """
         if isinstance(module, Module):
             module = module.name
@@ -382,6 +474,24 @@ class Circuit(BaseModel):
         Raises:
             PathResolutionError: If the given path could not be resolved to an object,
                 either because the path is malformed, or no associated object exists.
+
+        Example:
+            ```python
+            >>> circuit = Circuit(name='c')
+            >>> m = circuit.create_module('m')
+            >>> p = m.create_port('p', 'input', width=8)
+            >>> p_path = 'm.p'
+            >>> ps_path = 'm.p.7'  # Highest index of port p
+            >>> circuit.get_from_path(p_path)
+            Port(input p, 8 bit)
+            >>> circuit.get_from_path(ps_path)
+            PortSegment(m.p.7, Signal:x)
+            >>> circuit.get_from_path('invalid.path')
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.PathResolutionError: Cannot resolve path invalid.path: No module found with name invalid in circuit c!
+
+            ```
         """
         if isinstance(path, str):
             path = self.get_path_from_str(path)
@@ -434,7 +544,7 @@ class Circuit(BaseModel):
         path points to a port segment. In case it is an instance, the path is further investigated, as an instance
         can be followed by a port in the path or another instance (if it is a submodule instance, and the path
         points to an instance within the submodule), which is then resolved recursively until the whole path
-        is decoded. If no path can be retrieved, `None` is returned instead.
+        is decoded. If no path can be retrieved, a `PathResolutionError` is raised instead.
 
         Args:
             path_str (str): The hierarchical path to an object of this circuit as a plain string.
@@ -443,8 +553,25 @@ class Circuit(BaseModel):
                 Make sure, the '.' is not part of an element of the hierarchical path.
 
         Returns:
-            Optional[ElementPath]: An appropriate element path object from the given path based on certain heuristics.
-                Is None, if no path object can be built.
+            ElementPath: An appropriate element path object from the given path based on certain heuristics.
+
+        Example:
+            ```python
+            >>> circuit = Circuit(name='c')
+            >>> m = circuit.create_module('m')
+            >>> p = m.create_port('p', 'input', width=8)
+            >>> p_path = 'm.p'
+            >>> ps_path = 'm/p/7'  # Highest index of port p
+            >>> circuit.get_path_from_str(p_path)
+            PortPath m.p
+            >>> circuit.get_path_from_str(ps_path, sep='/')
+            PortSegmentPath m.p.7
+            >>> circuit.get_path_from_str('invalid.path')
+            Traceback (most recent call last):
+                ...
+            netlist_carpentry.core.exceptions.PathResolutionError: Cannot resolve path invalid.path: No module found with name invalid in circuit c!
+
+            ```
         """
         elements = path_str.split(sep)
         path_str = '.'.join(elements)  # Replace original separator with dot for conformity

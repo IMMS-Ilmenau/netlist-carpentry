@@ -117,7 +117,7 @@ class Instance(NetlistElement, BaseModel):
             A dictionary mapping port names to their corresponding connection paths.
         """
         conn: DefaultDict[str, Dict[int, WireSegmentPath]] = defaultdict(dict)
-        for pname in self.ports:
+        for pname in sorted(self.ports):
             p = self.ports[pname]
             for s in p.segments:
                 if p[s].is_connected or include_unconnected:

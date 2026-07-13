@@ -240,6 +240,9 @@ def test_unary_gate(unary_gate: UnaryGate) -> None:
     assert unary_gate.parameters.A_SIGNED is False
     assert LOG.warns_quantity == warns + 1
 
+    with pytest.raises(UnsupportedOperationError):
+        unary_gate.truth_table
+
 
 def test_unary_gate_8bit(simple_module: Module) -> None:
     g = UnaryGate(name='unary_gate_inst', instance_type='unary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
@@ -291,10 +294,10 @@ def test_unary_gate_split(simple_module: Module) -> None:
 
 def test_unary_gate_eval(unary_gate: UnaryGate) -> None:
     assert unary_gate.output_port.signal is Signal.UNDEFINED
-    unary_gate._set_output({0: Signal.HIGH})
+    unary_gate._set_output(SignalArray(signals={0: Signal.HIGH}))
     assert unary_gate.output_port.signal is Signal.HIGH
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(UnsupportedOperationError):
         unary_gate._calc_output()
 
 
@@ -526,6 +529,9 @@ def test_reducer(reduce_gate: ReduceGate) -> None:
     assert reduce_gate.parameters == {'A_WIDTH': 4, 'A_SIGNED': True, 'Y_WIDTH': 1}
     assert not reduce_gate.splittable
 
+    with pytest.raises(UnsupportedOperationError):
+        reduce_gate.reduce_operation
+
 
 def test_reduce_and(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import ReduceAnd
@@ -721,6 +727,9 @@ def test_binary_gate(binary_gate: BinaryGate) -> None:
     assert binary_gate.parameters.B_SIGNED is True
     assert LOG.warns_quantity == warns + 2
 
+    with pytest.raises(UnsupportedOperationError):
+        binary_gate.get_result(Signal.LOW, Signal.LOW)
+
 
 def test_binary_gate_8bit(simple_module: Module) -> None:
     g = BinaryGate(name='binary_gate_inst', instance_type='binary_gate', parameters={'Y_WIDTH': 8}, module=simple_module)
@@ -778,10 +787,10 @@ def test_binary_gate_split(simple_module: Module) -> None:
 
 def test_binary_gate_eval(binary_gate: BinaryGate) -> None:
     assert binary_gate.output_port.signal is Signal.UNDEFINED
-    binary_gate._set_output({0: Signal.HIGH})
+    binary_gate._set_output(SignalArray(signals={0: Signal.HIGH}))
     assert binary_gate.output_port.signal is Signal.HIGH
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(UnsupportedOperationError):
         binary_gate._calc_output()
 
 

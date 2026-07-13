@@ -2,6 +2,7 @@
 import copy
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -1197,9 +1198,9 @@ def test_get_edges(connected_module: Module) -> None:
     assert edges['Y'][0] == connected_module.wires['wire_and'][0]
 
     inst_and.connect('C', None)
-    edges = connected_module.get_edges(inst_and)
+    edges = connected_module.get_edges(inst_and.name)
     assert len(edges) == 4
-    assert ['A', 'B', 'Y', 'C'] == list(edges.keys())
+    assert ['A', 'B', 'C', 'Y'] == list(edges.keys())
     assert edges['C'][0] == WIRE_SEGMENT_X
 
 
@@ -1207,7 +1208,7 @@ def test_get_outgoing_edges(connected_module: Module) -> None:
     with pytest.raises(KeyError):
         connected_module.get_outgoing_edges('non_existing')
     inst_and = connected_module.instances['and_inst']
-    edges = connected_module.get_outgoing_edges(inst_and.name)
+    edges = connected_module.get_outgoing_edges(inst_and)
     assert len(edges) == 1
     assert ['Y'] == list(edges.keys())
     assert len(edges['Y']) == 1
@@ -1216,7 +1217,7 @@ def test_get_outgoing_edges(connected_module: Module) -> None:
     inst_and.connect('C', None, Dir.OUT)
     edges = connected_module.get_outgoing_edges(inst_and.name)
     assert len(edges) == 2
-    assert ['Y', 'C'] == list(edges.keys())
+    assert ['C', 'Y'] == list(edges.keys())
     assert edges['C'][0] == WIRE_SEGMENT_X
 
 
@@ -1224,7 +1225,7 @@ def test_get_incoming_edges(connected_module: Module) -> None:
     with pytest.raises(KeyError):
         connected_module.get_incoming_edges('non_existing')
     inst_and = connected_module.instances['and_inst']
-    edges = connected_module.get_incoming_edges(inst_and.name)
+    edges = connected_module.get_incoming_edges(inst_and)
     assert len(edges) == 2
     assert ['A', 'B'] == list(edges.keys())
     assert len(edges['A']) == 1
@@ -1289,8 +1290,11 @@ def test_get_load_ports(connected_module: Module) -> None:
 
 
 def test_get_neighbors(connected_module: Module) -> None:
-    non_existent = connected_module.get_neighbors('non_existing')
-    assert non_existent == {}
+    with pytest.raises(KeyError):
+        connected_module.get_neighbors('non_existing')
+    connected_module.create_instance(Module(name='submodule'), 'submodule_inst')
+    empty = connected_module.get_neighbors('submodule_inst')
+    assert empty == {}
     inst_and = connected_module.instances['and_inst']
     neighbors = connected_module.get_neighbors(inst_and.name)
     assert len(neighbors) == 3
@@ -1322,13 +1326,16 @@ def test_get_neighbors(connected_module: Module) -> None:
     inst_and.connect('C', None)
     neighbors = connected_module.get_edges(inst_and)
     assert len(neighbors) == 4
-    assert ['A', 'B', 'Y', 'C'] == list(neighbors.keys())
+    assert ['A', 'B', 'C', 'Y'] == list(neighbors.keys())
     assert neighbors['C'][0] == WIRE_SEGMENT_X
 
 
 def test_get_succeeding_instances(connected_module: Module) -> None:
-    non_existent = connected_module.get_succeeding_instances('non_existing')
-    assert non_existent == {}
+    with pytest.raises(KeyError):
+        connected_module.get_neighbors('non_existing')
+    connected_module.create_instance(Module(name='submodule'), 'submodule_inst')
+    empty = connected_module.get_neighbors('submodule_inst')
+    assert empty == {}
     inst_and = connected_module.instances['and_inst']
     inst_xor = connected_module.instances['xor_inst']
     inst_not = connected_module.instances['not_inst']
@@ -1353,8 +1360,11 @@ def test_get_succeeding_instances(connected_module: Module) -> None:
 
 
 def test_get_preceeding_instances(connected_module: Module) -> None:
-    non_existent = connected_module.get_preceeding_instances('non_existing')
-    assert non_existent == {}
+    with pytest.raises(KeyError):
+        connected_module.get_neighbors('non_existing')
+    connected_module.create_instance(Module(name='submodule'), 'submodule_inst')
+    empty = connected_module.get_neighbors('submodule_inst')
+    assert empty == {}
     inst_and = connected_module.instances['and_inst']
     inst_xor = connected_module.instances['xor_inst']
     inst_not = connected_module.instances['not_inst']
@@ -2186,6 +2196,21 @@ def test_module_str(empty_module: Module) -> None:
 def test_module_repr(empty_module: Module) -> None:
     # Test the representation of a module
     assert repr(empty_module) == 'Module(test_module1)'
+
+
+def test_deprecation_warnings(empty_module: Module) -> None:
+    empty_module.create_instance(Module(name='m'), 'inst')
+    mstr = re.escape("Parameter 'instance_name' of Module.get_outgoing_edges() is deprecated and will be removed in v1.0.0. Use 'instance' instead!")
+    with pytest.warns(DeprecationWarning, match=mstr):
+        empty_module.get_outgoing_edges(instance_name='inst')
+    with pytest.raises(TypeError):
+        empty_module.get_outgoing_edges()
+
+    mstr = re.escape("Parameter 'instance_name' of Module.get_incoming_edges() is deprecated and will be removed in v1.0.0. Use 'instance' instead!")
+    with pytest.warns(DeprecationWarning, match=mstr):
+        empty_module.get_incoming_edges(instance_name='inst')
+    with pytest.raises(TypeError):
+        empty_module.get_incoming_edges()
 
 
 if __name__ == '__main__':

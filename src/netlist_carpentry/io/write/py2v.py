@@ -311,7 +311,7 @@ class P2VTransformer:
         return ''
 
     def wire2v(self, wire: Wire) -> str:
-        """
+        r"""
         Converts a netlist wire to a wire or reg in Verilog syntax, depending on its driving instance.
 
         Args:
@@ -325,11 +325,10 @@ class P2VTransformer:
             >>> from netlist_carpentry.core.netlist_elements.module import Module
             >>> from netlist_carpentry.core.netlist_elements.wire import Wire
             >>> module = Module(name='module1')
-            >>> wire = Wire(name='wire1', width=8)
-            >>> module.add_wire(wire)
-            >>> transformer = P2VTransformer()
-            >>> print(transformer.wire2v(wire))
-            'wire [7:0] wire1;'
+            >>> wire = module.create_wire("wire1", width=8)
+            >>> P2VTransformer().wire2v(wire)
+            'wire [7:0]\twire1;'
+
             ```
 
         Example 2:
@@ -338,14 +337,12 @@ class P2VTransformer:
             >>> from netlist_carpentry.core.netlist_elements.wire import Wire
             >>> from netlist_carpentry.utils.gate_lib import DFF
             >>> module = Module(name='module1')
-            >>> dff = DFF(name='dff1')
-            >>> wire = Wire(name='wire1', width=8)
-            >>> module.add_wire(wire)
-            >>> module.add_instance(dff1)
-            >>> module.connect(dff.ports['Q'].path, wire[0].path)  # Connect wire to a Flip-Flop -> wire becomes a reg
-            >>> transformer = P2VTransformer()
-            >>> print(transformer.wire2v(wire))
-            'reg [7:0] wire1;'
+            >>> wire = module.create_wire('wire1', width=8)
+            >>> dff = module.create_instance(DFF, 'dff1')
+            >>> module.connect(wire[0], dff.ports['Q'])  # Connect wire to a Flip-Flop -> wire becomes a reg
+            >>> P2VTransformer().wire2v(wire)
+            'reg  [7:0]\twire1;'
+
             ```
         """
         wire_prefix = self._net_type(wire)
@@ -389,7 +386,7 @@ class P2VTransformer:
         return 'wire'
 
     def port2v(self, port: Port[Module]) -> str:
-        """
+        r"""
         Converts a Python Port object into its corresponding Verilog string, representing a module port.
 
         This method takes into account the direction and width of the port to generate the correct Verilog syntax.
@@ -401,11 +398,11 @@ class P2VTransformer:
             str: The Verilog string representation of the port.
 
         Example:
-            >>> from netlist_carpentry.core.netlist_elements.port import Port
-            >>> port = Port(name='port1', direction='input', width=8)
+            >>> module = Module(name='m')
+            >>> port = module.create_port('port1', 'input', width=8)
             >>> transformer = P2VTransformer()
-            >>> print(transformer.port2v(port))
-            'input [7:0] port1'
+            >>> transformer.port2v(port)
+            'input\twire\t[7:0]\tport1'
         """
         if port.name in port.parent.wires:
             w = port.parent.wires[port.name]

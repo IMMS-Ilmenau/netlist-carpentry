@@ -64,13 +64,14 @@ class Direction(Enum):
         Example:
             ```python
             >>> Direction.get('input')
-            <Direction.IN: 'input'>
+            Direction.IN
             >>> Direction.get('OUT')
-            <Direction.OUT: 'output'>
+            Direction.OUT
             >>> Direction.get('InOut')
-            <Direction.IN_OUT: 'inout'>
+            Direction.IN_OUT
             >>> Direction.get('invalid_value')
-            <Direction.UNKNOWN: 'unknown'>
+            Direction.UNKNOWN
+
             ```
         """
         value = value.strip().lower()

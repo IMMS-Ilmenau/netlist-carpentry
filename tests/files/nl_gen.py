@@ -1,6 +1,8 @@
 import os
+from pathlib import Path
 
-from netlist_carpentry.io.read.read_utils import generate_json_netlist
+from netlist_carpentry import ReadConfig
+from netlist_carpentry.io.read.read_utils import generate_json
 
 # Get the directory of the script
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -13,4 +15,4 @@ blacklist = ['netlist_generic_flattened.v', 'adderWrapper.v', 'simpleAdder.v', '
 for file in files:
     if file in blacklist:
         continue
-    generate_json_netlist(f'{script_dir}/{file}', f'{script_dir}/{file[:-2]}.json')
+    generate_json(ReadConfig(files=[Path(script_dir) / file], output=Path(script_dir) / (file[:-2] + '.json')), overwrite=True)

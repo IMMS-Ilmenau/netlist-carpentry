@@ -661,7 +661,9 @@ def test_wire_str(standard_wire: Wire) -> None:
 
 def test_wire_repr(standard_wire: Wire) -> None:
     # # # Test the representation of a wire
-    assert repr(standard_wire) == 'Wire(wire1 at wire1)'
+    assert repr(standard_wire) == 'Wire(wire1, 1 bit)'
+
+    assert repr(Module(name='m').create_wire('wire2', width=8)) == 'Wire(wire2, 8 bit)'
 
 
 if __name__ == '__main__':

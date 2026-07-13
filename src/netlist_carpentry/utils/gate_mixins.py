@@ -35,7 +35,7 @@ class GateProtocol(Protocol):
     def verilog_template(self) -> str: ...
     @property
     def verilog_context_map(self) -> SafeFormatDict: ...
-    def model_post_init(self, __context: Optional[Dict[str, object]]) -> None: ...
+    def model_post_init(self, __context: object) -> None: ...
     def update_parameters(self) -> None: ...
     def connect(
         self,
@@ -50,7 +50,7 @@ class GateProtocol(Protocol):
     def _storage_assigns(self, sig_value: str = '') -> str: ...
     def set(self, port_name: str, new_signal: SignalOrLogicLevel, idx: Union[int, List[int]] = 0) -> None: ...
     def evaluate(self) -> None: ...
-    def _calc_output(self, idx: NonNegativeInt = 0) -> Dict[int, Signal]: ...
+    def _calc_output(self, idx: NonNegativeInt = 0) -> SignalArray: ...
     def _set_output(self, new_signals: Dict[int, Signal]) -> None: ...
 
 
@@ -174,7 +174,7 @@ class ClkMixin(BaseModel):
     def clk_polarity(self, new_signal: Signal) -> None:
         self.parameters.CLK_POLARITY = new_signal
 
-    def model_post_init(self: ClockMixinProtocol, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self: ClockMixinProtocol, __context: object) -> None:
         """
         Initializes the gate's ports and connections.
 
@@ -272,16 +272,20 @@ class EnMixin(BaseModel):
         """
         self.set('EN', new_signal)
 
-    def model_post_init(self: EnableMixinProtocol, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self: EnableMixinProtocol, __context: object) -> None:
         super().model_post_init(__context)
         self.connect('EN', None, direction=Direction.IN)
 
-    def _calc_output(self: EnableMixinProtocol, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        if self.en_signal.is_undefined or (self.en_signal is self.en_polarity and self.input_port[idx].signal.is_undefined):
-            return {idx: Signal.UNDEFINED}
-        if self.en_signal is self.en_polarity:
-            return {idx: self.input_port[idx].signal if self.en_signal is self.en_polarity else self.output_port[idx].signal}
-        return {idx: self.output_port[idx].signal}
+    def _calc_output(self: EnableMixinProtocol) -> SignalArray:
+        signals = {}
+        for idx in range(self.data_width):
+            if self.en_signal.is_undefined or (self.en_signal is self.en_polarity and self.input_port[idx].signal.is_undefined):
+                signals[idx] = Signal.UNDEFINED
+            elif self.en_signal is self.en_polarity:
+                signals[idx] = self.input_port[idx].signal if self.en_signal is self.en_polarity else self.output_port[idx].signal
+            else:
+                signals[idx] = self.output_port[idx].signal
+        return SignalArray(signals=signals)
 
 
 class RstMixin(BaseModel):
@@ -318,7 +322,7 @@ class RstMixin(BaseModel):
         """True if the gate is currently in reset, False otherwise."""
         return self.rst_port.signal is self.rst_polarity
 
-    def model_post_init(self: ResetMixinProtocol, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self: ResetMixinProtocol, __context: object) -> None:
         super().model_post_init(__context)
         self.connect('RST', None, direction=Direction.IN)
 
@@ -383,10 +387,10 @@ class RstMixin(BaseModel):
         self.set(self.rst_port.name, new_signal)
         self.evaluate()
 
-    def _calc_output(self: ResetMixinProtocol, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self: ResetMixinProtocol) -> SignalArray:
         if self.rst_port.signal is self.rst_polarity:
-            return {idx: self.rst_val[idx]}
-        return super()._calc_output(idx)
+            return SignalArray(signals={idx: self.rst_val[idx] for idx in range(self.data_width)})
+        return super()._calc_output()
 
     def _split_sync_params(self: ResetMixinProtocol, slices: Iterable[ResetMixinProtocol]) -> None:
         super()._split_sync_params(slices)
@@ -417,7 +421,7 @@ class LoadMixin(BaseModel):
         return self.ports['AD']
 
     @property
-    def load_val(self: LoadMixinProtocol) -> Dict[int, Signal]:
+    def load_val(self: LoadMixinProtocol) -> SignalArray:
         """The value of the flipflop during and after reset, retrieved from the load data port."""
         return self.ad_port.signal_array
 
@@ -431,7 +435,7 @@ class LoadMixin(BaseModel):
         """True if the gate is currently in "load-value" mode, False otherwise."""
         return self.al_port.signal is self.load_polarity
 
-    def model_post_init(self: LoadMixinProtocol, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self: LoadMixinProtocol, __context: object) -> None:
         super().model_post_init(__context)
         self.connect('AL', None, direction=Direction.IN)
         self.connect('AD', None, direction=Direction.IN, width=self.width)
@@ -497,10 +501,10 @@ class LoadMixin(BaseModel):
         self.set(self.al_port.name, new_signal)
         self.evaluate()
 
-    def _calc_output(self: LoadMixinProtocol, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self: LoadMixinProtocol) -> SignalArray:
         if self.al_port.signal is self.load_polarity:
-            return {idx: self.load_val[idx]}
-        return super()._calc_output(idx)
+            return SignalArray(signals={idx: self.load_val[idx] for idx in range(self.data_width)})
+        return super()._calc_output()
 
 
 class SRMixin(BaseModel):
@@ -532,7 +536,7 @@ class SRMixin(BaseModel):
         """The set port of the gate."""
         return self.ports['SET']
 
-    def model_post_init(self: SRMixinProtocol, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self: SRMixinProtocol, __context: object) -> None:
         super().model_post_init(__context)
         self.connect('CLR', None, direction=Direction.IN, width=self.width)
         self.connect('SET', None, direction=Direction.IN, width=self.width)
@@ -641,12 +645,16 @@ class SRMixin(BaseModel):
         self.set(self.set_port.name, new_signal, idx)
         self.evaluate()
 
-    def _calc_output(self: SRMixinProtocol, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
-        if self.clr_port[idx].signal is self.clr_polarity:
-            return {idx: Signal.LOW}
-        if self.set_port[idx].signal is self.set_polarity:
-            return {idx: Signal.HIGH}
-        return super()._calc_output(idx)
+    def _calc_output(self: SRMixinProtocol) -> SignalArray:
+        signals = {}
+        for idx in range(self.data_width):
+            if self.clr_port[idx].signal is self.clr_polarity:
+                signals[idx] = Signal.LOW
+            elif self.set_port[idx].signal is self.set_polarity:
+                signals[idx] = Signal.HIGH
+            else:
+                signals[idx] = super()._calc_output().signals[idx]
+        return SignalArray(signals=signals)
 
 
 class ScanMixin(BaseModel):
@@ -731,16 +739,16 @@ class ScanMixin(BaseModel):
         """
         self.set('SE', new_signal)
 
-    def model_post_init(self: ScanMixinProtocol, __context: Optional[Dict[str, object]]) -> None:
+    def model_post_init(self: ScanMixinProtocol, __context: object) -> None:
         super().model_post_init(__context)
         self.connect('SE', None, direction=Direction.IN)
         self.connect('SI', None, direction=Direction.IN, width=self.width)
         self.connect('SO', None, direction=Direction.OUT, width=self.width)
 
-    def _calc_output(self: ScanMixinProtocol, idx: NonNegativeInt = 0) -> Dict[int, Signal]:
+    def _calc_output(self: ScanMixinProtocol) -> SignalArray:
         if self.se_signal is Signal.HIGH:
-            return {idx: self.si_port.signal_array[idx]}
-        return super()._calc_output(idx)
+            return self.si_port.signal_array
+        return super()._calc_output()
 
     def _set_output(self: ScanMixinProtocol, new_signals: Dict[int, Signal]) -> None:
         for idx, sig in new_signals.items():

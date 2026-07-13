@@ -205,11 +205,11 @@ class Signal(Enum):
         Example:
             >>> # 5 in binary is 101. MSB-first mapping:
             >>> Signal.from_int(5)
-            {0: <Signal.HIGH>, 1: <Signal.LOW>, 2: <Signal.HIGH>}
+            {0: HIGH, 1: LOW, 2: HIGH}
 
             >>> # -1 in 4-bit two's complement is 1111
             >>> Signal.from_int(-1, fixed_width=4)
-            {0: <Signal.HIGH>, 1: <Signal.HIGH>, 2: <Signal.HIGH>, 3: <Signal.HIGH>}
+            {0: HIGH, 1: HIGH, 2: HIGH, 3: HIGH}
         """
         from netlist_carpentry.core.types import SignalArray
 
@@ -247,8 +247,8 @@ class Signal(Enum):
             ...     Signal.to_int(signals_undefined)
             ... except ValueError as e:
             ...     print(e)
-            Cannot convert signal dict to integer: At least one entry is neither Signal.HIGH nor Signal.LOW,
-            dict is {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.HIGH}!
+            Cannot convert signals to integer or binary value: At least one entry is neither Signal.HIGH nor Signal.LOW, dict is {0: HIGH, 1: UNDEFINED, 2: HIGH}!
+
             ```
         """
         # Since enumerate starts from 0, the dict is LSB-first, so 'msb_first' must be inverted
@@ -282,8 +282,7 @@ class Signal(Enum):
             ...     Signal.dict_to_int(signals_undefined)
             ... except ValueError as e:
             ...     print(e)
-            Cannot convert signals to integer or binary value: At least one entry is neither Signal.HIGH nor Signal.LOW,
-            dict is {2: Signal.HIGH, 1: Signal.UNDEFINED, 0: Signal.HIGH}!
+            Cannot convert signals to integer or binary value: At least one entry is neither Signal.HIGH nor Signal.LOW, dict is {0: HIGH, 1: UNDEFINED, 2: HIGH}!
         """
         binary_string = Signal.dict_to_bin(signal_dict, msb_first)
         decimal_value = int(binary_string, 2)
@@ -327,11 +326,11 @@ class Signal(Enum):
         Example:
             >>> # Parsing a 4-bit MSB-first signal
             >>> Signal.from_bin("10xz", msb_first=True)
-            {0: <Signal.FLOATING>, 1: <Signal.UNDEFINED>, 2: <Signal.LOW>, 3: <Signal.HIGH>}
+            {0: FLOATING, 1: UNDEFINED, 2: LOW, 3: HIGH}
 
             >>> # Parsing with a fixed width (padding)
             >>> Signal.from_bin("11", fixed_width=4)
-            {0: <Signal.HIGH>, 1: <Signal.HIGH>, 2: <Signal.LOW>, 3: <Signal.LOW>}
+            {0: HIGH, 1: HIGH, 2: LOW, 3: LOW}
         """
         from netlist_carpentry.core.types import SignalArray
 
@@ -375,8 +374,7 @@ class Signal(Enum):
             ...     Signal.to_bin(signals_undefined)
             ... except ValueError as e:
             ...     print(e)
-            Cannot convert signals to integer or binary value: At least one entry is neither Signal.HIGH nor Signal.LOW,
-            dict is {2: Signal.HIGH, 1: Signal.UNDEFINED, 0: Signal.HIGH}!
+            Cannot convert signals to integer or binary value: At least one entry is neither Signal.HIGH nor Signal.LOW, dict is {0: HIGH, 1: UNDEFINED, 2: HIGH}!
         """
         # Since enumerate starts from 0, the dict is LSB-first, so 'msb_first' must be inverted
         return Signal.dict_to_bin({i: s for i, s in enumerate(reversed(sig_list))}, msb_first, fixed_width, pad_value)
@@ -403,21 +401,20 @@ class Signal(Enum):
             pad_value (Literal['0', '1'], optional): The value used for padding. May be either 0 or 1. Defaults to 0.
 
         Returns:
-            int: The binary value represented by the signal dictionary.
+            str: The binary value represented by the signal dictionary.
 
         Example:
             >>> signals = {0: Signal.HIGH, 1: Signal.LOW, 2: Signal.HIGH, 3: Signal.HIGH} # LSB: 1011, MSB: 1101 -> 13
-            >>> Signal.dict_to_int(signals)
+            >>> Signal.dict_to_bin(signals)
             '1101'
-            >>> Signal.dict_to_int(signals, msb_first=False)
+            >>> Signal.dict_to_bin(signals, msb_first=False)
             '1011'
             >>> signals_undefined = {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.HIGH}
             >>> try:
-            ...     Signal.dict_to_int(signals_undefined)
+            ...     Signal.dict_to_bin(signals_undefined)
             ... except ValueError as e:
             ...     print(e)
-            Cannot convert signals to integer or binary value: At least one entry is neither Signal.HIGH nor Signal.LOW,
-            dict is {2: Signal.HIGH, 1: Signal.UNDEFINED, 0: Signal.HIGH}!
+            Cannot convert signals to integer or binary value: At least one entry is neither Signal.HIGH nor Signal.LOW, dict is {0: HIGH, 1: UNDEFINED, 2: HIGH}!
         """
         if not signal_dict:
             return pad_value
