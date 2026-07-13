@@ -495,6 +495,48 @@ def test_set_name() -> None:
         w.set_name('NEW_NAME')
 
 
+def test_set_name_connections() -> None:
+    m = Module(name='m')
+    w = m.create_wire('w', width=2)
+    p1 = m.create_port('p1', direction=Direction.IN, width=2)
+    p2 = m.create_port('p2', direction=Direction.OUT, width=2)
+    m.connect(w[0], p1[0])
+    m.connect(w[0], p2[0])
+    assert w.connected_port_segments[0][0] == p1[0]
+    assert w.connected_port_segments[0][1] == p2[0]
+    assert w.connected_port_segments[1] == []
+    assert w[0].raw_path == 'm.w.0'
+    assert w[1].raw_path == 'm.w.1'
+    assert p1[0].raw_ws_path == 'm.w.0'
+    assert p1[1].raw_ws_path == ''
+    assert p2[0].raw_ws_path == 'm.w.0'
+    assert p2[1].raw_ws_path == ''
+
+    w.set_name('new_w')
+    assert w.connected_port_segments[0][0] == p1[0]
+    assert w.connected_port_segments[0][1] == p2[0]
+    assert w.connected_port_segments[1] == []
+    assert w[0].raw_path == 'm.new_w.0'
+    assert w[1].raw_path == 'm.new_w.1'
+    assert p1[0].raw_ws_path == 'm.new_w.0'
+    assert p1[1].raw_ws_path == ''
+    assert p2[0].raw_ws_path == 'm.new_w.0'
+    assert p2[1].raw_ws_path == ''
+
+    m.connect(w[1], p1[1])
+    m.connect(w[1], p2[1])
+    assert w.connected_port_segments[0][0] == p1[0]
+    assert w.connected_port_segments[0][1] == p2[0]
+    assert w.connected_port_segments[1][0] == p1[1]
+    assert w.connected_port_segments[1][1] == p2[1]
+    assert w[0].raw_path == 'm.new_w.0'
+    assert w[1].raw_path == 'm.new_w.1'
+    assert p1[0].raw_ws_path == 'm.new_w.0'
+    assert p1[1].raw_ws_path == 'm.new_w.1'
+    assert p2[0].raw_ws_path == 'm.new_w.0'
+    assert p2[1].raw_ws_path == 'm.new_w.1'
+
+
 def test_change_mutability(standard_wire: Wire) -> None:
     assert not standard_wire.locked
     standard_wire.change_mutability(is_now_locked=True)
