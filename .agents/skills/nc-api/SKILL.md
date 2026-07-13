@@ -21,18 +21,19 @@ description: The API of Netlist Carpentry with all relevant classes, properties,
 | 8 | [Element Paths](#element-paths) | Hierarchical navigation types |
 | 9 | [ModuleGraph](#modulegraph) | NetworkX integration |
 | 10 | [Pattern Matching](#pattern-matching) | `Pattern`, `Match`, `Constraint` |
-| 11 | [Signal Model](#signal-model) | `Signal` enum, `SignalArray` |
-| 12 | [Direction Enum](#direction-enum) | Port directions |
-| 13 | [EType Enum](#etype-enum) | Element type classification |
-| 14 | [Configuration](#configuration) | `CFG` global settings |
-| 15 | [Built-in Routines](#built-in-routines) | Optimization, checking |
-| 16 | [Gate Library](#gate-library) | Primitive gates, mixins, parameters |
-| 17 | [Equivalence Checking](#equivalence-checking) | `run_eqy`, `run_equiv`, `run_equiv_miter` |
-| 18 | [Base Classes](#base-classes) | `NetlistElement` — base for all elements |
-| 19 | [Custom Collections](#custom-collections) | `CustomDict`, `CustomList` |
-| 20 | [Metadata Types](#metadata-types) | `METADATA_DICT`, `NESTED_DICT` |
-| 21 | [Type Aliases & Protocols](#type-aliases--protocols) | Signal types, gate protocols |
-| 22 | [Constants & Utilities](#constants--utilities) | Wire constants, exports, logging |
+| 11 | [VCD Waveform Processing](#vcd-waveform-processing) | `VCDWaveform`, `VCDScope`, `VCDVar`, parsing functions |
+| 12 | [Signal Model](#signal-model) | `Signal` enum, `SignalArray` |
+| 13 | [Direction Enum](#direction-enum) | Port directions |
+| 14 | [EType Enum](#etype-enum) | Element type classification |
+| 15 | [Configuration](#configuration) | `CFG` global settings |
+| 16 | [Built-in Routines](#built-in-routines) | Optimization, checking |
+| 17 | [Gate Library](#gate-library) | Primitive gates, mixins, parameters |
+| 18 | [Equivalence Checking](#equivalence-checking) | `run_eqy`, `run_equiv`, `run_equiv_miter` |
+| 19 | [Base Classes](#base-classes) | `NetlistElement` — base for all elements |
+| 20 | [Custom Collections](#custom-collections) | `CustomDict`, `CustomList` |
+| 21 | [Metadata Types](#metadata-types) | `METADATA_DICT`, `NESTED_DICT` |
+| 22 | [Type Aliases & Protocols](#type-aliases--protocols) | Signal types, gate protocols |
+| 23 | [Constants & Utilities](#constants--utilities) | Wire constants, exports, logging |
 
 ---
 
@@ -218,21 +219,33 @@ result = generate_json(ReadConfig(files=["design.v"]))  # With config
 
 ---
 
-### `generate_json_netlist()` — Generate JSON Netlist
+### `generate_json_netlist()` — Generate JSON Netlist ⚠️ DEPRECATED
 
 ```python
 from netlist_carpentry import generate_json_netlist
 
-result = generate_json_netlist(["design.v"], top="my_top")
+result = generate_json_netlist("design.v", Path("out.json"), top="my_top")
 ```
 
+> **⚠️ Deprecated:** This function is deprecated and will be removed in v1.0.0. Use `generate_json()` with a `ReadConfig` object instead.
+
 **Parameters:**
-- `files` (List[str | Path]): Input RTL files.
-- `top` (str, optional): Top module name.
-- `output` (str | Path, optional): Output file path.
-- `overwrite` (bool): Overwrite existing file.
+- `input_file_path` (str | Path): Path to the input Verilog file.
+- `output_file_path` (str | Path): Path where the output JSON netlist should be saved.
+- `top_module_name` (str, optional): The name of the top module. Defaults to `''`.
+- `verbose` (bool, optional): Whether to print Yosys log. Defaults to `False`.
+- `yosys_script_path` (str | Path, optional): Path to a custom Yosys script. Defaults to `''`.
+- `no_hierarchy` (bool, optional): Skip the hierarchy pass. Defaults to `False`.
 
 **Returns:** `subprocess.CompletedProcess[str]` — Yosys execution result.
+
+**Replacement:**
+```python
+from netlist_carpentry import generate_json, ReadConfig
+
+cfg = ReadConfig(files=["design.v"], output=Path("out.json"), top="my_top")
+result = generate_json(cfg)
+```
 
 ---
 
@@ -1222,9 +1235,10 @@ from netlist_carpentry import Match
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `pattern_graph` | `ModuleGraph` | The pattern graph |
-| `matches` | `Dict[int, Dict[Tuple[str, str, int], Tuple[str, str, int]]]` | Match details (match_id → port mapping) |
+| `pattern_graph` | `ModuleGraph` | The pattern graph (deep copy) |
+| `matches` | `List[ModuleGraph]` | List of matched subgraphs found in the original circuit (each is a deep copy) |
 | `count` | `int` | Number of matches |
+| `pairings` | `Dict[str, Dict[int, str]]` | Mapping of pattern graph nodes to matched node IDs across all matches. Format: `{pattern_node_id: {match_index: matched_node_id}}` |
 
 #### Methods
 
@@ -1264,6 +1278,158 @@ constraint = CascadingGateConstraint("§and")
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `check()` | `check(potential_match_graph: ModuleGraph, circuit_graph: ModuleGraph) -> bool` | Check if all instances match type |
+
+#### Pre-defined Constraint Constants
+
+```python
+from netlist_carpentry import CASCADING_OR_CONSTRAINT, CASCADING_AND_CONSTRAINT
+```
+
+| Constant | Type | Description |
+|----------|------|-------------|
+| `CASCADING_OR_CONSTRAINT` | `CascadingGateConstraint` | Checks if subgraph forms a cascading OR structure |
+| `CASCADING_AND_CONSTRAINT` | `CascadingGateConstraint` | Checks if subgraph forms a cascading AND structure |
+
+---
+
+## VCD Waveform Processing
+
+VCD (Value Change Dump) processing requires the optional `pywellen` dependency. Install via `pip install netlist-carpentry[vcd]`.
+
+**Availability Check:**
+```python
+from netlist_carpentry import HAS_VCD
+if HAS_VCD:
+    from netlist_carpentry.io.vcd import VCDWaveform, ...
+```
+
+### `VCDWaveform` — VCD Waveform Container
+
+```python
+from netlist_carpentry.io.vcd import VCDWaveform
+
+wf = VCDWaveform("simulation.vcd")        # From file path (str or Path)
+wf = VCDWaveform(waveform_object)          # From pywellen Waveform object
+```
+
+#### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `top_scopes` | `List[VCDScope]` | Top-level scopes in the waveform |
+| `all_vars` | `Dict[str, VCDVar]` | All variables keyed by full name |
+
+### `VCDScope` — VCD Scope Representation
+
+```python
+from netlist_carpentry.io.vcd import VCDScope
+```
+
+#### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | `str` | Scope name |
+| `full_name` | `str` | Full hierarchical scope name |
+| `scope_type` | `SCOPE_TYPES` | Scope type (module, program, etc.) |
+| `scopes` | `List[VCDScope]` | Sub-scopes |
+| `vars` | `List[VCDVar]` | Variables in this scope |
+
+### `VCDVar` — VCD Variable Representation
+
+```python
+from netlist_carpentry.io.vcd import VCDVar
+```
+
+#### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | `str` | Variable name |
+| `full_name` | `str` | Full hierarchical variable name |
+| `bitwidth` | `Optional[int]` | Variable bitwidth |
+| `var_type` | `VAR_TYPES` | Variable type (wire, reg, etc.) |
+| `enum_type` | `Optional[Tuple[str, List[Tuple[str, str]]]]` | Enum type info |
+| `direction` | `Literal[...]` | Direction (Unknown, Input, Output, InOut, Buffer, Linkage) |
+| `length` | `Optional[int]` | Variable length |
+| `is_real` | `bool` | Whether variable is real type |
+| `is_string` | `bool` | Whether variable is string type |
+| `is_bit_vector` | `bool` | Whether variable is bit vector |
+| `is_1bit` | `bool` | Whether variable is 1-bit |
+| `all_changes` | `List[Tuple[NonNegativeInt, Union[NonNegativeInt, str]]]` | All signal changes (time, value) |
+| `change_times` | `List[NonNegativeInt]` | Timestamps when the variable changed |
+
+#### Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `value_at_time()` | `value_at_time(time: NonNegativeInt) -> Union[int, str]` | Get signal value at timestamp |
+| `value_at_idx()` | `value_at_idx(idx: int) -> Union[int, str]` | Get signal value at index |
+
+### VCD Parsing Functions
+
+#### `get_hierarchy_dict(wf: VCDWaveform) -> STR_DICT`
+Returns a nested dictionary of all scopes and subscopes.
+
+```python
+from netlist_carpentry.io.vcd import get_hierarchy_dict
+hierarchy = get_hierarchy_dict(wf)
+# {"top": {"sub1": {"sub2": {}}}}
+```
+
+#### `get_scope(wf: VCDWaveform, scope_name: str) -> VCDScope`
+Returns the scope with the given name. Raises `VcdLoadingError` if not found.
+
+#### `map_names_to_circuit(c: Circuit, wf: VCDWaveform, top_vcd_scope: str) -> VCD_MAPPING`
+Maps all scope names to corresponding circuit modules.
+
+```python
+from netlist_carpentry.io.vcd import map_names_to_circuit
+mapping = map_names_to_circuit(circuit, wf, "top_tb")
+# Returns {"top_tb": Module, "top_tb.sub": Module, ...}
+```
+
+#### `apply_vcd_data(c: Circuit, wf: VCDWaveform, top_scope: str, scope: VCDScope = None) -> None`
+Applies VCD data to circuit wires. Stores value traces in `Wire.metadata.vcd`.
+
+```python
+from netlist_carpentry.io.vcd import apply_vcd_data
+apply_vcd_data(circuit, wf, "top_tb")
+# After this, wire.metadata.vcd contains {"var.full.name": [(time, value), ...]}
+```
+
+#### `equal_toggles(wf: VCDWaveform, scope: VCDScope = None, vcd_vars: List[str | VCDVar] = None) -> SIGNAL_TOGGLE_DICT`
+Returns a dictionary of timestamps → list of VCD vars that toggle at those timestamps.
+
+```python
+from netlist_carpentry.io.vcd import equal_toggles
+toggles = equal_toggles(wf)
+# { (10, 20, 30): [VCDVar(...), VCDVar(...)], ... }
+```
+
+#### `filter_signals(wf: VCDWaveform, scope: VCDScope = None, vcd_vars: List[str | VCDVar] = None, min_occurences: PositiveInt = 1, min_changes: NonNegativeInt = 0) -> SIGNAL_TOGGLE_DICT`
+Filters signals based on toggle frequency and co-toggling behavior.
+
+```python
+from netlist_carpentry.io.vcd import filter_signals
+filtered = filter_signals(wf, min_occurences=2, min_changes=1)
+# Only includes signals that toggle together at least 2 times and change at least once
+```
+
+#### `filter_signals_per_scope(wf: VCDWaveform, scope: VCDScope, signal_dict: Dict[str, SIGNAL_TOGGLE_DICT], ...) -> None`
+Filters signals per scope and populates the given dictionary. Updates `signal_dict` in-place.
+
+#### `find_matching_signals(vcd_filepaths: List[Path | str]) -> SIGNAL_GROUPS`
+Finds signals across multiple VCD files that always have the same value and groups them.
+
+```python
+from netlist_carpentry.io.vcd import find_matching_signals
+groups = find_matching_signals(["sim1.vcd", "sim2.vcd"])
+# [["top_tb.sig_a", "top_tb.sig_b"], ["top_tb.sig_c"], ...]
+```
+
+#### `get_hierarchy_dict(wf: VCDWaveform) -> STR_DICT`
+Returns a nested dictionary of all scopes and subscopes.
 
 ---
 
@@ -1565,6 +1731,8 @@ gate_class = get("§and")  # Returns AndGate class
 
 ### Available Gate Classes
 
+#### Basic Logic Gates
+
 | Class | Instance Type | Ports | Description |
 |-------|--------------|-------|-------------|
 | `Buffer` | `§buf` | I, O | Buffer |
@@ -1575,27 +1743,99 @@ gate_class = get("§and")  # Returns AndGate class
 | `XnorGate` | `§xnor` | A, B, Y | XNOR |
 | `NorGate` | `§nor` | A, B, Y | NOR |
 | `NandGate` | `§nand` | A, B, Y | NAND |
+| `LogicAnd` | `§logic_and` | A, B, Y | Logic AND (two-input, non-zero check) |
+| `LogicOr` | `§logic_or` | A, B, Y | Logic OR (two-input, non-zero check) |
+| `LogicNot` | `§logic_not` | I, O | Logic NOT (!wire_vector) |
+| `BitwiseCaseEquality` | `§bweqx` | A, B, Y | Bitwise case equality (===) |
+
+#### Arithmetic Gates
+
+| Class | Instance Type | Ports | Description |
+|-------|--------------|-------|-------------|
 | `Adder` | `§add` | A, B, S, C_OUT | Adder |
 | `Subtractor` | `§sub` | A, B, D, B_OUT | Subtractor |
-| `Multiplexer` | `§mux` | D0..Dn, S, Y | MUX (bit_width param) |
-| `Demultiplexer` | `§demux` | D, S0..Sn, Y0..Yn | DEMUX |
-| `DFF` | `§dff` | CLK, D, Q | D flip-flop |
-| `ADFF` | `§adff` | CLK, D, RST, Q | Async reset DFF |
-| `DFFE` | `§dffe` | CLK, EN, D, Q | Enable DFF |
-| `ScanDFF` | `§scan_dff` | CLK, D, S, Q | Scan DFF |
-| `DLatch` | `§dlatch` | EN, D, Q | D latch |
+| `Multiplier` | `§mul` | A, B, Y | Multiplication |
+| `Divider` | `§div` | A, B, Y | Truncated division |
+| `Modulo` | `§mod` | A, B, Y | Modulo (remainder) |
+| `Exponentiator` | `§pow` | A, B, Y | Power/exponentiation |
+| `PosGate` | `§pos` | A, Y | Arithmetic plus (sign extend) |
+| `NegGate` | `§neg` | A, Y | Arithmetic negator (two's complement) |
+
+#### Comparison Gates
+
+| Class | Instance Type | Ports | Description |
+|-------|--------------|-------|-------------|
+| `LessThan` | `§lt` | A, B, Y | Less than |
+| `LessEqual` | `§le` | A, B, Y | Less than or equal (<=) |
+| `Equal` | `§eq` | A, B, Y | Equality |
+| `CaseEqual` | `§eqx` | A, B, Y | Case equal (===) |
+| `NotEqual` | `§ne` | A, B, Y | Not equal (!=) |
+| `CaseNotEqual` | `§nex` | A, B, Y | Case not equal (!==) |
+| `GreaterThan` | `§gt` | A, B, Y | Greater than |
+| `GreaterEqual` | `§ge` | A, B, Y | Greater than or equal (>=) |
+
+#### Shift Gates
+
+| Class | Instance Type | Ports | Description |
+|-------|--------------|-------|-------------|
 | `ShiftLeft` | `§shl` | A, B, Y | Shift left logical |
 | `ShiftRight` | `§shr` | A, B, Y | Shift right logical |
+| `ShiftSigned` | `§shift` | A, B, Y | Signed shift (conditional left/right) |
+| `ArithmeticShiftLeft` | `§sshl` | A, B, Y | Arithmetic shift left (<<<) |
+| `ArithmeticShiftRight` | `§sshr` | A, B, Y | Arithmetic shift right (>>>) |
+| `ShiftX` | `§shiftx` | A, B, Y | Shift with indexed part-select ([+:]) |
+
+#### Reduction Gates
+
+| Class | Instance Type | Ports | Description |
+|-------|--------------|-------|-------------|
 | `ReduceAnd` | `§reduce_and` | A, Y | AND reduction |
 | `ReduceOr` | `§reduce_or` | A, Y | OR reduction |
 | `ReduceXor` | `§reduce_xor` | A, Y | XOR reduction |
-| `LessThan` | `§lt` | A, B, Y | Less than |
-| `Equal` | `§eq` | A, B, Y | Equality |
-| `GreaterThan` | `§gt` | A, B, Y | Greater than |
+| `ReduceBool` | `§reduce_bool` | A, Y | Reduction OR with double negation |
+| `ReduceXnor` | `§reduce_xnor` | A, Y | Reduction XNOR |
+
+#### Multiplexer / Demultiplexer
+
+| Class | Instance Type | Ports | Description |
+|-------|--------------|-------|-------------|
+| `Multiplexer` | `§mux` | D0..Dn, S, Y | MUX (bit_width param) |
+| `Demultiplexer` | `§demux` | D, S, Y0..Yn | DEMUX (bit_width param) |
+
+#### Storage Elements — Flip-Flops
+
+| Class | Instance Type | Ports | Description |
+|-------|--------------|-------|-------------|
+| `DFF` | `§dff` | CLK, D, Q | D flip-flop |
+| `ADFF` | `§adff` | CLK, D, RST, Q | Async reset DFF |
+| `DFFE` | `§dffe` | CLK, EN, D, Q | Enable DFF |
+| `ADFFE` | `§adffe` | CLK, EN, D, RST, Q | Async reset DFF with enable |
+| `SDFF` | `§sdff` | CLK, D, RST, Q | Synchronous reset DFF |
+| `SDFFE` | `§sdffe` | CLK, EN, D, RST, Q | Sync reset DFF (rst precedence) |
+| `SDFFCE` | `§sdffce` | CLK, EN, D, RST, Q | Sync reset DFF with enable (en precedence) |
+| `ALDFF` | `§aldff` | CLK, AL, AD, D, Q | Async load DFF |
+| `ALDFFE` | `§aldffe` | CLK, AL, EN, AD, D, Q | Async load DFF with enable |
+| `DFFSR` | `§dffsr` | CLK, CLR, SET, D, Q | SR DFF |
+| `DFFSRE` | `§dffsre` | CLK, CLR, SET, EN, D, Q | SR DFF with enable |
+
+#### Storage Elements — Scan Flip-Flops
+
+| Class | Instance Type | Ports | Description |
+|-------|--------------|-------|-------------|
+| `ScanDFF` | `§scan_dff` | CLK, D, S, Q | Scan DFF |
+| `ScanADFF` | `§scan_adff` | CLK, SE, SI, D, SO, Q | Scan async reset DFF |
+| `ScanDFFE` | `§scan_dffe` | CLK, SE, SI, EN, D, SO, Q | Scan enable DFF |
+| `ScanADFFE` | `§scan_adffe` | CLK, SE, SI, EN, D, RST, SO, Q | Scan async reset enable DFF |
+
+#### Storage Elements — Latches
+
+| Class | Instance Type | Ports | Description |
+|-------|--------------|-------|-------------|
+| `DLatch` | `§dlatch` | EN, D, Q | D latch |
 
 ### Gate Mixins
 
-Combine with gate classes for extended functionality. Full method details are in the [Base Classes](#gate-mixins) section below.
+Combine with gate classes for extended functionality. Full method details are in the [Base Classes](#gate-mixins-detailed) section below.
 
 ```python
 from netlist_carpentry.utils.gate_mixins import ClkMixin, RstMixin, EnMixin, ScanMixin, SRMixin, LoadMixin
