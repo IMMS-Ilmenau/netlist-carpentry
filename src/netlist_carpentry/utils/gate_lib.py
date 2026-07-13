@@ -49,10 +49,6 @@ class Buffer(UnaryGate, BaseModel):
 
     A buffer gate is a gate that simply passes its input signal to its output.
     It is used to isolate a signal or to drive a long wire.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}buf'
@@ -62,11 +58,6 @@ class Buffer(UnaryGate, BaseModel):
         return 'assign\t{out} = {in1};'
 
     def get_result(self, s: Signal) -> Signal:
-        """
-        Result of a Buffer for a given signal.
-
-        For a buffer gate, the output signal is simply the input signal.
-        """
         return s if s.is_defined else Signal.UNDEFINED
 
 
@@ -76,10 +67,6 @@ class NotGate(UnaryGate, BaseModel):
 
     An inverter gate is a gate that inverts its input signal.
     It produces a HIGH output signal if its input signal is LOW, and vice versa.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}not'
@@ -89,11 +76,6 @@ class NotGate(UnaryGate, BaseModel):
         return 'assign\t{out} = ~{in1};'
 
     def get_result(self, s: Signal) -> Signal:
-        """
-        Result of a NotGate for a given signal.
-
-        For an inverter gate, the output signal is the inverse of the input signal.
-        """
         return ~s
 
 
@@ -102,10 +84,6 @@ class PosGate(UnaryGate, BaseModel):
     An arithmetic plus gate.
 
     An arithmetic plus gate is a gate that just returns its input signal, sign extended.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}pos'
@@ -115,16 +93,6 @@ class PosGate(UnaryGate, BaseModel):
         return 'assign\t{out} = +{in1};'
 
     def get_result_vector(self, s: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for a full signal vector.
-
-        For an arithmetic plus gate, returns the input signal sign-extended to the output width.
-
-        Args:
-            s (SignalArray): The input signal array.
-
-        Returns:
-            SignalArray: The input signal sign-extended to the output width.
-        """
         if s.is_defined:
             int_val = int(s) or 0
             return SignalArray.from_int(int_val, msb_first=self.output_port.msb_first, fixed_width=self.output_port.width)
@@ -136,10 +104,6 @@ class NegGate(UnaryGate, BaseModel):
     An arithmetic negator gate.
 
     An arithmetic negator gate is a gate that returns the two's complement of its input signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}neg'
@@ -149,16 +113,6 @@ class NegGate(UnaryGate, BaseModel):
         return 'assign\t{out} = -{in1};'
 
     def get_result_vector(self, s: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for a full signal vector.
-
-        For an arithmetic negator gate, returns the two's complement of the input signal.
-
-        Args:
-            s (SignalArray): The input signal array.
-
-        Returns:
-            SignalArray: The two's complement of the input signal.
-        """
         if s.is_defined:
             int_val = int(s) or 0
             comp_str = Signal.twos_complement(int_val, width=self.output_port.width, msb_first=self.output_port.msb_first)
@@ -172,10 +126,6 @@ class ReduceAnd(ReduceGate, BaseModel):
 
     A reduction AND gate performs a logical AND operation on all input signals.
     It produces a HIGH output signal if and only if all input signals are HIGH.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}reduce_and'
@@ -204,10 +154,6 @@ class ReduceOr(ReduceGate, BaseModel):
 
     A reduction OR gate performs a logical OR operation on all input signals.
     It produces a HIGH output signal if at least one input signal is HIGH.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}reduce_or'
@@ -237,10 +183,6 @@ class ReduceBool(ReduceGate, BaseModel):
     A reduction Boolean gate performs a logical OR operation on all input signals,
     but with the effect of a double negation (i.e., '!(!wire_vector)' in Verilog).
     It produces a HIGH output signal if at least one input signal is HIGH.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}reduce_bool'
@@ -269,10 +211,6 @@ class ReduceXor(ReduceGate, BaseModel):
 
     A reduction XOR gate performs a logical XOR operation on all input signals.
     It produces a HIGH output signal if an odd number of input signals are HIGH.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}reduce_xor'
@@ -301,10 +239,6 @@ class ReduceXnor(ReduceGate, BaseModel):
 
     A reduction XNOR gate performs a logical XNOR operation on all input signals.
     It produces a HIGH output signal if an even number of input signals are HIGH.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}reduce_xnor'
@@ -335,10 +269,6 @@ class LogicNot(ReduceGate, BaseModel):
     It produces a HIGH output signal if all input signals are LOW.
     The output is LOW, if any input signal is HIGH.
     If there are undefined bits, the result is also UNDEFINED.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}logic_not'
@@ -364,17 +294,6 @@ class LogicNot(ReduceGate, BaseModel):
         return lambda s1, s2: s1 | s2
 
     def get_result_vector(self, s: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for a full signal vector.
-
-        Performs a logical NOT on all input signals. Produces HIGH if all inputs are LOW,
-        LOW if any input is HIGH, UNDEFINED if any input is undefined.
-
-        Args:
-            s (SignalArray): The input signal array.
-
-        Returns:
-            SignalArray: A 1-bit SignalArray containing the inverted reduction result.
-        """
         return ~super().get_result_vector(s)
 
 
@@ -384,10 +303,6 @@ class AndGate(BinaryGate, BaseModel):
 
     An AND gate is a gate that produces a HIGH output signal only if both its input signals are HIGH.
     Otherwise, it produces a LOW output signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}and'
@@ -397,10 +312,6 @@ class AndGate(BinaryGate, BaseModel):
         return 'assign\t{out} = {in1} & {in2};'
 
     def get_result(self, s1: Signal, s2: Signal) -> Signal:
-        """Result of an AND gate for 2 given signals.
-
-        For an AND gate, the output signal is HIGH only if both input signals are HIGH.
-        """
         return s1 & s2
 
 
@@ -410,10 +321,6 @@ class OrGate(BinaryGate, BaseModel):
 
     An OR gate is a gate that produces a HIGH output signal if either of its input signals is HIGH.
     Otherwise, it produces a LOW output signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}or'
@@ -423,10 +330,6 @@ class OrGate(BinaryGate, BaseModel):
         return 'assign\t{out} = {in1} | {in2};'
 
     def get_result(self, s1: Signal, s2: Signal) -> Signal:
-        """Result of an OR gate for 2 given signals.
-
-        For an OR gate, the output signal is HIGH if either input signal is HIGH.
-        """
         return s1 | s2
 
 
@@ -436,10 +339,6 @@ class XorGate(BinaryGate, BaseModel):
 
     An XOR gate is a gate that produces a HIGH output signal if its input signals are different.
     Otherwise, it produces a LOW output signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}xor'
@@ -449,10 +348,6 @@ class XorGate(BinaryGate, BaseModel):
         return 'assign\t{out} = {in1} ^ {in2};'
 
     def get_result(self, s1: Signal, s2: Signal) -> Signal:
-        """Result of an XOR gate for 2 given signals.
-
-        For an XOR gate, the output signal is HIGH if the input signals are different.
-        """
         return s1 ^ s2
 
 
@@ -462,10 +357,6 @@ class XnorGate(BinaryGate, BaseModel):
 
     An XNOR gate is a gate that produces a HIGH output signal if its input signals are the same.
     Otherwise, it produces a LOW output signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}xnor'
@@ -475,10 +366,6 @@ class XnorGate(BinaryGate, BaseModel):
         return 'assign\t{out} = {in1} ^~ {in2};'
 
     def get_result(self, s1: Signal, s2: Signal) -> Signal:
-        """Result of an XNOR gate for 2 given signals.
-
-        For an XNOR gate, the output signal is HIGH if the input signals are the same.
-        """
         return ~(s1 ^ s2)
 
 
@@ -488,10 +375,6 @@ class NorGate(BinaryGate, BaseModel):
 
     A NOR gate is a gate that produces a LOW output signal if either of its input signals is HIGH.
     Otherwise, it produces a HIGH output signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}nor'
@@ -501,10 +384,6 @@ class NorGate(BinaryGate, BaseModel):
         return 'assign\t{out} = ~({in1} | {in2});'
 
     def get_result(self, s1: Signal, s2: Signal) -> Signal:
-        """Result of an NOR gate for 2 given signals.
-
-        For a NOR gate, the output signal is LOW if either input signal is HIGH.
-        """
         return ~(s1 | s2)
 
 
@@ -514,10 +393,6 @@ class NandGate(BinaryGate, BaseModel):
 
     A NAND gate is a gate that produces a LOW output signal only if both its input signals are HIGH.
     Otherwise, it produces a HIGH output signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}nand'
@@ -527,10 +402,6 @@ class NandGate(BinaryGate, BaseModel):
         return 'assign\t{out} = ~({in1} & {in2});'
 
     def get_result(self, s1: Signal, s2: Signal) -> Signal:
-        """Result of an NAND gate for 2 given signals.
-
-        For a NAND gate, the output signal is LOW only if both input signals are HIGH.
-        """
         return ~(s1 & s2)
 
 
@@ -541,10 +412,6 @@ class BitwiseCaseEquality(BinaryGate, BaseModel):
     A BITWISE CASE EQUALITY gate is a gate that compares the input vectors bit by bit and
     produces a HIGH output signal for a certain bit only if both its input signals are HIGH.
     Otherwise, it produces a LOW output signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}bweqx'
@@ -554,10 +421,6 @@ class BitwiseCaseEquality(BinaryGate, BaseModel):
         return 'assign\t{out} = {in1} === {in2};'
 
     def get_result(self, s1: Signal, s2: Signal) -> Signal:
-        """Result of an BITWISE CASE EQUALITY gate for 2 given signals.
-
-        For a BITWISE CASE EQUALITY gate, the output signal is HIGH for a certain bit only if both its input signals are HIGH.
-        """
         return Signal.HIGH if s1 is s2 else Signal.LOW
 
 
@@ -567,10 +430,6 @@ class ShiftSigned(ShiftGate, BaseModel):
 
     A signed SHIFT gate is a gate that returns its left input shifted right by the number on the right side
     if it is positive or unsigned, and shifted left by the number on the right side if it is negative.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}shift'
@@ -581,18 +440,6 @@ class ShiftSigned(ShiftGate, BaseModel):
         return 'assign\t{out} = {in1}' + shift_op + '{in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        For a signed SHIFT gate, returns its left input shifted right by the number on the right side
-        if it is positive or unsigned, and shifted left by the number on the right side if it is negative.
-
-        Args:
-            s1 (SignalArray): The left input signal array (value to shift).
-            s2 (SignalArray): The right input signal array (shift amount).
-
-        Returns:
-            SignalArray: The shifted result.
-        """
         if not s2.is_defined:
             return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
         shift_left = self.b_signed and int(s2) is not None and int(s2) < 0
@@ -605,10 +452,6 @@ class ShiftLeft(ShiftGate, BaseModel):
     A SHIFT-LEFT gate.
 
     A SHIFT-LEFT gate is a gate that returns its left input shifted left by the number on the right side.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}shl'
@@ -618,17 +461,6 @@ class ShiftLeft(ShiftGate, BaseModel):
         return 'assign\t{out} = {in1} << {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Shifts the left input left by the shift amount (right input).
-
-        Args:
-            s1 (SignalArray): The left input signal array (value to shift).
-            s2 (SignalArray): The right input signal array (shift amount).
-
-        Returns:
-            SignalArray: The shifted result.
-        """
         if not s2.is_defined:
             return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
         out_val = s1 << s2
@@ -640,10 +472,6 @@ class ShiftRight(ShiftGate, BaseModel):
     A SHIFT-RIGHT gate.
 
     A SHIFT-RIGHT gate is a gate that returns its left input shifted right by the number on the right side.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}shr'
@@ -653,17 +481,6 @@ class ShiftRight(ShiftGate, BaseModel):
         return 'assign\t{out} = {in1} >> {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Shifts the left input right by the shift amount (right input).
-
-        Args:
-            s1 (SignalArray): The left input signal array (value to shift).
-            s2 (SignalArray): The right input signal array (shift amount).
-
-        Returns:
-            SignalArray: The shifted result.
-        """
         if not s2.is_defined:
             return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
         val_a = self.ports['A'].signal_array
@@ -679,10 +496,6 @@ class ArithmeticShiftLeft(ShiftGate, BaseModel):
     An ARITHMETIC SHIFT-LEFT gate.
 
     An ARITHMETIC SHIFT-LEFT gate is a gate that returns its left input shifted left by the number on the right side.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}sshl'
@@ -692,17 +505,6 @@ class ArithmeticShiftLeft(ShiftGate, BaseModel):
         return 'assign\t{out} = {in1} <<< {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Performs an arithmetic (signed) left shift of the first input by the shift amount.
-
-        Args:
-            s1 (SignalArray): The left input signal array (value to shift).
-            s2 (SignalArray): The right input signal array (shift amount).
-
-        Returns:
-            SignalArray: The shifted result.
-        """
         if not s2.is_defined:
             return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
         out_val = s1 << s2
@@ -714,10 +516,6 @@ class ArithmeticShiftRight(ShiftGate, BaseModel):
     An ARITHMETIC SHIFT-RIGHT gate.
 
     An ARITHMETIC SHIFT-RIGHT gate is a gate that returns its left input shifted right by the number on the right side.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}sshr'
@@ -727,17 +525,6 @@ class ArithmeticShiftRight(ShiftGate, BaseModel):
         return 'assign\t{out} = {in1} >>> {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Performs an arithmetic (signed) right shift of the first input by the shift amount.
-
-        Args:
-            s1 (SignalArray): The left input signal array (value to shift).
-            s2 (SignalArray): The right input signal array (shift amount).
-
-        Returns:
-            SignalArray: The shifted result.
-        """
         if not s2.is_defined:
             return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
         out_val = s1 >> s2
@@ -750,10 +537,6 @@ class ShiftX(ShiftGate, BaseModel):
 
     A SHIFT-X gate is a gate that returns its first input shifted right or left by the number on the second input,
     based on whether the second input is signed and negative or not.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}shiftx'
@@ -818,10 +601,6 @@ class LogicAnd(BinaryNto1Gate, BaseModel):
 
     A LOGIC-AND gate is a gate that produces a HIGH output signal if both input signals are non-zero.
     Otherwise, it produces a LOW output signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}logic_and'
@@ -831,18 +610,6 @@ class LogicAnd(BinaryNto1Gate, BaseModel):
         return 'assign\t{out} = {in1} && {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Produces a 1-bit HIGH output if both input signals are non-zero, otherwise LOW.
-        Returns UNDEFINED if either input is undefined.
-
-        Args:
-            s1 (SignalArray): The first input signal array.
-            s2 (SignalArray): The second input signal array.
-
-        Returns:
-            SignalArray: A 1-bit SignalArray containing the logic AND result.
-        """
         if s1.is_defined and s2.is_defined:
             return SignalArray(signals={0: Signal.HIGH if int(s1) and int(s2) else Signal.LOW})
         return SignalArray(signals={0: Signal.UNDEFINED})
@@ -854,10 +621,6 @@ class LogicOr(BinaryNto1Gate, BaseModel):
 
     A LOGIC-OR gate is a gate that produces a HIGH output signal if at least one of both input signals is non-zero.
     Otherwise, it produces a LOW output signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}logic_or'
@@ -867,18 +630,6 @@ class LogicOr(BinaryNto1Gate, BaseModel):
         return 'assign\t{out} = {in1} || {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Produces a 1-bit HIGH output if at least one input signal is non-zero, otherwise LOW.
-        Returns UNDEFINED if either input is undefined.
-
-        Args:
-            s1 (SignalArray): The first input signal array.
-            s2 (SignalArray): The second input signal array.
-
-        Returns:
-            SignalArray: A 1-bit SignalArray containing the logic OR result.
-        """
         if s1.is_defined and s2.is_defined:
             return SignalArray(signals={0: Signal.HIGH if int(s1) or int(s2) else Signal.LOW})
         return SignalArray(signals={0: Signal.UNDEFINED})
@@ -890,10 +641,6 @@ class LessThan(BinaryNto1Gate, BaseModel):
 
     A LESS-THAN gate is a gate that produces a HIGH output signal only if its "left" input signal value is less than its "right" input signal.
     Otherwise, it produces a LOW output signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}lt'
@@ -903,18 +650,6 @@ class LessThan(BinaryNto1Gate, BaseModel):
         return 'assign\t{out} = {in1} < {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Produces a 1-bit HIGH output if the first input is less than the second input.
-        Returns UNDEFINED if either input is undefined.
-
-        Args:
-            s1 (SignalArray): The first (left) input signal array.
-            s2 (SignalArray): The second (right) input signal array.
-
-        Returns:
-            SignalArray: A 1-bit SignalArray containing the comparison result.
-        """
         if s1.is_defined and s2.is_defined:
             return SignalArray(signals={0: Signal.HIGH if int(s1) < int(s2) else Signal.LOW})
         return SignalArray(signals={0: Signal.UNDEFINED})
@@ -926,10 +661,6 @@ class LessEqual(BinaryNto1Gate, BaseModel):
 
     A LESS-OR-EQUAL gate is a gate that produces a HIGH output signal if its "left" input signal value is less or equal to its "right" input signal.
     Otherwise, it produces a LOW output signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}le'
@@ -939,18 +670,6 @@ class LessEqual(BinaryNto1Gate, BaseModel):
         return 'assign\t{out} = {in1} <= {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Produces a 1-bit HIGH output if the first input is less than or equal to the second input.
-        Returns UNDEFINED if either input is undefined.
-
-        Args:
-            s1 (SignalArray): The first (left) input signal array.
-            s2 (SignalArray): The second (right) input signal array.
-
-        Returns:
-            SignalArray: A 1-bit SignalArray containing the comparison result.
-        """
         if s1.is_defined and s2.is_defined:
             return SignalArray(signals={0: Signal.HIGH if int(s1) <= int(s2) else Signal.LOW})
         return SignalArray(signals={0: Signal.UNDEFINED})
@@ -962,10 +681,6 @@ class Equal(BinaryNto1Gate, BaseModel):
 
     An EQUAL gate is a gate that produces a HIGH output signal only if both input signals have the same value.
     Otherwise, it produces a LOW output signal. Produces UNDEFINED, if one of the input signals is `x` or `z`.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}eq'
@@ -975,18 +690,6 @@ class Equal(BinaryNto1Gate, BaseModel):
         return 'assign\t{out} = {in1} == {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Produces a 1-bit HIGH output if both input signals have the same value.
-        Returns UNDEFINED if either input is undefined.
-
-        Args:
-            s1 (SignalArray): The first input signal array.
-            s2 (SignalArray): The second input signal array.
-
-        Returns:
-            SignalArray: A 1-bit SignalArray containing the equality result.
-        """
         if s1.is_defined and s2.is_defined:
             return SignalArray(signals={0: Signal.HIGH if int(s1) == int(s2) else Signal.LOW})
         return SignalArray(signals={0: Signal.UNDEFINED})
@@ -1001,10 +704,6 @@ class CaseEqual(BinaryNto1Gate, BaseModel):
 
     Unlike the normal equality comparison (Equal gate, §eq) that can give `x` as output, this gate produces an exact equality comparison.
     It will strictly give `0` or `1` as output, even if input includes `x` or `z` values, implementing the Verilog `===` operator.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}eqx'
@@ -1014,20 +713,8 @@ class CaseEqual(BinaryNto1Gate, BaseModel):
         return 'assign\t{out} = {in1} === {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Produces a 1-bit HIGH output if both input signals have the same value AND the same signedness.
-        Unlike Equal gate, this always returns 0 or 1 (never x), even if inputs contain x/z values.
-
-        Args:
-            s1 (SignalArray): The first input signal array.
-            s2 (SignalArray): The second input signal array.
-
-        Returns:
-            SignalArray: A 1-bit SignalArray containing the case-equality result.
-        """
         sigs_eq = s1 == s2
-        sign_eq = getattr(s1, 'signed', False) == getattr(s2, 'signed', False)
+        sign_eq = s1.signed == s2.signed
         return SignalArray(signals={0: Signal.HIGH if sigs_eq and sign_eq else Signal.LOW})
 
 
@@ -1037,10 +724,6 @@ class NotEqual(BinaryNto1Gate, BaseModel):
 
     A NOT-EQUAL gate is a gate that produces a HIGH output signal only if both input signals have different values.
     Otherwise (if both are equal), it produces a LOW output signal. Produces UNDEFINED, if one of the input signals is `x` or `z`.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}ne'
@@ -1050,18 +733,6 @@ class NotEqual(BinaryNto1Gate, BaseModel):
         return 'assign\t{out} = {in1} != {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Produces a 1-bit HIGH output if the two input signals have different values.
-        Returns UNDEFINED if either input is undefined.
-
-        Args:
-            s1 (SignalArray): The first input signal array.
-            s2 (SignalArray): The second input signal array.
-
-        Returns:
-            SignalArray: A 1-bit SignalArray containing the inequality result.
-        """
         if s1.is_defined and s2.is_defined:
             return SignalArray(signals={0: Signal.HIGH if int(s1) != int(s2) else Signal.LOW})
         return SignalArray(signals={0: Signal.UNDEFINED})
@@ -1076,10 +747,6 @@ class CaseNotEqual(BinaryNto1Gate, BaseModel):
 
     Unlike the normal inequality comparison (NotEqual gate, §ne) that can give `x` as output, this gate produces an exact inequality comparison.
     It will strictly give `0` or `1` as output, even if input includes `x` or `z` values, implementing the Verilog `!==` operator.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}nex'
@@ -1089,20 +756,8 @@ class CaseNotEqual(BinaryNto1Gate, BaseModel):
         return 'assign\t{out} = {in1} !== {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Produces a 1-bit HIGH output if the two input signals have different values OR different signedness.
-        Unlike NotEqual gate, this always returns 0 or 1 (never x), even if inputs contain x/z values.
-
-        Args:
-            s1 (SignalArray): The first input signal array.
-            s2 (SignalArray): The second input signal array.
-
-        Returns:
-            SignalArray: A 1-bit SignalArray containing the case-inequality result.
-        """
         sigs_eq = s1 == s2
-        sign_eq = getattr(s1, 'signed', False) == getattr(s2, 'signed', False)
+        sign_eq = s1.signed == s2.signed
         return SignalArray(signals={0: Signal.LOW if sigs_eq and sign_eq else Signal.HIGH})
 
 
@@ -1112,10 +767,6 @@ class GreaterThan(BinaryNto1Gate, BaseModel):
 
     A GREATER-THAN gate is a gate that produces a HIGH output signal only if its "left" input signal value is greater than its "right" input signal.
     Otherwise, it produces a LOW output signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}gt'
@@ -1125,18 +776,6 @@ class GreaterThan(BinaryNto1Gate, BaseModel):
         return 'assign\t{out} = {in1} > {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Produces a 1-bit HIGH output if the first input is greater than the second input.
-        Returns UNDEFINED if either input is undefined.
-
-        Args:
-            s1 (SignalArray): The first (left) input signal array.
-            s2 (SignalArray): The second (right) input signal array.
-
-        Returns:
-            SignalArray: A 1-bit SignalArray containing the comparison result.
-        """
         if s1.is_defined and s2.is_defined:
             return SignalArray(signals={0: Signal.HIGH if int(s1) > int(s2) else Signal.LOW})
         return SignalArray(signals={0: Signal.UNDEFINED})
@@ -1148,10 +787,6 @@ class GreaterEqual(BinaryNto1Gate, BaseModel):
 
     A GREATER-OR-EQUAL gate is a gate that produces a HIGH output signal if its "left" input signal value is greater or equal to its "right" input signal.
     Otherwise, it produces a LOW output signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
     """
 
     instance_type: str = f'{CFG.id_internal}ge'
@@ -1161,18 +796,6 @@ class GreaterEqual(BinaryNto1Gate, BaseModel):
         return 'assign\t{out} = {in1} >= {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Produces a 1-bit HIGH output if the first input is greater than or equal to the second input.
-        Returns UNDEFINED if either input is undefined.
-
-        Args:
-            s1 (SignalArray): The first (left) input signal array.
-            s2 (SignalArray): The second (right) input signal array.
-
-        Returns:
-            SignalArray: A 1-bit SignalArray containing the comparison result.
-        """
         if s1.is_defined and s2.is_defined:
             return SignalArray(signals={0: Signal.HIGH if int(s1) >= int(s2) else Signal.LOW})
         return SignalArray(signals={0: Signal.UNDEFINED})
@@ -1183,10 +806,6 @@ class Multiplexer(PrimitiveGate, BaseModel):
     A multiplexer.
 
     A multiplexer is a gate that selects one of its input signals to be its output signal, based on a control signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
         bit_width (PositiveInt): The width of the control signal.
     """
 
@@ -1415,19 +1034,6 @@ class Multiplexer(PrimitiveGate, BaseModel):
         )
 
     def get_result_vector(self, select: SignalArray, data: Dict[str, SignalArray]) -> SignalArray:
-        """Returns the result of this multiplexer's operation for full signal vectors.
-
-        Selects one of the input data signal arrays based on the select signal value,
-        and returns it as the output.
-
-        Args:
-            select (SignalArray): The select signal array that determines which data input to choose.
-            data (Dict[str, SignalArray]): A dictionary mapping data port names ('D0', 'D1', etc.)
-                to their corresponding signal arrays.
-
-        Returns:
-            SignalArray: The selected data signal array, or all-UNDEFINED if the select is undefined.
-        """
         if not select.is_defined:
             return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.y_width)})
         sel_val = int(select)
@@ -1442,10 +1048,6 @@ class Demultiplexer(PrimitiveGate, BaseModel):
     A demultiplexer.
 
     A demultiplexer is a gate that selects one of its output ports to be connected to its input signal, based on a control signal.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
         bit_width (PositiveInt): The width of the control signal.
     """
 
@@ -1678,21 +1280,6 @@ class Adder(ArithmeticGate, BaseModel):
         return 'assign\t{out} = {in1} + {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Computes the sum of two N-bit signal arrays and returns the result
-        truncated to the output port width.
-
-        Args:
-            s1 (SignalArray): The first input signal array.
-            s2 (SignalArray): The second input signal array.
-
-        Returns:
-            SignalArray: The sum of the two inputs, truncated to output width.
-
-        Raises:
-            EvaluationError: If either input contains undefined signal values.
-        """
         sig1_int = int(s1)
         sig2_int = int(s2)
         return SignalArray.from_int(sig1_int + sig2_int, fixed_width=self.output_port.width, truncate=True)
@@ -1706,21 +1293,6 @@ class Subtractor(ArithmeticGate, BaseModel):
         return 'assign\t{out} = {in1} - {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Computes the difference of two N-bit signal arrays and returns the result
-        truncated to the output port width.
-
-        Args:
-            s1 (SignalArray): The first input signal array.
-            s2 (SignalArray): The second input signal array.
-
-        Returns:
-            SignalArray: The difference of the two inputs, truncated to output width.
-
-        Raises:
-            EvaluationError: If either input contains undefined signal values.
-        """
         sig1_int = int(s1)
         sig2_int = int(s2)
         return SignalArray.from_int(sig1_int - sig2_int, fixed_width=self.output_port.width, truncate=True)
@@ -1734,21 +1306,6 @@ class Multiplier(ArithmeticGate, BaseModel):
         return 'assign\t{out} = {in1} * {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Computes the product of two N-bit signal arrays and returns the result
-        truncated to the output port width.
-
-        Args:
-            s1 (SignalArray): The first input signal array.
-            s2 (SignalArray): The second input signal array.
-
-        Returns:
-            SignalArray: The product of the two inputs, truncated to output width.
-
-        Raises:
-            EvaluationError: If either input contains undefined signal values.
-        """
         sig1_int = int(s1)
         sig2_int = int(s2)
         return SignalArray.from_int(sig1_int * sig2_int, fixed_width=self.output_port.width, truncate=True)
@@ -1762,21 +1319,6 @@ class Divider(ArithmeticGate, BaseModel):
         return 'assign\t{out} = {in1} / {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Computes the truncated division of two N-bit signal arrays and returns the result
-        truncated to the output port width.
-
-        Args:
-            s1 (SignalArray): The first input signal array.
-            s2 (SignalArray): The second input signal array.
-
-        Returns:
-            SignalArray: The quotient of the two inputs, truncated to output width.
-
-        Raises:
-            EvaluationError: If either input contains undefined signal values.
-        """
         sig1_int = int(s1)
         sig2_int = int(s2)
         return SignalArray.from_int(int(sig1_int / sig2_int), fixed_width=self.output_port.width, truncate=True)
@@ -1790,21 +1332,6 @@ class Modulo(ArithmeticGate, BaseModel):
         return 'assign\t{out} = {in1} % {in2};'
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Computes the modulo (remainder) of two N-bit signal arrays and returns the result
-        truncated to the output port width.
-
-        Args:
-            s1 (SignalArray): The first input signal array.
-            s2 (SignalArray): The second input signal array.
-
-        Returns:
-            SignalArray: The remainder of the division, truncated to output width.
-
-        Raises:
-            EvaluationError: If either input contains undefined signal values.
-        """
         sig1_int = int(s1)
         sig2_int = int(s2)
         return SignalArray.from_int(sig1_int % sig2_int, fixed_width=self.output_port.width, truncate=True)
@@ -1856,22 +1383,6 @@ class Exponentiator(ArithmeticGate, BaseModel):
         return self.get_result_vector(self.input_ports[0].signal_array, self.input_ports[1].signal_array)
 
     def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
-        """Returns the result of this gate's operation for full signal vectors.
-
-        Computes the first input signal to the power of the second input signal,
-        with hardware-appropriate wrap-around (modulo 2^N).
-
-        Args:
-            s1 (SignalArray): The base input signal array.
-            s2 (SignalArray): The exponent input signal array.
-
-        Returns:
-            SignalArray: The result of base ** exponent, truncated to output width.
-                Returns all-UNDEFINED if the operation cannot be computed (e.g., 0**negative).
-
-        Raises:
-            EvaluationError: If either input contains undefined signal values.
-        """
         base, expo = int(s1), int(s2)
         mask = (1 << self.output_port.width) - 1
         b_val = base & mask
@@ -1895,10 +1406,6 @@ class DFF(ClkMixin, StorageGate, BaseModel):
     A D flip-flop (DFF) is a clocked gate that stores a value on its input port and outputs it on its output port.
     The value is stored when the clock signal has a rising edge.
     The most basic version only has 3 ports: D, Q and CLK.
-
-    Attributes:
-        name (str): The name of the gate instance.
-        instance_type (str): The type of the gate.
         en_polarity (Signal): The polarity of the enable signal.
     """
 
