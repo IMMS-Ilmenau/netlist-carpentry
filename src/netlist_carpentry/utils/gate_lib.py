@@ -114,16 +114,21 @@ class PosGate(UnaryGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = +{in1};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for a full signal vector.
 
-        For an arithmetic plus gate, the output signal is the input signal sign-extended.
+        For an arithmetic plus gate, returns the input signal sign-extended to the output width.
+
+        Args:
+            s (SignalArray): The input signal array.
+
+        Returns:
+            SignalArray: The input signal sign-extended to the output width.
         """
-        if all(self.signal_in(i).is_defined for i in self.input_port.segments):
-            int_val = self.input_port.signal_int or 0
+        if s.is_defined:
+            int_val = int(s) or 0
             return SignalArray.from_int(int_val, msb_first=self.output_port.msb_first, fixed_width=self.output_port.width)
-        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
+        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.output_port.width)})
 
 
 class NegGate(UnaryGate, BaseModel):
@@ -143,17 +148,22 @@ class NegGate(UnaryGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = -{in1};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for a full signal vector.
 
-        For an arithmetic negator gate, the output signal is the two's complement of the input signal.
+        For an arithmetic negator gate, returns the two's complement of the input signal.
+
+        Args:
+            s (SignalArray): The input signal array.
+
+        Returns:
+            SignalArray: The two's complement of the input signal.
         """
-        if all(self.signal_in(i).is_defined for i in self.input_port.segments):
-            int_val = self.input_port.signal_int or 0
+        if s.is_defined:
+            int_val = int(s) or 0
             comp_str = Signal.twos_complement(int_val, width=self.output_port.width, msb_first=self.output_port.msb_first)
             return SignalArray.from_bin(comp_str, msb_first=self.output_port.msb_first, fixed_width=self.output_port.width)
-        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
+        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.output_port.width)})
 
 
 class ReduceAnd(ReduceGate, BaseModel):
@@ -353,8 +363,19 @@ class LogicNot(ReduceGate, BaseModel):
         """
         return lambda s1, s2: s1 | s2
 
-    def _calc_output(self) -> SignalArray:
-        return ~super()._calc_output()  # Inversion, since it is a logic not
+    def get_result_vector(self, s: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for a full signal vector.
+
+        Performs a logical NOT on all input signals. Produces HIGH if all inputs are LOW,
+        LOW if any input is HIGH, UNDEFINED if any input is undefined.
+
+        Args:
+            s (SignalArray): The input signal array.
+
+        Returns:
+            SignalArray: A 1-bit SignalArray containing the inverted reduction result.
+        """
+        return ~super().get_result_vector(s)
 
 
 class AndGate(BinaryGate, BaseModel):
@@ -559,19 +580,23 @@ class ShiftSigned(ShiftGate, BaseModel):
         shift_op = ' << -' if self.b_signed else ' >> '
         return 'assign\t{out} = {in1}' + shift_op + '{in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
         For a signed SHIFT gate, returns its left input shifted right by the number on the right side
         if it is positive or unsigned, and shifted left by the number on the right side if it is negative.
+
+        Args:
+            s1 (SignalArray): The left input signal array (value to shift).
+            s2 (SignalArray): The right input signal array (shift amount).
+
+        Returns:
+            SignalArray: The shifted result.
         """
-        if not self.ports['B'].signal_array.is_defined:
+        if not s2.is_defined:
             return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
-        val_a = self.ports['A'].signal_array
-        val_b = self.ports['B'].signal_array
-        shift_left = self.b_signed and self.ports['B'].signal_int is not None and self.ports['B'].signal_int < 0
-        out_val = val_a << -int(val_b) if shift_left else val_a >> val_b
+        shift_left = self.b_signed and int(s2) is not None and int(s2) < 0
+        out_val = s1 << -int(s2) if shift_left else s1 >> s2
         return out_val
 
 
@@ -592,19 +617,21 @@ class ShiftLeft(ShiftGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} << {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a SHIFT-LEFT gate, returns its left input shifted left by the number on the right side.
+        Shifts the left input left by the shift amount (right input).
+
+        Args:
+            s1 (SignalArray): The left input signal array (value to shift).
+            s2 (SignalArray): The right input signal array (shift amount).
+
+        Returns:
+            SignalArray: The shifted result.
         """
-        if not self.ports['B'].signal_array.is_defined:
+        if not s2.is_defined:
             return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
-        val_a = self.ports['A'].signal_array
-        val_b = self.ports['B'].signal_array
-        val_a.signed = False
-        val_b.signed = False
-        out_val = val_a << val_b
+        out_val = s1 << s2
         return out_val
 
 
@@ -625,13 +652,19 @@ class ShiftRight(ShiftGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} >> {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a SHIFT-RIGHT gate, returns its left input shifted right by the number on the right side.
+        Shifts the left input right by the shift amount (right input).
+
+        Args:
+            s1 (SignalArray): The left input signal array (value to shift).
+            s2 (SignalArray): The right input signal array (shift amount).
+
+        Returns:
+            SignalArray: The shifted result.
         """
-        if not self.ports['B'].signal_array.is_defined:
+        if not s2.is_defined:
             return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
         val_a = self.ports['A'].signal_array
         val_b = self.ports['B'].signal_array
@@ -658,15 +691,21 @@ class ArithmeticShiftLeft(ShiftGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} <<< {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a SHIFT-LEFT gate, returns its left input shifted left by the number on the right side.
+        Performs an arithmetic (signed) left shift of the first input by the shift amount.
+
+        Args:
+            s1 (SignalArray): The left input signal array (value to shift).
+            s2 (SignalArray): The right input signal array (shift amount).
+
+        Returns:
+            SignalArray: The shifted result.
         """
-        if not self.ports['B'].signal_array.is_defined:
+        if not s2.is_defined:
             return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
-        out_val = self.ports['A'].signal_array << self.ports['B'].signal_array
+        out_val = s1 << s2
         return out_val
 
 
@@ -687,15 +726,21 @@ class ArithmeticShiftRight(ShiftGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} >>> {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a SHIFT-RIGHT gate, returns its left input shifted right by the number on the right side.
+        Performs an arithmetic (signed) right shift of the first input by the shift amount.
+
+        Args:
+            s1 (SignalArray): The left input signal array (value to shift).
+            s2 (SignalArray): The right input signal array (shift amount).
+
+        Returns:
+            SignalArray: The shifted result.
         """
-        if not self.ports['B'].signal_array.is_defined:
+        if not s2.is_defined:
             return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
-        out_val = self.ports['A'].signal_array >> self.ports['B'].signal_array
+        out_val = s1 >> s2
         return out_val
 
 
@@ -785,18 +830,22 @@ class LogicAnd(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} && {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a LOGIC-AND gate, the output signal is HIGH if both input signals are non-zero.
+        Produces a 1-bit HIGH output if both input signals are non-zero, otherwise LOW.
+        Returns UNDEFINED if either input is undefined.
+
+        Args:
+            s1 (SignalArray): The first input signal array.
+            s2 (SignalArray): The second input signal array.
+
+        Returns:
+            SignalArray: A 1-bit SignalArray containing the logic AND result.
         """
-        sin1 = self.input_ports[0].signal_array
-        sin2 = self.input_ports[1].signal_array
-        if sin1.is_defined and sin2.is_defined:
-            # Both int(sin1) > 0 and int(sin2) > 0
-            return SignalArray(signals={idx: Signal.HIGH if int(sin1) and int(sin2) else Signal.LOW for idx in range(self.data_width)})
-        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
+        if s1.is_defined and s2.is_defined:
+            return SignalArray(signals={0: Signal.HIGH if int(s1) and int(s2) else Signal.LOW})
+        return SignalArray(signals={0: Signal.UNDEFINED})
 
 
 class LogicOr(BinaryNto1Gate, BaseModel):
@@ -817,18 +866,22 @@ class LogicOr(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} || {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a LOGIC-OR gate, the output signal is HIGH if at least one of both input signals is non-zero.
+        Produces a 1-bit HIGH output if at least one input signal is non-zero, otherwise LOW.
+        Returns UNDEFINED if either input is undefined.
+
+        Args:
+            s1 (SignalArray): The first input signal array.
+            s2 (SignalArray): The second input signal array.
+
+        Returns:
+            SignalArray: A 1-bit SignalArray containing the logic OR result.
         """
-        sin1 = self.input_ports[0].signal_array
-        sin2 = self.input_ports[1].signal_array
-        if sin1.is_defined and sin2.is_defined:
-            # Either int(sin1) > 0 or int(sin2) > 0
-            return SignalArray(signals={idx: Signal.HIGH if int(sin1) or int(sin2) else Signal.LOW for idx in range(self.data_width)})
-        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
+        if s1.is_defined and s2.is_defined:
+            return SignalArray(signals={0: Signal.HIGH if int(s1) or int(s2) else Signal.LOW})
+        return SignalArray(signals={0: Signal.UNDEFINED})
 
 
 class LessThan(BinaryNto1Gate, BaseModel):
@@ -849,17 +902,22 @@ class LessThan(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} < {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a LESS-THAN gate, the output signal is HIGH only if its "left" input signal value is less than its "right" input signal.
+        Produces a 1-bit HIGH output if the first input is less than the second input.
+        Returns UNDEFINED if either input is undefined.
+
+        Args:
+            s1 (SignalArray): The first (left) input signal array.
+            s2 (SignalArray): The second (right) input signal array.
+
+        Returns:
+            SignalArray: A 1-bit SignalArray containing the comparison result.
         """
-        sin1 = self.input_ports[0].signal_array
-        sin2 = self.input_ports[1].signal_array
-        if sin1.is_defined and sin2.is_defined:
-            return SignalArray(signals={idx: Signal.HIGH if int(sin1) < int(sin2) else Signal.LOW for idx in range(self.data_width)})
-        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
+        if s1.is_defined and s2.is_defined:
+            return SignalArray(signals={0: Signal.HIGH if int(s1) < int(s2) else Signal.LOW})
+        return SignalArray(signals={0: Signal.UNDEFINED})
 
 
 class LessEqual(BinaryNto1Gate, BaseModel):
@@ -880,17 +938,22 @@ class LessEqual(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} <= {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a LESS-OR-EQUAL gate, the output signal is HIGH if its "left" input signal value is less or equal to its "right" input signal.
+        Produces a 1-bit HIGH output if the first input is less than or equal to the second input.
+        Returns UNDEFINED if either input is undefined.
+
+        Args:
+            s1 (SignalArray): The first (left) input signal array.
+            s2 (SignalArray): The second (right) input signal array.
+
+        Returns:
+            SignalArray: A 1-bit SignalArray containing the comparison result.
         """
-        sin1 = self.input_ports[0].signal_array
-        sin2 = self.input_ports[1].signal_array
-        if sin1.is_defined and sin2.is_defined:
-            return SignalArray(signals={idx: Signal.HIGH if int(sin1) <= int(sin2) else Signal.LOW for idx in range(self.data_width)})
-        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
+        if s1.is_defined and s2.is_defined:
+            return SignalArray(signals={0: Signal.HIGH if int(s1) <= int(s2) else Signal.LOW})
+        return SignalArray(signals={0: Signal.UNDEFINED})
 
 
 class Equal(BinaryNto1Gate, BaseModel):
@@ -911,18 +974,22 @@ class Equal(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} == {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For an EQUAL gate, the output signal is HIGH only if both input signals have the same value.
-        The output is UNDEFINED, if one of the inputs is undefined.
+        Produces a 1-bit HIGH output if both input signals have the same value.
+        Returns UNDEFINED if either input is undefined.
+
+        Args:
+            s1 (SignalArray): The first input signal array.
+            s2 (SignalArray): The second input signal array.
+
+        Returns:
+            SignalArray: A 1-bit SignalArray containing the equality result.
         """
-        sin1 = self.input_ports[0].signal_array
-        sin2 = self.input_ports[1].signal_array
-        if sin1.is_defined and sin2.is_defined:
-            return SignalArray(signals={idx: Signal.HIGH if int(sin1) == int(sin2) else Signal.LOW for idx in range(self.data_width)})
-        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
+        if s1.is_defined and s2.is_defined:
+            return SignalArray(signals={0: Signal.HIGH if int(s1) == int(s2) else Signal.LOW})
+        return SignalArray(signals={0: Signal.UNDEFINED})
 
 
 class CaseEqual(BinaryNto1Gate, BaseModel):
@@ -946,15 +1013,22 @@ class CaseEqual(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} === {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a CASE-EQUAL gate, the output signal is HIGH only if both input signals have the same value, otherwise LOW.
+        Produces a 1-bit HIGH output if both input signals have the same value AND the same signedness.
+        Unlike Equal gate, this always returns 0 or 1 (never x), even if inputs contain x/z values.
+
+        Args:
+            s1 (SignalArray): The first input signal array.
+            s2 (SignalArray): The second input signal array.
+
+        Returns:
+            SignalArray: A 1-bit SignalArray containing the case-equality result.
         """
-        sigs_eq = self.input_ports[0].signal_array == self.input_ports[1].signal_array
-        sign_eq = self.input_ports[0].signed == self.input_ports[1].signed
-        return SignalArray(signals={idx: Signal.HIGH if sigs_eq and sign_eq else Signal.LOW for idx in range(self.data_width)})
+        sigs_eq = s1 == s2
+        sign_eq = getattr(s1, 'signed', False) == getattr(s2, 'signed', False)
+        return SignalArray(signals={0: Signal.HIGH if sigs_eq and sign_eq else Signal.LOW})
 
 
 class NotEqual(BinaryNto1Gate, BaseModel):
@@ -975,18 +1049,22 @@ class NotEqual(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} != {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a NOT-EQUAL gate, the output signal is HIGH only if both input signals have different values.
-        The output is UNDEFINED, if one of the inputs is undefined.
+        Produces a 1-bit HIGH output if the two input signals have different values.
+        Returns UNDEFINED if either input is undefined.
+
+        Args:
+            s1 (SignalArray): The first input signal array.
+            s2 (SignalArray): The second input signal array.
+
+        Returns:
+            SignalArray: A 1-bit SignalArray containing the inequality result.
         """
-        sin1 = self.input_ports[0].signal_array
-        sin2 = self.input_ports[1].signal_array
-        if sin1.is_defined and sin2.is_defined:
-            return SignalArray(signals={idx: Signal.HIGH if int(sin1) != int(sin2) else Signal.LOW for idx in range(self.data_width)})
-        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
+        if s1.is_defined and s2.is_defined:
+            return SignalArray(signals={0: Signal.HIGH if int(s1) != int(s2) else Signal.LOW})
+        return SignalArray(signals={0: Signal.UNDEFINED})
 
 
 class CaseNotEqual(BinaryNto1Gate, BaseModel):
@@ -1010,15 +1088,22 @@ class CaseNotEqual(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} !== {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a CASE-NOT-EQUAL gate, the output signal is HIGH only if both input signals have different values, otherwise LOW.
+        Produces a 1-bit HIGH output if the two input signals have different values OR different signedness.
+        Unlike NotEqual gate, this always returns 0 or 1 (never x), even if inputs contain x/z values.
+
+        Args:
+            s1 (SignalArray): The first input signal array.
+            s2 (SignalArray): The second input signal array.
+
+        Returns:
+            SignalArray: A 1-bit SignalArray containing the case-inequality result.
         """
-        sigs_eq = self.input_ports[0].signal_array == self.input_ports[1].signal_array
-        sign_eq = self.input_ports[0].signed == self.input_ports[1].signed
-        return SignalArray(signals={idx: Signal.LOW if sigs_eq and sign_eq else Signal.HIGH for idx in range(self.data_width)})
+        sigs_eq = s1 == s2
+        sign_eq = getattr(s1, 'signed', False) == getattr(s2, 'signed', False)
+        return SignalArray(signals={0: Signal.LOW if sigs_eq and sign_eq else Signal.HIGH})
 
 
 class GreaterThan(BinaryNto1Gate, BaseModel):
@@ -1039,17 +1124,22 @@ class GreaterThan(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} > {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a GREATER-THAN gate, the output signal is HIGH only if its "left" input signal value is greater than its "right" input signal.
+        Produces a 1-bit HIGH output if the first input is greater than the second input.
+        Returns UNDEFINED if either input is undefined.
+
+        Args:
+            s1 (SignalArray): The first (left) input signal array.
+            s2 (SignalArray): The second (right) input signal array.
+
+        Returns:
+            SignalArray: A 1-bit SignalArray containing the comparison result.
         """
-        sin1 = self.input_ports[0].signal_array
-        sin2 = self.input_ports[1].signal_array
-        if sin1.is_defined and sin2.is_defined:
-            return SignalArray(signals={idx: Signal.HIGH if int(sin1) > int(sin2) else Signal.LOW for idx in range(self.data_width)})
-        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
+        if s1.is_defined and s2.is_defined:
+            return SignalArray(signals={0: Signal.HIGH if int(s1) > int(s2) else Signal.LOW})
+        return SignalArray(signals={0: Signal.UNDEFINED})
 
 
 class GreaterEqual(BinaryNto1Gate, BaseModel):
@@ -1070,17 +1160,22 @@ class GreaterEqual(BinaryNto1Gate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} >= {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a GREATER-OR-EQUAL gate, the output signal is HIGH if its "left" input signal value is greater or equal to its "right" input signal.
+        Produces a 1-bit HIGH output if the first input is greater than or equal to the second input.
+        Returns UNDEFINED if either input is undefined.
+
+        Args:
+            s1 (SignalArray): The first (left) input signal array.
+            s2 (SignalArray): The second (right) input signal array.
+
+        Returns:
+            SignalArray: A 1-bit SignalArray containing the comparison result.
         """
-        sin1 = self.input_ports[0].signal_array
-        sin2 = self.input_ports[1].signal_array
-        if sin1.is_defined and sin2.is_defined:
-            return SignalArray(signals={idx: Signal.HIGH if int(sin1) >= int(sin2) else Signal.LOW for idx in range(self.data_width)})
-        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.data_width)})
+        if s1.is_defined and s2.is_defined:
+            return SignalArray(signals={0: Signal.HIGH if int(s1) >= int(s2) else Signal.LOW})
+        return SignalArray(signals={0: Signal.UNDEFINED})
 
 
 class Multiplexer(PrimitiveGate, BaseModel):
@@ -1318,6 +1413,28 @@ class Multiplexer(PrimitiveGate, BaseModel):
                 for idx in range(self.data_width)
             }
         )
+
+    def get_result_vector(self, select: SignalArray, data: Dict[str, SignalArray]) -> SignalArray:
+        """Returns the result of this multiplexer's operation for full signal vectors.
+
+        Selects one of the input data signal arrays based on the select signal value,
+        and returns it as the output.
+
+        Args:
+            select (SignalArray): The select signal array that determines which data input to choose.
+            data (Dict[str, SignalArray]): A dictionary mapping data port names ('D0', 'D1', etc.)
+                to their corresponding signal arrays.
+
+        Returns:
+            SignalArray: The selected data signal array, or all-UNDEFINED if the select is undefined.
+        """
+        if not select.is_defined:
+            return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.y_width)})
+        sel_val = int(select)
+        port_name = f'D{sel_val}'
+        if port_name in data:
+            return data[port_name]
+        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.y_width)})
 
 
 class Demultiplexer(PrimitiveGate, BaseModel):
@@ -1560,14 +1677,24 @@ class Adder(ArithmeticGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} + {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For an ADD gate, the output signal is the sum of both input signals.
-        """
-        sig1_int, sig2_int = self.inputs_int()
+        Computes the sum of two N-bit signal arrays and returns the result
+        truncated to the output port width.
 
+        Args:
+            s1 (SignalArray): The first input signal array.
+            s2 (SignalArray): The second input signal array.
+
+        Returns:
+            SignalArray: The sum of the two inputs, truncated to output width.
+
+        Raises:
+            EvaluationError: If either input contains undefined signal values.
+        """
+        sig1_int = int(s1)
+        sig2_int = int(s2)
         return SignalArray.from_int(sig1_int + sig2_int, fixed_width=self.output_port.width, truncate=True)
 
 
@@ -1578,14 +1705,24 @@ class Subtractor(ArithmeticGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} - {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For an SUB gate, the output signal is the first input signal minus the second input signal.
-        """
-        sig1_int, sig2_int = self.inputs_int()
+        Computes the difference of two N-bit signal arrays and returns the result
+        truncated to the output port width.
 
+        Args:
+            s1 (SignalArray): The first input signal array.
+            s2 (SignalArray): The second input signal array.
+
+        Returns:
+            SignalArray: The difference of the two inputs, truncated to output width.
+
+        Raises:
+            EvaluationError: If either input contains undefined signal values.
+        """
+        sig1_int = int(s1)
+        sig2_int = int(s2)
         return SignalArray.from_int(sig1_int - sig2_int, fixed_width=self.output_port.width, truncate=True)
 
 
@@ -1596,14 +1733,24 @@ class Multiplier(ArithmeticGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} * {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a MUL gate, the output signal is the product of both input signals.
-        """
-        sig1_int, sig2_int = self.inputs_int()
+        Computes the product of two N-bit signal arrays and returns the result
+        truncated to the output port width.
 
+        Args:
+            s1 (SignalArray): The first input signal array.
+            s2 (SignalArray): The second input signal array.
+
+        Returns:
+            SignalArray: The product of the two inputs, truncated to output width.
+
+        Raises:
+            EvaluationError: If either input contains undefined signal values.
+        """
+        sig1_int = int(s1)
+        sig2_int = int(s2)
         return SignalArray.from_int(sig1_int * sig2_int, fixed_width=self.output_port.width, truncate=True)
 
 
@@ -1614,14 +1761,24 @@ class Divider(ArithmeticGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} / {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a DIV gate, the output signal is the truncated division of both input signals.
-        """
-        sig1_int, sig2_int = self.inputs_int()
+        Computes the truncated division of two N-bit signal arrays and returns the result
+        truncated to the output port width.
 
+        Args:
+            s1 (SignalArray): The first input signal array.
+            s2 (SignalArray): The second input signal array.
+
+        Returns:
+            SignalArray: The quotient of the two inputs, truncated to output width.
+
+        Raises:
+            EvaluationError: If either input contains undefined signal values.
+        """
+        sig1_int = int(s1)
+        sig2_int = int(s2)
         return SignalArray.from_int(int(sig1_int / sig2_int), fixed_width=self.output_port.width, truncate=True)
 
 
@@ -1632,14 +1789,24 @@ class Modulo(ArithmeticGate, BaseModel):
     def verilog_template(self) -> str:
         return 'assign\t{out} = {in1} % {in2};'
 
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
 
-        For a MOD gate, the output signal is the modulo (remainder) of a truncating division.
-        """
-        sig1_int, sig2_int = self.inputs_int()
+        Computes the modulo (remainder) of two N-bit signal arrays and returns the result
+        truncated to the output port width.
 
+        Args:
+            s1 (SignalArray): The first input signal array.
+            s2 (SignalArray): The second input signal array.
+
+        Returns:
+            SignalArray: The remainder of the division, truncated to output width.
+
+        Raises:
+            EvaluationError: If either input contains undefined signal values.
+        """
+        sig1_int = int(s1)
+        sig2_int = int(s2)
         return SignalArray.from_int(sig1_int % sig2_int, fixed_width=self.output_port.width, truncate=True)
 
 
@@ -1684,10 +1851,43 @@ class Exponentiator(ArithmeticGate, BaseModel):
         0**0 is defined as 1, following IEEE 754-2008
         (https://en.wikipedia.org/wiki/Zero_to_the_power_of_zero#IEEE_floating-point_standard).
         """
-        pow_sig = self._verilog_pow()
-        if pow_sig is not None:
-            return SignalArray.from_int(pow_sig, fixed_width=self.output_port.width, truncate=True)
-        return SignalArray(signals={i: Signal.UNDEFINED for i, _ in self.output_port for idx in range(self.data_width)})
+        # Set signedness on output port before computing result
+        self.output_port.set_signed(self.ports['A'].signed)
+        return self.get_result_vector(self.input_ports[0].signal_array, self.input_ports[1].signal_array)
+
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
+
+        Computes the first input signal to the power of the second input signal,
+        with hardware-appropriate wrap-around (modulo 2^N).
+
+        Args:
+            s1 (SignalArray): The base input signal array.
+            s2 (SignalArray): The exponent input signal array.
+
+        Returns:
+            SignalArray: The result of base ** exponent, truncated to output width.
+                Returns all-UNDEFINED if the operation cannot be computed (e.g., 0**negative).
+
+        Raises:
+            EvaluationError: If either input contains undefined signal values.
+        """
+        base, expo = int(s1), int(s2)
+        mask = (1 << self.output_port.width) - 1
+        b_val = base & mask
+        e_val = expo & mask
+        if expo < 0:
+            if base == 0:
+                return SignalArray(signals={i: Signal.UNDEFINED for i in range(self.output_port.width)})
+            elif base == 1:
+                result = 1
+            elif base == -1:
+                result = -1 if (e_val % 2) else 1
+            else:
+                result = 0
+        else:
+            result = pow(b_val, e_val, 1 << self.output_port.width)
+        return SignalArray.from_int(result, fixed_width=self.output_port.width, truncate=True)
 
 
 class DFF(ClkMixin, StorageGate, BaseModel):

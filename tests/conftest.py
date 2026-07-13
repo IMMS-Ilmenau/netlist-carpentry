@@ -11,8 +11,6 @@ def pytest_configure(config: Any) -> None:
     from netlist_carpentry import CFG
 
     CFG.allow_detached_segments = True
-    CFG.log_level = 5
-    initialize_logging()
 
 
 def pytest_runtest_setup(item: object) -> None:

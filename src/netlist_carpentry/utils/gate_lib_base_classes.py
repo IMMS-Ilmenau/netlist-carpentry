@@ -396,6 +396,8 @@ class UnaryGate(PrimitiveGate, BaseModel):
         This method is only implemented for bitwise evaluating gates (e.g. Buffer, NotGate).
         This method raises an UnsupportedOperationError if used on arithmetic gates (e.g. PosGate, NegGate).
 
+        For vector-level operations on full signal arrays, use :meth:`get_result_vector` instead.
+
         Args:
             s (Signal): The Signal, i.e. the input operand.
 
@@ -406,6 +408,28 @@ class UnaryGate(PrimitiveGate, BaseModel):
             Signal: The result of this gate's operation on the given signals.
         """
         raise UnsupportedOperationError(f'{self.__class__.__name__}.get_result() is not supported: Valid operation missing!')
+
+    def get_result_vector(self, s: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for a full signal vector.
+
+        This method provides a unified interface for all unary gates to operate on
+        :class:`SignalArray` (multi-bit) inputs. The default implementation iterates
+        over each bit index and calls :meth:`get_result` for bitwise gates (e.g. Buffer,
+        NotGate). Gates that operate on the full vector (e.g. arithmetic gates like
+        PosGate, NegGate) override this method with their vector-level logic.
+
+        For reduction gates (e.g. ReduceAnd, ReduceOr), the output is a 1-bit
+        :class:`SignalArray` regardless of input width.
+
+        Args:
+            s (SignalArray): The input signal array.
+
+        Returns:
+            SignalArray: The result of this gate's operation on the given signals.
+                For bitwise gates, this has the same width as the input.
+                For reduction gates, this is a 1-bit SignalArray.
+        """
+        return SignalArray(signals={idx: self.get_result(s[idx]) for idx in range(len(s.signals))})
 
     def update_parameters(self) -> None:
         super().update_parameters()
@@ -432,7 +456,7 @@ class UnaryGate(PrimitiveGate, BaseModel):
         return self.output_port.signal_array[idx]
 
     def _calc_output(self) -> SignalArray:
-        return SignalArray(signals={idx: self.truth_table[self.signal_in(idx)] for idx in range(self.data_width)})
+        return self.get_result_vector(self.input_port.signal_array)
 
 
 class _Out1BitMixin(PrimitiveGate):
@@ -509,8 +533,22 @@ class ReduceGate(_Out1BitMixin, UnaryGate):
         return self.output_port.signal
 
     def _calc_output(self) -> SignalArray:
-        signals = {idx: reduce(self.reduce_operation, self.input_port.signal_array.signals.values()) for idx in range(self.data_width)}
-        return SignalArray(signals=signals)
+        return self.get_result_vector(self.input_port.signal_array)
+
+    def get_result_vector(self, s: SignalArray) -> SignalArray:
+        """Returns the result of this reduction gate's operation for a full signal vector.
+
+        Reduces an N-bit :class:`SignalArray` to a 1-bit :class:`SignalArray` by
+        applying :meth:`reduce_operation` across all bits using :func:`functools.reduce`.
+
+        Args:
+            s (SignalArray): The input signal array of any width.
+
+        Returns:
+            SignalArray: A 1-bit SignalArray containing the reduction result.
+        """
+        reduced = reduce(self.reduce_operation, s.signals.values())
+        return SignalArray(signals={0: reduced})
 
 
 class BinaryGate(PrimitiveGate, BaseModel):
@@ -611,6 +649,8 @@ class BinaryGate(PrimitiveGate, BaseModel):
         This method is only implemented for bitwise evaluating gates (e.g. AndGate, OrGate).
         This method raises an UnsupportedOperationError if used on other gates (e.g. Adder).
 
+        For vector-level operations on full signal arrays, use :meth:`get_result_vector` instead.
+
         Args:
             s1 (Signal): The first Signal, i.e. the first operand.
             s2 (Signal): The second Signal, i.e. the second operand.
@@ -622,6 +662,30 @@ class BinaryGate(PrimitiveGate, BaseModel):
             Signal: The result of this gate's operation on the given signals.
         """
         raise UnsupportedOperationError(f'{self.__class__.__name__}.get_result() is not supported: Valid operation missing!')
+
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this gate's operation for full signal vectors.
+
+        This method provides a unified interface for all binary gates to operate on
+        :class:`SignalArray` (multi-bit) inputs. The default implementation iterates
+        over each bit index and calls :meth:`get_result` for bitwise gates (e.g. AndGate,
+        OrGate, XorGate). Gates that operate on the full vectors (e.g. arithmetic gates
+        like Adder, Subtractor, or comparison gates like LessThan) override this method
+        with their vector-level logic.
+
+        For comparison gates that produce a single bit from two N-bit inputs
+        (e.g. LessThan, Equal), the output is a 1-bit :class:`SignalArray`.
+
+        Args:
+            s1 (SignalArray): The first input signal array.
+            s2 (SignalArray): The second input signal array.
+
+        Returns:
+            SignalArray: The result of this gate's operation on the given signals.
+                For bitwise gates, this has the same width as the inputs.
+                For comparison/reduction gates, this is a 1-bit SignalArray.
+        """
+        return SignalArray(signals={idx: self.get_result(s1[idx], s2[idx]) for idx in range(min(len(s1.signals), len(s2.signals)))})
 
     def update_parameters(self) -> None:
         super().update_parameters()
@@ -658,7 +722,7 @@ class BinaryGate(PrimitiveGate, BaseModel):
 
     def _calc_output(self) -> SignalArray:
         """Calculates the gate's output signal."""
-        return SignalArray(signals={idx: self.truth_table[self.signals_in(idx)] for idx in range(self.data_width)})
+        return self.get_result_vector(self.input_ports[0].signal_array, self.input_ports[1].signal_array)
 
 
 class ShiftGate(BinaryGate, BaseModel):
@@ -790,6 +854,27 @@ class BinaryNto1Gate(_Out1BitMixin, BinaryGate, BaseModel):
         in1, in2 = self._check_signal_signed(self.verilog_net_map['A'], self.verilog_net_map['B'])
         # Check whether output is connected, do not transform if output port is unconnected
         return self.verilog_template.format(out=out, in1=in1, in2=in2) if out != "1'bx" else ''
+
+    def get_result_vector(self, s1: SignalArray, s2: SignalArray) -> SignalArray:
+        """Returns the result of this N-to-1 gate's operation for full signal vectors.
+
+        Reduces two N-bit :class:`SignalArray` inputs to a 1-bit :class:`SignalArray`.
+        Concrete subclasses (e.g. LessThan, Equal, GreaterThan) override this method
+        with their specific comparison logic.
+
+        Args:
+            s1 (SignalArray): The first input signal array.
+            s2 (SignalArray): The second input signal array.
+
+        Returns:
+            SignalArray: A 1-bit SignalArray containing the comparison result.
+
+        Raises:
+            UnsupportedOperationError: If the subclass does not implement vector-level logic.
+        """
+        raise UnsupportedOperationError(
+            f'{self.__class__.__name__}.get_result_vector() is not implemented: This gate requires vector-level comparison logic.'
+        )
 
 
 class StorageGate(PrimitiveGate, BaseModel):

@@ -9,7 +9,7 @@ from netlist_carpentry import WIRE_SEGMENT_X, Port
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.enums.signal import Signal
-from netlist_carpentry.core.exceptions import EvaluationError, SignalAssignmentError, UnsupportedOperationError
+from netlist_carpentry.core.exceptions import InvalidSignalError, SignalAssignmentError, UnsupportedOperationError
 from netlist_carpentry.core.netlist_elements.element_path import PortPath, WireSegmentPath
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
@@ -2142,7 +2142,7 @@ def test_adder_structure(simple_module: Module) -> None:
     target_str = "assign\t{carry, wire} = {wireA2, 2'bx1, wireA1[0]} + {wireB[3], 1'bx, wireB[1:0]};"
     assert a.verilog == target_str
 
-    with pytest.raises(EvaluationError):
+    with pytest.raises(InvalidSignalError):
         a._calc_output()
 
     a.ports['A'].parameters['signed'] = '0'
@@ -2192,7 +2192,7 @@ def test_adder_behavior(simple_module: Module) -> None:
     a.evaluate()  # 12 + (-6) = 6
     assert a.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.LOW, 4: Signal.LOW}
     a.tie_port('A', 3, 'Z')
-    with pytest.raises(EvaluationError):
+    with pytest.raises(InvalidSignalError):
         a.evaluate()
 
 
@@ -2264,7 +2264,7 @@ def test_subtractor_behavior(simple_module: Module) -> None:
     s.evaluate()  # 12 - (-3) = 15 ==> 01111
     assert s.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH, 4: Signal.LOW}
     s.tie_port('A', 3, 'Z')
-    with pytest.raises(EvaluationError):
+    with pytest.raises(InvalidSignalError):
         s.evaluate()
 
 
@@ -2338,7 +2338,7 @@ def test_multiplier_behavior(simple_module: Module) -> None:
     m.evaluate()  # 4 * (-3) = -12 ==> 10100 in two's complement
     assert m.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.HIGH, 3: Signal.LOW, 4: Signal.HIGH}
     m.tie_port('A', 3, 'Z')
-    with pytest.raises(EvaluationError):
+    with pytest.raises(InvalidSignalError):
         m.evaluate()
 
 
@@ -2414,7 +2414,7 @@ def test_divider_behavior(simple_module: Module) -> None:
     d.evaluate()  # 6 / (-3) = -2 ==> 1110 in two's complement
     assert d.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
     d.tie_port('A', 3, 'Z')
-    with pytest.raises(EvaluationError):
+    with pytest.raises(InvalidSignalError):
         d.evaluate()
 
 
@@ -2491,7 +2491,7 @@ def test_modulo_behavior(simple_module: Module) -> None:
     m.evaluate()  # 7 % (-3) = -2 ==> 1110 in two's complement
     assert m.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.HIGH, 2: Signal.HIGH, 3: Signal.HIGH}
     m.tie_port('A', 3, 'Z')
-    with pytest.raises(EvaluationError):
+    with pytest.raises(InvalidSignalError):
         m.evaluate()
 
 
@@ -2609,7 +2609,7 @@ def test_exponentiator_behavior(simple_module: Module) -> None:
     assert e.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     assert e.output_port.signal_int == 0
     e.tie_port('A', 3, 'Z')
-    with pytest.raises(EvaluationError):
+    with pytest.raises(InvalidSignalError):
         e.evaluate()
 
 
