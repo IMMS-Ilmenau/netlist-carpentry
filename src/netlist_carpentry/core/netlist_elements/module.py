@@ -1187,8 +1187,27 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         Raises:
             MissingConnectionError: If the source port has no wires connected to it.
-            AlreadyConnectedError: If at least one segment of the target port is already connect to a wire.
+            AlreadyConnectedError: If at least one segment of the target port is already connected to a wire.
             WidthMismatchError: If the given ports have different widths.
+
+        Example:
+            ```python
+            >>> m = Module(name='m')
+            >>> src = m.create_port('src', 'input', width=4)
+            >>> tgt = m.create_port('tgt', 'input', width=4)
+            >>> wire = m.create_wire('wire', width=4)
+            >>> m.connect(wire, src, new_wire_name='my_wire')  # Connect wire to source port
+            >>> src.is_connected
+            True
+            >>> tgt.is_connected
+            False
+            >>> m.reconnect(src, tgt)  # Move connections from src to tgt
+            >>> src.is_connected
+            False
+            >>> tgt.is_connected
+            True
+
+            ```
         """
         if isinstance(source, PortPath):
             source = self.get_from_path(source)
@@ -1203,19 +1222,25 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         This method disconnects all wire segments from the source port and
         attaches them to the corresponding indices of the target port.
 
+        Both ports must belong to this module (or to instances within this module).
+        The source port must have at least one connection; the target port must be
+        entirely unconnected. Ports must have matching widths.
+
         Args:
             source: The port object to disconnect wires from.
             target: The port object to connect the wires to.
 
         Raises:
             MissingConnectionError: If the source port has no wires connected to it.
-            AlreadyConnectedError: If at least one segment of the target port is already connect to a wire.
+            AlreadyConnectedError: If at least one segment of the target port is already connected to a wire.
             WidthMismatchError: If the given ports have different widths.
         """
         if source.width != target.width:
             raise WidthMismatchError(f'Cannot reconnect {source.raw_path} to {target.raw_path}: Ports have different widths!')
         if source.is_unconnected:
             raise MissingConnectionError(f'Cannot reconnect {source.raw_path} to {target.raw_path}: Source port has no connection!')
+        if not target.is_unconnected:
+            raise AlreadyConnectedError(f'Cannot reconnect {source.raw_path} to {target.raw_path}: Target port is already connected!')
         orig_con = source.connected_wire_segments.copy()
         self.disconnect(source)
         for idx, ws_path in orig_con.items():
