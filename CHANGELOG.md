@@ -1,4 +1,4 @@
-# Changelog 0.5.0
+# Changelog 0.5.0 (2026-07-14)
 
 ## ADDED
 - Implemented missing Yosys cell abstractions into the gate library, including
