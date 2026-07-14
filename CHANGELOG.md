@@ -37,6 +37,8 @@
   - `BinaryGate.truth_table[(Signal.HIGH, Signal.LOW)]` is equivalent to `BinaryGate.get_result(Signal.HIGH, Signal.LOW)`
   - Not yet implemented for reduction gates (UnaryGate with single-bit output) and logic gates (BinaryGate with single-bit output)
 - Reduction gates received a property `reduce_operation` that returns a lambda function modeling the reduction functionality of the gate
+- Introduced `get_result_vector()` method for most primitive gates that returns the result of a given input signal configuration, similar to the `PrimitiveGate._calc_output()` method, except `get_result_vector()` computes the result for the given SignalArray objects, and not only for the current inputs
+- Added Copilot skill files for the basics of Netlist Carpentry (accessible via /nc-basics) and for the API of Netlist Carpentry (accessible via /nc-api)
 - Added lots of code examples to the docstrings - code examples are tested via doctest (as part of the pytest run) when running tox
 
 ## FIXED
@@ -51,6 +53,15 @@
 - Fixed `repr(Port)`, now also shows the direction (if given) and port width
 - Fixed `repr(Wire)`, now also shows wire width
 - Fixed `repr(WireSegment)` for constant wire segments, now showing explicit `"Tied to <value>"`
+- Fixed issue with modules imported from foreign circuits, they are now copied into the circuit correctly
+- `Port`, `Wire`, `Instance` objects now register themselves automatically in their parent Module object in the corresponding dictionary, and a warning is issued if no parent module is given
+- Fixed issues with `Module.copy_instance()` and `NetlistElement.copy_object()`
+- Fixed Yosys SLang plugin not being used correctly
+- Fixed empty Verilog sections being written for no reason
+- Fixed `Module.reconnect()` issue if one of the given parameters points outside of this module - now an appropriate exception is raised
+- Fixed `Module.connect()` if the source port is a module port - now instead of a generic name `"_ncgen_..."`, the port name is used
+- Fixed hidden bug in `Circuit.uniquify()`
+- Fixed bug in `Circuit.create_blackbox_modules()`, now port directions and widths are copied correctly
 
 ## CHANGED
 - `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.ARST_POLARITY` → `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.RST_POLARITY`
@@ -80,6 +91,7 @@
   - `Module.get_succeeding_instances()`
   - `Module.get_preceeding_instances()`
   - Previous calls with `instance_name=<value>` still work, but show a deprecation warning
+- For the Verilog write-out, the `port2v()`, `wire2v()` and `instance2v()` methods no longer require a Module Parameter - the module is now retrieved from the parent of the given instance
 
 
 # Older Versions
