@@ -115,11 +115,8 @@ class P2VTransformer:
 
     def _module_wires2v(self, module: Module) -> str:
         place_holder = '\t// Wire Definitions'
-        return (
-            place_holder + ''.join(f'\n\t\t{self.wire2v(w)}' for w in module.wires.values() if w.name not in module.ports) + '\n'
-            if module.wires
-            else ''
-        )
+        defs = ''.join(f'\n\t\t{self.wire2v(w)}' for w in module.wires.values() if w.name not in module.ports)
+        return place_holder + defs + '\n' if defs else ''
 
     def _module_instances2v(self, module: Module) -> str:
         place_holder = '\t// Primitive Gates and Submodule Instances'

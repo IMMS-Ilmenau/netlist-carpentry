@@ -954,7 +954,16 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         # Determine the wire segment: new if source port is unconnected, else reuse
         if isinstance(source_seg, PortSegment) and source_seg.is_unconnected:
-            wire_seg = self.create_wire(new_wire_name)[0]
+            # If the source is a module port segment and no explicit name is given, use the parent port name for the wire (so generated Verilog matches).
+            # Check if a wire with that name already exists to avoid conflicts when connecting multiple segments of the same port.
+            if new_wire_name is None and source_seg.parent.is_module_port:
+                wire_name = source_seg.parent.name
+                if wire_name in self.wires:
+                    wire_seg = self.wires[wire_name][source_seg.index]
+                else:
+                    wire_seg = self.create_wire(wire_name, width=source_seg.parent.width)[source_seg.index]
+            else:
+                wire_seg = self.create_wire(new_wire_name)[0]
         else:
             wire_seg = source_seg.ws  # type: ignore[union-attr]
 
@@ -1022,8 +1031,16 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 '\tconnect(port.segment[1], port.segment[4])'
             )
 
-        # Create a new wire only if the driver is unconnected
-        wire = self.create_wire(new_wire_name, width=driver.width) if driver.is_unconnected_partly else None
+        # Determine the wire name when creating a new wire for an unconnected driver, also check if a wire with that name already exists to avoid conflicts.
+        # If the driver is a module port and no explicit name is given, use the port name (so the generated Verilog has `wire <port_name>` matching the port).
+        if driver.is_unconnected_partly:
+            if new_wire_name is None and driver.is_module_port:
+                wire_name = driver.name
+                wire = self.wires[wire_name] if wire_name in self.wires else self.create_wire(wire_name, width=driver.width)
+            else:
+                wire = self.create_wire(new_wire_name, width=driver.width)
+        else:
+            wire = None
 
         load_offset = load.offset or 0
         for idx, dr_seg in driver:

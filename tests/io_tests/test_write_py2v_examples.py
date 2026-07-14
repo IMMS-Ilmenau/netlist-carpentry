@@ -88,7 +88,9 @@ def test_wire2port() -> None:
     m.connect(in_, out)
 
     found = P2VTransformer().module2v(m)
-    target = 'module m\n\t(\n\t\tinput\twire\t\t\tin,\n\t\toutput\twire\t\t\tout\n\t);\n\t// Wire Definitions\n\t\twire\t\t_ncgen_0_;\n\n\t// Port<->Wire Connections\n\t\tassign _ncgen_0_\t= in;\n\t\tassign out\t= _ncgen_0_;\n\nendmodule'
+    target = (
+        'module m\n\t(\n\t\tinput\twire\t\t\tin,\n\t\toutput\twire\t\t\tout\n\t);\n\n\t// Port<->Wire Connections\n\t\tassign out\t= in;\n\nendmodule'
+    )
     assert found == target
 
 

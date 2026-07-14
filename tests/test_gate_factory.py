@@ -83,10 +83,10 @@ def test_un_gate(module: Module) -> None:
     assert g.name == '_NotGate_1_'
     assert g.y_width == 4
     assert g.ports['A'].is_connected
-    assert next(iter(g.ports['A'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['A'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['A'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['Y'].is_connected
-    assert next(iter(g.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Y'].connected_wires == module.ports['P3'].connected_wires
 
     g = factory._un_gate(lib.NotGate, module, A=module.ports['P1'], Y=module.ports['P4'])
@@ -164,11 +164,11 @@ def test_reduce_gate(module: Module) -> None:
     assert g.a_width == 4
     assert g.ports['A'].is_connected
     assert g.ports['A'].width == 4
-    assert next(iter(g.ports['A'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['A'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['A'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['Y'].is_connected
     assert g.ports['Y'].width == 1
-    assert next(iter(g.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Y'].connected_wires == module.ports['P5'].connected_wires
 
     g = factory._reduce_gate(lib.ReduceOr, module, params={'A_WIDTH': 4, 'Y_WIDTH': 4})
@@ -233,13 +233,13 @@ def test_bin_gate(module: Module) -> None:
     assert g.name == '_XorGate_1_'
     assert g.y_width == 4
     assert g.ports['A'].is_connected
-    assert next(iter(g.ports['A'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['A'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['A'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['B'].is_connected
-    assert next(iter(g.ports['B'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['B'].connected_wires)).raw == 'test_module1.P2'
     assert g.ports['B'].connected_wires == module.ports['P2'].connected_wires
     assert g.ports['Y'].is_connected
-    assert next(iter(g.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Y'].connected_wires == module.ports['P3'].connected_wires
 
 
@@ -399,15 +399,15 @@ def test_shift_gate(module: Module) -> None:
     assert g3.name == '_ShiftLeft_2_'
     assert g3.y_width == 4
     assert g3.ports['A'].is_connected
-    assert next(iter(g3.ports['A'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g3.ports['A'].connected_wires)).raw == 'test_module1.P1'
     assert g3.ports['A'].connected_wires == module.ports['P1'].connected_wires
     assert g3.ports['B'].is_connected
     assert g3.ports['B'].width == 2
     assert g3.ports['B'].width == module.ports['P6'].width
-    assert next(iter(g3.ports['B'].connected_wires)).raw == 'test_module1._ncgen_3_'  # 1 and 2 are the wires connected to g2
+    assert next(iter(g3.ports['B'].connected_wires)).raw == 'test_module1.P6'  # 1 and 2 are the wires connected to g2
     assert g3.ports['B'].connected_wires == module.ports['P6'].connected_wires
     assert g3.ports['Y'].is_connected
-    assert next(iter(g3.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_4_'
+    assert next(iter(g3.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_1_'
     assert g3.ports['Y'].connected_wires == module.ports['P3'].connected_wires
 
     g4 = factory._shift_gate(lib.ShiftLeft, module, A=module.ports['P1'])
@@ -535,15 +535,15 @@ def test_binNto1_gate(module: Module) -> None:
     assert g.b_width == 4
     assert g.ports['A'].is_connected
     assert g.ports['A'].width == 4
-    assert next(iter(g.ports['A'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['A'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['A'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['B'].is_connected
     assert g.ports['B'].width == 4
-    assert next(iter(g.ports['B'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['B'].connected_wires)).raw == 'test_module1.P2'
     assert g.ports['B'].connected_wires == module.ports['P2'].connected_wires
     assert g.ports['Y'].is_connected
     assert g.ports['Y'].width == 1
-    assert next(iter(g.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Y'].connected_wires == module.ports['P5'].connected_wires
 
     g = factory._binNto1_gate(lib.LogicAnd, module, A=module.ports['P1'])
@@ -760,27 +760,27 @@ def test_multiplexer(module: Module) -> None:
     assert g.bit_width == 2
     assert g.ports['D0'].is_connected
     assert g.ports['D0'].width == 4
-    assert next(iter(g.ports['D0'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D0'].connected_wires)).raw == 'test_module1.D0'
     assert g.ports['D0'].connected_wires == module.ports['D0'].connected_wires
     assert g.ports['D1'].is_connected
     assert g.ports['D1'].width == 4
-    assert next(iter(g.ports['D1'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['D1'].connected_wires)).raw == 'test_module1.D1'
     assert g.ports['D1'].connected_wires == module.ports['D1'].connected_wires
     assert g.ports['D2'].is_connected
     assert g.ports['D2'].width == 4
-    assert next(iter(g.ports['D2'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['D2'].connected_wires)).raw == 'test_module1.D2'
     assert g.ports['D2'].connected_wires == module.ports['D2'].connected_wires
     assert g.ports['D3'].is_connected
     assert g.ports['D3'].width == 4
-    assert next(iter(g.ports['D3'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert next(iter(g.ports['D3'].connected_wires)).raw == 'test_module1.D3'
     assert g.ports['D3'].connected_wires == module.ports['D3'].connected_wires
     assert g.ports['S'].is_connected
     assert g.ports['S'].width == 2
-    assert next(iter(g.ports['S'].connected_wires)).raw == 'test_module1._ncgen_4_'
+    assert next(iter(g.ports['S'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['S'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['Y'].is_connected
     assert g.ports['Y'].width == 4
-    assert next(iter(g.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_5_'
+    assert next(iter(g.ports['Y'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Y'].connected_wires == module.ports['P3'].connected_wires
 
 
@@ -824,27 +824,27 @@ def test_demultiplexer(module: Module) -> None:
     assert g.bit_width == 2
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P3'
     assert g.ports['D'].connected_wires == module.ports['P3'].connected_wires
     assert g.ports['S'].is_connected
     assert g.ports['S'].width == 2
-    assert next(iter(g.ports['S'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['S'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['S'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['Y0'].is_connected
     assert g.ports['Y0'].width == 4
-    assert next(iter(g.ports['Y0'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['Y0'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Y0'].connected_wires == module.ports['Y0'].connected_wires
     assert g.ports['Y1'].is_connected
     assert g.ports['Y1'].width == 4
-    assert next(iter(g.ports['Y1'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert next(iter(g.ports['Y1'].connected_wires)).raw == 'test_module1._ncgen_1_'
     assert g.ports['Y1'].connected_wires == module.ports['Y1'].connected_wires
     assert g.ports['Y2'].is_connected
     assert g.ports['Y2'].width == 4
-    assert next(iter(g.ports['Y2'].connected_wires)).raw == 'test_module1._ncgen_4_'
+    assert next(iter(g.ports['Y2'].connected_wires)).raw == 'test_module1._ncgen_2_'
     assert g.ports['Y2'].connected_wires == module.ports['Y2'].connected_wires
     assert g.ports['Y3'].is_connected
     assert g.ports['Y3'].width == 4
-    assert next(iter(g.ports['Y3'].connected_wires)).raw == 'test_module1._ncgen_5_'
+    assert next(iter(g.ports['Y3'].connected_wires)).raw == 'test_module1._ncgen_3_'
     assert g.ports['Y3'].connected_wires == module.ports['Y3'].connected_wires
 
 
@@ -1016,15 +1016,15 @@ def test_dff_gate(module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['CLK'].is_connected
     assert g.ports['CLK'].width == 1
-    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
 
 
@@ -1057,19 +1057,19 @@ def test_adff_gate(module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['CLK'].is_connected
     assert g.ports['CLK'].width == 1
-    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['RST'].is_connected
     assert g.ports['RST'].width == 1
-    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1.P7'
     assert g.ports['RST'].connected_wires == module.ports['P7'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
 
 
@@ -1100,19 +1100,19 @@ def test_dffe_gate(module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['CLK'].is_connected
     assert g.ports['CLK'].width == 1
-    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['EN'].is_connected
     assert g.ports['EN'].width == 1
-    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['EN'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
 
 
@@ -1148,23 +1148,23 @@ def test_adffe_gate(module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['CLK'].is_connected
     assert g.ports['CLK'].width == 1
-    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['RST'].is_connected
     assert g.ports['RST'].width == 1
-    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1.P7'
     assert g.ports['RST'].connected_wires == module.ports['P7'].connected_wires
     assert g.ports['EN'].is_connected
     assert g.ports['EN'].width == 1
-    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['EN'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
 
 
@@ -1197,19 +1197,19 @@ def test_sdff_gate(module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['CLK'].is_connected
     assert g.ports['CLK'].width == 1
-    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['RST'].is_connected
     assert g.ports['RST'].width == 1
-    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1.P7'
     assert g.ports['RST'].connected_wires == module.ports['P7'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
 
 
@@ -1245,23 +1245,23 @@ def test_sdffce_gate(module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['CLK'].is_connected
     assert g.ports['CLK'].width == 1
-    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['RST'].is_connected
     assert g.ports['RST'].width == 1
-    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1.P7'
     assert g.ports['RST'].connected_wires == module.ports['P7'].connected_wires
     assert g.ports['EN'].is_connected
     assert g.ports['EN'].width == 1
-    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['EN'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
 
 
@@ -1297,23 +1297,23 @@ def test_sdffe_gate(module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['CLK'].is_connected
     assert g.ports['CLK'].width == 1
-    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['RST'].is_connected
     assert g.ports['RST'].width == 1
-    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1.P7'
     assert g.ports['RST'].connected_wires == module.ports['P7'].connected_wires
     assert g.ports['EN'].is_connected
     assert g.ports['EN'].width == 1
-    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['EN'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
 
 
@@ -1349,23 +1349,23 @@ def test_aldff_gate(module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['CLK'].is_connected
     assert g.ports['CLK'].width == 1
-    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['AD'].is_connected
     assert g.ports['AD'].width == 4
-    assert next(iter(g.ports['AD'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert next(iter(g.ports['AD'].connected_wires)).raw == 'test_module1.P7'
     assert g.ports['AD'].connected_wires == module.ports['P7'].connected_wires
     assert g.ports['AL'].is_connected
     assert g.ports['AL'].width == 1
-    assert next(iter(g.ports['AL'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['AL'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['AL'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
 
 
@@ -1410,27 +1410,27 @@ def test_aldffe_gate(module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['CLK'].is_connected
     assert g.ports['CLK'].width == 1
-    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['CLK'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['AD'].is_connected
     assert g.ports['AD'].width == 4
-    assert next(iter(g.ports['AD'].connected_wires)).raw == 'test_module1._ncgen_4_'
+    assert next(iter(g.ports['AD'].connected_wires)).raw == 'test_module1.P7'
     assert g.ports['AD'].connected_wires == module.ports['P7'].connected_wires
     assert g.ports['AL'].is_connected
     assert g.ports['AL'].width == 1
-    assert next(iter(g.ports['AL'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['AL'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['AL'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['EN'].is_connected
     assert g.ports['EN'].width == 1
-    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1.P8'
     assert g.ports['EN'].connected_wires == module.ports['P8'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
 
 
@@ -1471,27 +1471,27 @@ def test_scan_dff_gate(scan_module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == scan_module.ports['P1'].connected_wires
     assert g.ports['CLK'].is_connected
     assert g.ports['CLK'].width == 1
-    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['CLK'].connected_wires == scan_module.ports['P6'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == scan_module.ports['P3'].connected_wires
     assert g.ports['SE'].is_connected
     assert g.ports['SE'].width == 1
-    assert next(iter(g.ports['SE'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['SE'].connected_wires)).raw == 'test_module1.SE'
     assert g.ports['SE'].connected_wires == scan_module.ports['SE'].connected_wires
     assert g.ports['SI'].is_connected
     assert g.ports['SI'].width == 4
-    assert next(iter(g.ports['SI'].connected_wires)).raw == 'test_module1._ncgen_4_'
+    assert next(iter(g.ports['SI'].connected_wires)).raw == 'test_module1.SI'
     assert g.ports['SI'].connected_wires == scan_module.ports['SI'].connected_wires
     assert g.ports['SO'].is_connected
     assert g.ports['SO'].width == 4
-    assert next(iter(g.ports['SO'].connected_wires)).raw == 'test_module1._ncgen_5_'
+    assert next(iter(g.ports['SO'].connected_wires)).raw == 'test_module1._ncgen_1_'
     assert g.ports['SO'].connected_wires == scan_module.ports['SO'].connected_wires
 
 
@@ -1537,31 +1537,31 @@ def test_scan_adff_gate(scan_module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == scan_module.ports['P1'].connected_wires
     assert g.ports['CLK'].is_connected
     assert g.ports['CLK'].width == 1
-    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['CLK'].connected_wires == scan_module.ports['P6'].connected_wires
     assert g.ports['RST'].is_connected
     assert g.ports['RST'].width == 1
-    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1.P7'
     assert g.ports['RST'].connected_wires == scan_module.ports['P7'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_4_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == scan_module.ports['P3'].connected_wires
     assert g.ports['SE'].is_connected
     assert g.ports['SE'].width == 1
-    assert next(iter(g.ports['SE'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert next(iter(g.ports['SE'].connected_wires)).raw == 'test_module1.SE'
     assert g.ports['SE'].connected_wires == scan_module.ports['SE'].connected_wires
     assert g.ports['SI'].is_connected
     assert g.ports['SI'].width == 4
-    assert next(iter(g.ports['SI'].connected_wires)).raw == 'test_module1._ncgen_5_'
+    assert next(iter(g.ports['SI'].connected_wires)).raw == 'test_module1.SI'
     assert g.ports['SI'].connected_wires == scan_module.ports['SI'].connected_wires
     assert g.ports['SO'].is_connected
     assert g.ports['SO'].width == 4
-    assert next(iter(g.ports['SO'].connected_wires)).raw == 'test_module1._ncgen_6_'
+    assert next(iter(g.ports['SO'].connected_wires)).raw == 'test_module1._ncgen_1_'
     assert g.ports['SO'].connected_wires == scan_module.ports['SO'].connected_wires
 
 
@@ -1605,31 +1605,31 @@ def test_scan_dffe_gate(scan_module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == scan_module.ports['P1'].connected_wires
     assert g.ports['CLK'].is_connected
     assert g.ports['CLK'].width == 1
-    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['CLK'].connected_wires == scan_module.ports['P6'].connected_wires
     assert g.ports['EN'].is_connected
     assert g.ports['EN'].width == 1
-    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['EN'].connected_wires == scan_module.ports['P6'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == scan_module.ports['P3'].connected_wires
     assert g.ports['SE'].is_connected
     assert g.ports['SE'].width == 1
-    assert next(iter(g.ports['SE'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['SE'].connected_wires)).raw == 'test_module1.SE'
     assert g.ports['SE'].connected_wires == scan_module.ports['SE'].connected_wires
     assert g.ports['SI'].is_connected
     assert g.ports['SI'].width == 4
-    assert next(iter(g.ports['SI'].connected_wires)).raw == 'test_module1._ncgen_4_'
+    assert next(iter(g.ports['SI'].connected_wires)).raw == 'test_module1.SI'
     assert g.ports['SI'].connected_wires == scan_module.ports['SI'].connected_wires
     assert g.ports['SO'].is_connected
     assert g.ports['SO'].width == 4
-    assert next(iter(g.ports['SO'].connected_wires)).raw == 'test_module1._ncgen_5_'
+    assert next(iter(g.ports['SO'].connected_wires)).raw == 'test_module1._ncgen_1_'
     assert g.ports['SO'].connected_wires == scan_module.ports['SO'].connected_wires
 
 
@@ -1677,35 +1677,35 @@ def test_scan_adffe_gate(scan_module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == scan_module.ports['P1'].connected_wires
     assert g.ports['CLK'].is_connected
     assert g.ports['CLK'].width == 1
-    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['CLK'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['CLK'].connected_wires == scan_module.ports['P6'].connected_wires
     assert g.ports['RST'].is_connected
     assert g.ports['RST'].width == 1
-    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['RST'].connected_wires)).raw == 'test_module1.P7'
     assert g.ports['RST'].connected_wires == scan_module.ports['P7'].connected_wires
     assert g.ports['EN'].is_connected
     assert g.ports['EN'].width == 1
-    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['EN'].connected_wires == scan_module.ports['P6'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_4_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == scan_module.ports['P3'].connected_wires
     assert g.ports['SE'].is_connected
     assert g.ports['SE'].width == 1
-    assert next(iter(g.ports['SE'].connected_wires)).raw == 'test_module1._ncgen_3_'
+    assert next(iter(g.ports['SE'].connected_wires)).raw == 'test_module1.SE'
     assert g.ports['SE'].connected_wires == scan_module.ports['SE'].connected_wires
     assert g.ports['SI'].is_connected
     assert g.ports['SI'].width == 4
-    assert next(iter(g.ports['SI'].connected_wires)).raw == 'test_module1._ncgen_5_'
+    assert next(iter(g.ports['SI'].connected_wires)).raw == 'test_module1.SI'
     assert g.ports['SI'].connected_wires == scan_module.ports['SI'].connected_wires
     assert g.ports['SO'].is_connected
     assert g.ports['SO'].width == 4
-    assert next(iter(g.ports['SO'].connected_wires)).raw == 'test_module1._ncgen_6_'
+    assert next(iter(g.ports['SO'].connected_wires)).raw == 'test_module1._ncgen_1_'
     assert g.ports['SO'].connected_wires == scan_module.ports['SO'].connected_wires
 
 
@@ -1735,15 +1735,15 @@ def test_dlatch_gate(module: Module) -> None:
     assert g.width == 4
     assert g.ports['D'].is_connected
     assert g.ports['D'].width == 4
-    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1._ncgen_0_'
+    assert next(iter(g.ports['D'].connected_wires)).raw == 'test_module1.P1'
     assert g.ports['D'].connected_wires == module.ports['P1'].connected_wires
     assert g.ports['EN'].is_connected
     assert g.ports['EN'].width == 1
-    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1._ncgen_1_'
+    assert next(iter(g.ports['EN'].connected_wires)).raw == 'test_module1.P6'
     assert g.ports['EN'].connected_wires == module.ports['P6'].connected_wires
     assert g.ports['Q'].is_connected
     assert g.ports['Q'].width == 4
-    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_2_'
+    assert next(iter(g.ports['Q'].connected_wires)).raw == 'test_module1._ncgen_0_'
     assert g.ports['Q'].connected_wires == module.ports['P3'].connected_wires
 
 
