@@ -5,7 +5,7 @@ from typing import Dict
 import pytest
 from utils import save_results
 
-from netlist_carpentry import WIRE_SEGMENT_X, Port
+from netlist_carpentry import WIRE_SEGMENT_X, Port, SignalArray
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.enums.signal import Signal
@@ -14,7 +14,6 @@ from netlist_carpentry.core.netlist_elements.element_path import PortPath, WireS
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.core.netlist_elements.wire_segment import WIRE_SEGMENT_1
-from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.gate_lib import (
     ADFF,
     ADFFE,

@@ -21,6 +21,7 @@ ON_WINDOWS = 'win' in platform.system().lower()
 from netlist_carpentry.utils import CFG, LOG, initialize_logging, VERILOG_KEYWORDS  # Config and log must be loaded before the other modules
 from netlist_carpentry.core.graph import EMPTY_GRAPH
 from netlist_carpentry.core.enums import Direction, Signal
+from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.wire_segment import (
     WIRE_SEGMENT_0,
@@ -76,6 +77,7 @@ __all__ = [
     'PortSegment',
     'ReadConfig',
     'Signal',
+    'SignalArray',
     'Wire',
     'WireSegment',
     'gate_factory',

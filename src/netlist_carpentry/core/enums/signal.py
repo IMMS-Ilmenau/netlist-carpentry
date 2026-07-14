@@ -211,10 +211,10 @@ class Signal(Enum):
             >>> Signal.from_int(-1, fixed_width=4)
             {0: HIGH, 1: HIGH, 2: HIGH, 3: HIGH}
         """
-        from netlist_carpentry.core.types import SignalArray
+        from netlist_carpentry import SignalArray
 
         warnings.warn(
-            "Signal.from_int() is deprecated and will be removed in v1.0.0. Use SignalArray.from_int() instead! SignalArray can be imported from 'netlist_carpentry.core.types'.",
+            "Signal.from_int() is deprecated and will be removed in v1.0.0. Use SignalArray.from_int() instead! SignalArray can be imported directly from 'netlist_carpentry'.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -332,10 +332,10 @@ class Signal(Enum):
             >>> Signal.from_bin("11", fixed_width=4)
             {0: HIGH, 1: HIGH, 2: LOW, 3: LOW}
         """
-        from netlist_carpentry.core.types import SignalArray
+        from netlist_carpentry import SignalArray
 
         warnings.warn(
-            "Signal.from_bin() is deprecated and will be removed in v1.0.0. Use SignalArray.from_bin() instead! SignalArray can be imported from 'netlist_carpentry.core.types'.",
+            "Signal.from_bin() is deprecated and will be removed in v1.0.0. Use SignalArray.from_bin() instead! SignalArray can be imported directly from 'netlist_carpentry'.",
             DeprecationWarning,
             stacklevel=2,
         )

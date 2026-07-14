@@ -2,12 +2,11 @@ import os
 
 import pytest
 
-from netlist_carpentry import LOG, read
+from netlist_carpentry import LOG, SignalArray, read
 from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.signal import Signal
 from netlist_carpentry.core.netlist_elements.module import Module
-from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
 from netlist_carpentry.routines import opt_constant
 from netlist_carpentry.routines.opt.constant_folds import opt_constant_mux_inputs, opt_constant_propagation

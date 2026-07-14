@@ -2,9 +2,8 @@ import os
 
 import pytest
 
-from netlist_carpentry import Signal
+from netlist_carpentry import Signal, SignalArray
 from netlist_carpentry.core.exceptions import InvalidSignalError
-from netlist_carpentry.core.types import SignalArray
 
 
 def test_basics() -> None:

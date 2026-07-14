@@ -22,7 +22,7 @@ from typing import (
 from pydantic import BaseModel, NonNegativeInt, PositiveInt, model_validator
 from typing_extensions import Self
 
-from netlist_carpentry import LOG, Direction, Signal
+from netlist_carpentry import LOG, Direction, Signal, SignalArray
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import (
     IdentifierConflictError,
@@ -37,7 +37,6 @@ from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DIC
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.protocols.signals import LogicLevel, SignalOrLogicLevel
-from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.gate_lib_dataclasses import PortParams
 

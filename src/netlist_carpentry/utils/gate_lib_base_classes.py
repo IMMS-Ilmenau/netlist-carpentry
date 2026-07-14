@@ -15,12 +15,11 @@ from typing import Callable, Dict, Iterable, List, Literal, Optional, Tuple, Uni
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
-from netlist_carpentry import CFG, LOG, Direction, Instance, Module, Port, Signal
+from netlist_carpentry import CFG, LOG, Direction, Instance, Module, Port, Signal, SignalArray
 from netlist_carpentry.core.exceptions import EvaluationError, ObjectNotFoundError, UnsupportedOperationError, WidthMismatchError
 from netlist_carpentry.core.netlist_elements.port import ANY_PORT
 from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2OBJ, WIRE_SEGMENT_X, WireSegment
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
-from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.gate_lib_dataclasses import (
     BinaryParams,
     DFFParams,

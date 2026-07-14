@@ -4,6 +4,7 @@ import os
 import pytest
 from pydantic import ValidationError
 
+from netlist_carpentry import SignalArray
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.enums.signal import Signal
@@ -20,7 +21,6 @@ from netlist_carpentry.core.netlist_elements.netlist_element import NetlistEleme
 from netlist_carpentry.core.netlist_elements.port import Port
 from netlist_carpentry.core.netlist_elements.wire import Wire
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
-from netlist_carpentry.core.types import SignalArray
 
 
 @pytest.fixture

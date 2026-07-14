@@ -3,7 +3,7 @@ import os
 import pytest
 from pydantic import ValidationError
 
-from netlist_carpentry import WIRE_SEGMENT_1, WIRE_SEGMENT_X, Module
+from netlist_carpentry import WIRE_SEGMENT_1, WIRE_SEGMENT_X, Module, SignalArray
 from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.element_type import EType
@@ -22,7 +22,6 @@ from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.mixins.metadata import METADATA_DICT
 from netlist_carpentry.core.netlist_elements.netlist_element import NetlistElement
-from netlist_carpentry.core.types import SignalArray
 
 
 @pytest.fixture

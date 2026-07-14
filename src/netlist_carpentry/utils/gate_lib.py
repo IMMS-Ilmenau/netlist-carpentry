@@ -17,9 +17,8 @@ from typing import Callable, Dict, List, Optional, Tuple, Type, Union
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
-from netlist_carpentry import CFG, Direction, Instance, Module, Port, Signal
+from netlist_carpentry import CFG, Direction, Instance, Module, Port, Signal, SignalArray
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
-from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.gate_lib_base_classes import (
     ArithmeticGate,
     BinaryGate,

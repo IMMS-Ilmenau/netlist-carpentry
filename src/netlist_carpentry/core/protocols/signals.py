@@ -4,8 +4,7 @@ from typing import Dict, Literal, Optional, Protocol, Union, overload
 
 from pydantic import NonNegativeInt
 
-from netlist_carpentry import Signal
-from netlist_carpentry.core.types import SignalArray
+from netlist_carpentry import Signal, SignalArray
 
 LogicLevelInt = Literal[0, 1]
 LogicLevel = Union[Literal['0', '1', 'Z', 'X'], LogicLevelInt]

@@ -3,12 +3,11 @@ from typing import Dict, Iterable, List, Optional, Protocol, Type, Union, runtim
 
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 
-from netlist_carpentry import Direction, Instance, Port, Signal
+from netlist_carpentry import Direction, Instance, Port, Signal, SignalArray
 from netlist_carpentry.core.exceptions import WidthMismatchError
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.core.netlist_elements.port import ANY_PORT
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
-from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.gate_lib_dataclasses import ClockParams, DFFParams, EnableParams, LoadParams, Parameters, ResetParams, SRParams
 from netlist_carpentry.utils.safe_format_dict import SafeFormatDict

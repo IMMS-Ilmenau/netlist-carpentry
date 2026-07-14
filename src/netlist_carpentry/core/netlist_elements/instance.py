@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Callable, DefaultDict, Dict, Iterable, Literal
 from pydantic import BaseModel, NonNegativeInt, PositiveInt, model_validator
 from typing_extensions import Self
 
-from netlist_carpentry import LOG, WIRE_SEGMENT_X, Direction, Port, Signal
+from netlist_carpentry import LOG, WIRE_SEGMENT_X, Direction, Port, Signal, SignalArray
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import (
     IdentifierConflictError,
@@ -24,7 +24,6 @@ from netlist_carpentry.core.netlist_elements.netlist_element import NetlistEleme
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2OBJ
 from netlist_carpentry.core.protocols.signals import LogicLevel
-from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.custom_dict import CustomDict
 from netlist_carpentry.utils.gate_lib_dataclasses import InstanceParams
 

@@ -4,10 +4,9 @@ from typing import Dict, List
 
 from tqdm import tqdm
 
-from netlist_carpentry import LOG, Instance, Module, Signal
+from netlist_carpentry import LOG, Instance, Module, Signal, SignalArray
 from netlist_carpentry.core.exceptions import EvaluationError
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
-from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.gate_lib import DFF, DLatch
 from netlist_carpentry.utils.gate_lib_base_classes import PrimitiveGate
 from netlist_carpentry.utils.gate_mixins import ClockMixinProtocol, EnableMixinProtocol, ResetMixinProtocol

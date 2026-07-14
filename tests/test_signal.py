@@ -207,7 +207,7 @@ def test_from_int() -> None:
     with pytest.warns(
         DeprecationWarning,
         match=re.escape(
-            "Signal.from_int() is deprecated and will be removed in v1.0.0. Use SignalArray.from_int() instead! SignalArray can be imported from 'netlist_carpentry.core.types'"
+            "Signal.from_int() is deprecated and will be removed in v1.0.0. Use SignalArray.from_int() instead! SignalArray can be imported directly from 'netlist_carpentry'"
         ),
     ):
         assert Signal.from_int(0) == {0: Signal.LOW}
@@ -254,7 +254,7 @@ def test_from_bin() -> None:
     with pytest.warns(
         DeprecationWarning,
         match=re.escape(
-            "Signal.from_bin() is deprecated and will be removed in v1.0.0. Use SignalArray.from_bin() instead! SignalArray can be imported from 'netlist_carpentry.core.types'"
+            "Signal.from_bin() is deprecated and will be removed in v1.0.0. Use SignalArray.from_bin() instead! SignalArray can be imported directly from 'netlist_carpentry'"
         ),
     ):
         assert Signal.from_bin('0') == {0: Signal.LOW}
