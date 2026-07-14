@@ -83,18 +83,79 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             PortSegment: The port segment at the specified index.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('p', 'input', width=4)
+            >>> p[0]
+            PortSegment(m.p.0, Signal:x)
+            >>> p[3]
+            PortSegment(m.p.3, Signal:x)
+
+            ```
         """
         if index in self.segments:
             return self.segments[index]
         raise IndexError(f'Port {self.raw_path} does not have a segment {index}!')
 
     def __len__(self) -> int:
+        """Returns the number of port segments in this port.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=8)
+            >>> len(p)
+            8
+
+            ```
+        """
         return len(self.segments)
 
     def __iter__(self) -> Generator[Tuple[int, PortSegment], None, None]:  # type: ignore[override]
+        """Iterates over the port segments in this port.
+
+        Yields:
+            Tuple[int, PortSegment]: A tuple of (index, PortSegment) for each segment.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=3)
+            >>> list(p)
+            [(0, PortSegment(m.data.0, Signal:x)), (1, PortSegment(m.data.1, Signal:x)), (2, PortSegment(m.data.2, Signal:x))]
+
+            ```
+        """
         return iter(s for s in self.segments.items())
 
     def __eq__(self, value: object) -> bool:
+        """Compares this port to another object for equality.
+
+        Two ports are considered equal if they have the same name and the same parent.
+
+        Args:
+            value (object): The object to compare with this port.
+
+        Returns:
+            bool: True if the other object is a port with the same name and parent, False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p1 = m.create_port('clk', 'input')
+            >>> p1 == p1  # Same object
+            True
+            >>> p1 == "not a port"
+            False
+
+            ```
+        """
         if not isinstance(value, Port):
             return NotImplemented
         if not super().__eq__(value):
@@ -111,6 +172,16 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             PortPath: The hierarchical path of the netlist element.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('addr', 'input', width=8)
+            >>> p.path.raw
+            'm.addr'
+
+            ```
         """
         if self.has_parent:
             return PortPath(raw='.'.join([*self.parent.path.parts, self.name]))
@@ -118,7 +189,18 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
     @property
     def type(self) -> EType:
-        """The type of the element, which is a port."""
+        """The type of the element, which is a port.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('clk', 'input')
+            >>> p.type is EType.PORT
+            True
+
+            ```
+        """
         return EType.PORT
 
     @property
@@ -138,6 +220,16 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         For a module port, this returns the immediate parent.
         For an instance port, it returns the module to which the instance belongs
         (i.e. the parent of the instance, or the grandparent of this port).
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='top')
+            >>> p = m.create_port('data', 'input', width=8)
+            >>> p.module.name
+            'top'
+
+            ```
         """
         from netlist_carpentry import Module
 
@@ -147,7 +239,18 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
     @property
     def segments(self) -> CustomDict[int, PortSegment]:
-        """Returns the port segments of this port, where the key is the bit index."""
+        """Returns the port segments of this port, where the key is the bit index.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> list(p.segments.keys())
+            [0, 1, 2, 3]
+
+            ```
+        """
         return self._segments
 
     @property
@@ -164,6 +267,19 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             Signal: The signal associated with this port, if this port is 1 bit wide, otherwise returns Signal.UNDEFINED.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('clk', 'input')
+            >>> p.signal
+            UNDEFINED
+            >>> p.set_signal(Signal.HIGH)
+            >>> p.signal
+            HIGH
+
+            ```
         """
         if len(self.segments) == 1:
             return self[next(iter(self.segments))].signal
@@ -191,6 +307,19 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         If the signal string for a 4 bit port is '1001', then this property will return 9.
         If the string contains 'x' or 'z', the signal does not form an integer and this property returns `None`.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.set_signals(SignalArray.from_int(5, msb_first=True, fixed_width=4))
+            >>> p.signal_int
+            5
+            >>> p.set_signal(Signal.UNDEFINED, index=2)
+            >>> p.signal_int  # Contains undefined value
+
+            ```
         """
         try:
             return int(self.signal_array)
@@ -208,6 +337,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             SignalArray: The array of signals associated with each segment of this port.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.set_signal(Signal.HIGH, index=0)
+            >>> p.set_signal(Signal.LOW, index=1)
+            >>> p.set_signal(Signal.HIGH, index=2)
+            >>> p.set_signal(Signal.LOW, index=3)
+            >>> str(p.signal_array)
+            '0101'
+
+            ```
         """
         signals = {idx - (self.offset or 0): self[idx].signal for idx in self.segments}
         return SignalArray(signals=signals, signed=self.signed, msb_first=self.msb_first)
@@ -230,6 +373,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         are currently 1 and the other two segments are 0.
         If the string contains 'x', the corresponding segment has an undefined value, and if the string
         contains 'z', the corresponding segment is floating.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.set_signal(Signal.HIGH, index=0)
+            >>> p.set_signal(Signal.LOW, index=1)
+            >>> p.set_signal(Signal.HIGH, index=2)
+            >>> p.set_signal(Signal.LOW, index=3)
+            >>> p.signal_str
+            '0101'
+
+            ```
         """
         return str(self.signal_array)
 
@@ -240,6 +397,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         False, if the signals on all port segments are either "0" or "1".
         Otherwise, returns True.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=2)
+            >>> p.has_undefined_signals
+            True
+            >>> p.set_signal(Signal.HIGH, index=0)
+            >>> p.set_signal(Signal.LOW, index=1)
+            >>> p.has_undefined_signals
+            False
+
+            ```
         """
         return any(s.is_undefined for s in self.signal_array.values())
 
@@ -251,6 +422,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         To check if all port segments are tied to "0" or "1", use `Port.is_tied_defined`.
 
         False, if any segments are connected to a wire.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=2)
+            >>> p.is_tied  # Unconnected segments are considered tied
+            True
+            >>> p.set_signal(Signal.HIGH, index=0)
+            >>> p.set_signal(Signal.LOW, index=1)
+            >>> p.is_tied
+            True
+
+            ```
         """
         return all(s.is_tied for s in self.segments.values())
 
@@ -262,6 +447,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         To check if all port segments are tied to "0" or "1", use `Port.is_tied_defined`.
 
         False, if all segments are connected to a wire.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input')
+            >>> w = m.create_wire('w')
+            >>> p.is_tied_partly  # All unconnected segments are tied
+            True
+            >>> m.connect(w, p)
+            >>> p.is_tied_partly
+            False
+
+            ```
         """
         return any(s.is_tied for s in self.segments.values())
 
@@ -274,6 +473,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             bool: True if at least one segment is connected, False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.is_connected_partly
+            False
+            >>> wire = m.create_wire('w', width=4)
+            >>> m.connect(wire, p, new_wire_name='w')
+            >>> p.is_connected_partly
+            True
+
+            ```
         """
         return any(seg.is_connected for seg in self.segments.values())
 
@@ -286,6 +499,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             bool: True if all segments are connected, False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.is_connected
+            False
+            >>> wire = m.create_wire('w', width=4)
+            >>> m.connect(wire, p, new_wire_name='w')
+            >>> p.is_connected
+            True
+
+            ```
         """
         return all(seg.is_connected for seg in self.segments.values())
 
@@ -298,6 +525,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             bool: True if no segments are connected, False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.is_unconnected
+            True
+            >>> wire = m.create_wire('w', width=4)
+            >>> m.connect(wire, p, new_wire_name='w')
+            >>> p.is_unconnected
+            False
+
+            ```
         """
         return not self.is_connected_partly
 
@@ -310,6 +551,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             bool: True if at least one segment is unconnected, False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.is_unconnected_partly  # All segments unconnected
+            True
+            >>> wire = m.create_wire('w', width=4)
+            >>> m.connect(wire, p, new_wire_name='w')
+            >>> p.is_unconnected_partly  # All segments now connected
+            False
+
+            ```
         """
         return not self.is_connected
 
@@ -318,10 +573,28 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         """
         Determines whether the port is completely floating.
 
-        A port is considered completely floating if at least one of its segments is floating.
+        A port is considered completely floating if all of its segments are floating.
 
         Returns:
-            bool: True if at least one segment is floating, False otherwise.
+            bool: True if all segments are floating, False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'output', width=2)
+            >>> p.is_floating  # Unconnected segments are not floating (by default signal is X, not Z)
+            False
+            >>> p.tie_signal(Signal.FLOATING, index=0)
+            >>> p.tie_signal(Signal.FLOATING, index=1)
+            >>> p.is_floating  # Both segments are floating
+            True
+            >>> w = m.create_wire('w', width=2)
+            >>> m.connect(w, p)
+            >>> p.is_floating  # Connected to wire, not floating
+            False
+
+            ```
         """
         return all(seg.is_floating for seg in self.segments.values())
 
@@ -334,17 +607,60 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             bool: True if at least one segment is floating, False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'output', width=4)
+            >>> p.is_floating_partly  # Unconnected segments are not floating (by default signal is X, not Z)
+            False
+            >>> p.tie_signal(Signal.FLOATING, index=0)
+            >>> p.is_floating_partly  # One segment is floating
+            True
+
+            ```
         """
         return any(seg.is_floating for seg in self.segments.values())
 
     @property
     def is_tied_defined(self) -> bool:
-        """True if all segments are tied to a defined value (0 or 1), False otherwise."""
+        """True if all segments are tied to a defined value (0 or 1), False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=2)
+            >>> p.is_tied_defined  # Unconnected segments are not defined
+            False
+            >>> w = m.create_wire('w', width=2)
+            >>> m.connect(w, p)
+            >>> p.is_tied_defined  # Connected to wire, not tied to constant
+            False
+
+            ```
+        """
         return all(ps.is_tied_defined for _, ps in self)
 
     @property
     def is_tied_defined_partly(self) -> bool:
-        """True if at least one segment is tied to a defined value (0 or 1), False otherwise."""
+        """True if at least one segment is tied to a defined value (0 or 1), False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.is_tied_defined_partly  # All unconnected
+            False
+            >>> w = m.create_wire('w', width=4)
+            >>> m.connect(w, p)
+            >>> p.is_tied_defined_partly  # Connected to wire, not tied to constant
+            False
+
+            ```
+        """
         return any(ps.is_tied_defined for _, ps in self)
 
     @property
@@ -354,6 +670,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         If True, every segment is either unconnected or floating. Can also be mixed.
         If False, at least one segment is either connected or tied to 0 or 1.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=2)
+            >>> p.is_tied_undefined  # Unconnected segments are undefined
+            True
+            >>> w = m.create_wire('w', width=2)
+            >>> m.connect(w, p, new_wire_name='w')
+            >>> p.is_tied_undefined  # Connected to wire, not tied to undefined
+            False
+
+            ```
         """
         return all(ps.is_tied_undefined for _, ps in self)
 
@@ -364,16 +694,56 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         If True, at least one segment is either unconnected or floating.
         If False, all segments are either connected or tied to 0 or 1.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.is_tied_undefined_partly  # All unconnected
+            True
+            >>> w = m.create_wire('w', width=4)
+            >>> m.connect(w, p, new_wire_name='w')
+            >>> p.is_tied_undefined_partly  # All connected to wire
+            False
+
+            ```
         """
         return any(ps.is_tied_undefined for _, ps in self)
 
     @property
     def width(self) -> int:
-        """The width of the port in bits, which is simply the number of port segments in the port."""
+        """The width of the port in bits, which is simply the number of port segments in the port.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p1 = m.create_port('clk', 'input')
+            >>> p1.width
+            1
+            >>> p2 = m.create_port('data', 'input', width=8)
+            >>> p2.width
+            8
+
+            ```
+        """
         return len(self.segments)
 
     @property
     def offset(self) -> Optional[int]:
+        """The minimum segment index of this port, or None if the port has no segments.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.offset
+            0
+
+            ```
+        """
         return min(self.segments.keys()) if self.segments else None
 
     @property
@@ -383,16 +753,63 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         This property is coupled with Port.msb_first.
         To change this value, change `Port.msb_first`, and this property is updated accordingly.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.lsb_first  # Default is MSB first
+            False
+            >>> p.msb_first = False
+            >>> p.lsb_first
+            True
+
+            ```
         """
         return not self.msb_first
 
     @property
     def signed(self) -> bool:
+        """Whether this port is signed.
+
+        Normally, signed should only be either 0 or 1, but treat non-zero cases as signed (e.g. '1'/'0' or True/False).
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=8)
+            >>> p.signed
+            False
+            >>> p.set_signed(True)
+            True
+            >>> p.signed
+            True
+
+            ```
+        """
         # Normally, signed should only be either 0 or 1, but treat non-zero cases as signed (e.g. '1'/'0' or True/False)
         return self.parameters.signed is not None and int(self.parameters.signed) != 0
 
     @property
     def unsigned(self) -> bool:
+        """Whether this port is unsigned (i.e., not signed).
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=8)
+            >>> p.unsigned
+            True
+            >>> p.set_signed(True)
+            True
+            >>> p.unsigned
+            False
+
+            ```
+        """
         return not self.signed
 
     @property
@@ -402,6 +819,16 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         True, if this port is an instance port.
         False, if this port is a module port.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('clk', 'input')
+            >>> p.is_instance_port
+            False
+
+            ```
         """
         from netlist_carpentry.core.netlist_elements.instance import Instance
 
@@ -414,6 +841,16 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         True, if this port is a module port.
         False, if this port is an instance port.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('clk', 'input')
+            >>> p.is_module_port
+            True
+
+            ```
         """
         return not self.is_instance_port
 
@@ -424,6 +861,19 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             bool: True if this port is an input port, False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p_in = m.create_port('a', 'input')
+            >>> p_in.is_input
+            True
+            >>> p_out = m.create_port('b', 'output')
+            >>> p_out.is_input
+            False
+
+            ```
         """
         return self.direction.is_input
 
@@ -434,6 +884,19 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             bool: True if this port is an output port, False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p_out = m.create_port('b', 'output')
+            >>> p_out.is_output
+            True
+            >>> p_in = m.create_port('a', 'input')
+            >>> p_in.is_output
+            False
+
+            ```
         """
         return self.direction.is_output
 
@@ -446,6 +909,19 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             bool: True if this port is a driver port, False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p_in = m.create_port('a', 'input')
+            >>> p_in.is_driver  # Module input is a driver
+            True
+            >>> p_out = m.create_port('b', 'output')
+            >>> p_out.is_driver  # Module output is a load
+            False
+
+            ```
         """
         return (self.is_instance_port and self.is_output) or (self.is_module_port and self.is_input)
 
@@ -458,6 +934,19 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             bool: True if this port is a load port, False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p_out = m.create_port('b', 'output')
+            >>> p_out.is_load  # Module output is a load
+            True
+            >>> p_in = m.create_port('a', 'input')
+            >>> p_in.is_load  # Module input is a driver
+            False
+
+            ```
         """
         return (self.is_instance_port and self.is_input) or (self.is_module_port and self.is_output)
 
@@ -467,6 +956,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         Returns a dictionary of paths of wire segments connected to this port.
 
         A port is considered connected to a wire segment if at least one of its segments is connected to that wire segment.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=2)
+            >>> p.connected_wire_segments  # Unconnected segments show empty path
+            {0: WireSegmentPath X, 1: WireSegmentPath X}
+            >>> wire = m.create_wire('w', width=2)
+            >>> m.connect(wire, p, new_wire_name='w')
+            >>> p.connected_wire_segments
+            {0: WireSegmentPath m.w.0, 1: WireSegmentPath m.w.1}
+
+            ```
         """
         return {i: s.ws_path for i, s in self.segments.items()}
 
@@ -476,6 +979,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         Returns a set of paths of wires connected to this port.
 
         A port is considered connected to a wire if at least one of its segments is connected to that wire.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=2)
+            >>> len(p.connected_wires)
+            0
+            >>> wire = m.create_wire('w', width=2)
+            >>> m.connect(wire, p, new_wire_name='w')
+            >>> len(p.connected_wires)
+            1
+
+            ```
         """
         # "if" clause skips constant wire segments, which do not have a parent by definition
         return set(ws.parent for ws in self.connected_wire_segments.values() if ws.has_parent())
@@ -488,6 +1005,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         True if this conforms to the Verilog expression `assign port = wire;`.
         False, if this conforms to other cases including bit slicing or concatenation, e.g.
         `assign port[1:0] = {wire1, wire2}`
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.is_connected_1to1  # Not connected yet
+            False
+            >>> wire = m.create_wire('w', width=4)
+            >>> m.connect(wire, p, new_wire_name='w')
+            >>> p.is_connected_1to1  # Connected 1-to-1
+            True
+
+            ```
         """
         w = None
         offset = self.offset or 0
@@ -526,6 +1057,27 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         return self
 
     def set_name(self, new_name: str) -> None:
+        """
+        Renames this port to a new name.
+
+        For module ports, the associated wire is also renamed if it exists.
+
+        Args:
+            new_name (str): The new name for this port.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('old_name', 'input')
+            >>> p.name
+            'old_name'
+            >>> p.set_name('new_name')
+            >>> p.name
+            'new_name'
+
+            ```
+        """
         old_name = self.name
         self.parent.ports[new_name] = self.parent.ports.pop(old_name)  # type: ignore[assignment]
         super().set_name(new_name)
@@ -553,6 +1105,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             PortSegment: The PortSegment that was created and added to this port.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=2)
+            >>> len(p.segments)
+            2
+            >>> p.create_port_segment(index=2)
+            PortSegment(m.data.2, Signal:x)
+            >>> len(p.segments)
+            3
+
+            ```
         """
         return self._add_port_segment(PortSegment(name=str(index), port=self))
 
@@ -570,6 +1136,17 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             List[PortSegment]: A list of PortSegment objects created and added to this port.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=2)
+            >>> segs = p.create_port_segments(3, offset=10)
+            >>> sorted(segs.keys())
+            [10, 11, 12]
+
+            ```
         """
         return {i: self.create_port_segment(i) for i in range(offset, offset + count)}
 
@@ -579,6 +1156,19 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Args:
             index (NonNegativeInt): The index of the PortSegment to remove from this port.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=3)
+            >>> len(p.segments)
+            3
+            >>> p.remove_port_segment(1)
+            >>> len(p.segments)
+            2
+
+            ```
         """
         self.segments.remove(index, locked=self.locked)
 
@@ -591,6 +1181,18 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Returns:
             Optional[PortSegment]: The PortSegment with the given index, or None if no port segment with that index exists.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.get_port_segment(2)
+            PortSegment(m.data.2, Signal:x)
+            >>> p.get_port_segment(10) is None
+            True
+
+            ```
         """
         return self.segments.get(index, None)
 
@@ -621,6 +1223,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
             InvalidDirectionError: (raised by: PortSegment.tie_signal) If this port segment belongs to an instance output port,
                 which is driven by the instance inputs and the instance's internal logic.
             InvalidSignalError: (raised by: PortSegment.tie_signal) If an invalid value is provided.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=2)
+            >>> p.tie_signal(Signal.HIGH, index=0)
+            >>> p[0].is_tied
+            True
+            >>> p.tie_signal(Signal.LOW, index=1)
+            >>> p[1].is_tied
+            True
+
+            ```
         """
         if index not in self.segments:
             raise ObjectNotFoundError(f'No PortSegment with index {index} exists in Port "{self.raw_path}"!')
@@ -646,6 +1262,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Raises:
             ValueError: If the index is out of range of the port's segments.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.set_signal(Signal.HIGH, index=0)
+            >>> p.set_signal(Signal.LOW, index=1)
+            >>> p.set_signal(Signal.HIGH, index=2)
+            >>> p.set_signal(Signal.LOW, index=3)
+            >>> p.signal_str
+            '0101'
+
+            ```
         """
         self[index].set_signal(signal)
 
@@ -656,6 +1286,30 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
     @overload
     def set_signals(self, signal: SignalArray) -> None: ...
     def set_signals(self, signal: Union[int, str, SignalArray]) -> None:
+        """
+        Sets the signals of all port segments at once.
+
+        Accepts an integer (treated as unsigned), a binary string, or a SignalArray.
+        The signals are applied to all segments of the port.
+
+        Args:
+            signal (Union[int, str, SignalArray]): The signal value to set. An int is treated as
+                an unsigned integer, a str as a binary string, and SignalArray is used directly.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module, Signal
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> p.set_signals(10)  # decimal 10 in binary is 1010
+            >>> p.signal_str
+            '1010'
+            >>> p.set_signals('1100')
+            >>> p.signal_str
+            '1100'
+
+            ```
+        """
         if isinstance(signal, int):
             signal_array = SignalArray.from_int(signal, msb_first=self.msb_first, fixed_width=self.width)
         elif isinstance(signal, str):
@@ -719,6 +1373,22 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
             Union[ANY_PORT, Dict[NonNegativeInt, Optional[PortSegment]]]: Either a single port that drives this port (if `single` is True),
                 or a dictionary containing the driver (which is the opposing port segment) for each segment of this port. If the entry is None,
                 then the corresponding port segment is undriven.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p_in = m.create_port('a', 'input')
+            >>> p_out = m.create_port('b', 'output')
+            >>> m.connect(p_in, p_out)
+            >>> p_in.driver()  # Module input ports are drivers, cannot get their driver
+            Traceback (most recent call last):
+            ...
+            netlist_carpentry.core.exceptions.InvalidDirectionError: Cannot get driving port of port m.a: This port is a driver and thus does not have a driver!
+            >>> p_out.driver()  # Module output ports are loads, can retrieve their driver
+            {0: PortSegment(m.a.0, Signal:x)}
+
+            ```
         """
         if self.is_driver:
             raise InvalidDirectionError(f'Cannot get driving port of port {self.raw_path}: This port is a driver and thus does not have a driver!')
@@ -748,6 +1418,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         Returns:
             Dict[NonNegativeInt, List[PortSegment]]: A dict of all indices mapped to port segments that receive the same signal via the same wire.
                 If this port itself is a load port, it is also included into the list of load for each segment.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p_in = m.create_port('a', 'input')
+            >>> p_out = m.create_port('b', 'output')
+            >>> m.connect(p_in, p_out)
+            >>> p_in.loads()
+            {0: [PortSegment(m.b.0, Signal:x)]}
+            >>> p_out.loads()  # Returns itself as part of the loads, since it is a load port itself
+            {0: [PortSegment(m.b.0, Signal:x)]}
+
+            ```
         """
         return {idx: self.module.wires[self[idx].ws_path.parent.name].loads()[ps.ws.index] for idx, ps in self}
 
@@ -761,6 +1445,20 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         Returns:
             bool: True if the signedness was changed (i.e. the new value is different from the previous value),
                 False otherwise.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=8)
+            >>> p.set_signed(True)  # Changed from unsigned to signed
+            True
+            >>> p.set_signed(True)  # Already signed, no change
+            False
+            >>> p.set_signed(False)  # Changed back to unsigned
+            True
+
+            ```
         """
         prev = self.signed
         self.parameters.signed = int(signed)
@@ -778,6 +1476,19 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Note:
             If index is None, changes the connections of all segments in this port to the same given wire segment.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=2)
+            >>> w1 = m.create_wire('w1', width=2)
+            >>> w2 = m.create_wire('w2', width=2)
+            >>> m.connect(w1, p, new_wire_name='w1')
+            >>> p.connected_wire_segments
+            {0: WireSegmentPath m.w1.0, 1: WireSegmentPath m.w1.1}
+
+            ```
         """
         if self.locked:
             raise ObjectLockedError(f'Unable to connect port {self.raw_path} to {new_wire_segment_path.raw}: Port is locked!')
@@ -800,6 +1511,36 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         return super().change_mutability(is_now_locked)
 
     def copy_object(self, new_name: str) -> Port[T_PARENT]:
+        """
+        Creates a copy of this port with a new name.
+
+        The copied port has the same direction, width, and offset as the original,
+        but is initially unconnected. Raises an error if the new name is already in use.
+
+        Args:
+            new_name (str): The name for the copied port.
+
+        Returns:
+            Port[T_PARENT]: A new Port object with the given name.
+
+        Raises:
+            IdentifierConflictError: If a port with the same name already exists in the parent.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p1 = m.create_port('data', 'input', width=4)
+            >>> p2 = p1.copy_object('data_copy')
+            >>> p2.name
+            'data_copy'
+            >>> p2.width
+            4
+            >>> p2.is_unconnected
+            True
+
+            ```
+        """
         from netlist_carpentry import Instance, Module
 
         if self.has_parent:
@@ -829,8 +1570,38 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         return md
 
     def __str__(self) -> str:
+        """Returns a string representation of the port.
+
+        Returns:
+            str: A string in the format 'Port "name" with path <path> (<direction> port)'.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> str(p)
+            'Port "data" with path m.data (input port)'
+
+            ```
+        """
         return f'{self.__class__.__name__} "{self.name}" with path {self.path.raw} ({self.direction.value} port)'
 
     def __repr__(self) -> str:
+        """Returns a concise string representation of the port.
+
+        Returns:
+            str: A string in the format 'Port(<direction> <name>, <width> bit)'.
+
+        Example:
+            ```python
+            >>> from netlist_carpentry import Module
+            >>> m = Module(name='m')
+            >>> p = m.create_port('data', 'input', width=4)
+            >>> repr(p)
+            'Port(input data, 4 bit)'
+
+            ```
+        """
         direction = str(self.direction) + ' ' if self.direction.is_defined else ''
         return f'{self.__class__.__name__}({direction}{self.name}, {self.width} bit)'

@@ -876,9 +876,9 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         **Requirements:**
 
-        * The **target** must be unconnected (no existing wire attachment).
+        * The **target** must be unconnected (no existing wire attachment, but can be tied to 0/1/Z).
         * Source and target must be compatible: either both are segments, or both have matching widths.
-        * Path objects (``PortPath``, ``WirePath``, ``PortSegmentPath``, ``WireSegmentPath``) are accepted for all arguments.
+        * Path objects (``PortPath``, ``WirePath``, ``PortSegmentPath``, ``WireSegmentPath``) are accepted as well.
 
         Args:
             source: The signal source. May be a ``Wire``, ``WireSegment``, ``Port``, ``PortSegment``, or any
@@ -924,7 +924,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         target_obj = self._get_from_path_or_object(target)
 
         # Validate: target must be unconnected
-        if not target_obj.is_unconnected:
+        if not target_obj.is_tied:
             raise AlreadyConnectedError(f'{target_obj.type.value} {target_obj.raw_path} must be unconnected before attempting to connect it!')
 
         # Dispatch based on source/target types

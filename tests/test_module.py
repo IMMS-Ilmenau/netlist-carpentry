@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from netlist_carpentry import LOG, WIRE_SEGMENT_X, Wire, run_equiv, run_eqy
+from netlist_carpentry import LOG, WIRE_SEGMENT_1, WIRE_SEGMENT_X, WIRE_SEGMENT_Z, Wire, run_equiv, run_eqy
 from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.core.enums.direction import Direction as Dir
 from netlist_carpentry.core.enums.element_type import EType
@@ -933,6 +933,22 @@ def test_connect(standard_module: Module) -> None:
     standard_module.connect(WIRE_SEGMENT_0, p[0])
     assert WIRE_SEGMENT_0.port_segments == []
     assert p[0].ws_path == WIRE_SEGMENT_0.path
+
+    standard_module.connect(WIRE_SEGMENT_1, p[0])  # Overwriting tied values is fine
+    assert WIRE_SEGMENT_1.port_segments == []
+    assert p[0].ws_path == WIRE_SEGMENT_1.path
+
+    standard_module.connect(WIRE_SEGMENT_X, p[0])  # Overwriting tied values is fine
+    assert WIRE_SEGMENT_X.port_segments == []
+    assert p[0].ws_path == WIRE_SEGMENT_X.path
+
+    standard_module.connect(WIRE_SEGMENT_Z, p[0])  # Overwriting tied values is fine
+    assert WIRE_SEGMENT_Z.port_segments == []
+    assert p[0].ws_path == WIRE_SEGMENT_Z.path
+
+    standard_module.connect(w[0], p[0])  # Overwriting tied values is fine
+    assert w[0].port_segments == [p[0]]
+    assert p[0].ws_path == w[0].path
 
     with pytest.raises(AlreadyConnectedError):
         standard_module.connect(w[0], p[0])
