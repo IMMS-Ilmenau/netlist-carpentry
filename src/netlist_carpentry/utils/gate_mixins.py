@@ -17,6 +17,8 @@ class GateProtocol(Protocol):
     instance_type: str
 
     @property
+    def raw_path(self) -> str: ...
+    @property
     def parameters(self) -> Parameters: ...
     @property
     def ports(self) -> CustomDict[str, Port[Instance]]: ...
@@ -45,7 +47,7 @@ class GateProtocol(Protocol):
         width: PositiveInt = 1,
     ) -> None: ...
     def p2v(self, port: ANY_PORT, exclude_indices: Optional[List[int]] = None, include_indices: Optional[List[int]] = None) -> str: ...
-    def _v_header(self, port: Port[Instance], polarity: Signal, idx: int = 0) -> str: ...
+    def _v_header(self, port: Port[Instance], polarity: Signal, idx: Optional[int] = None) -> str: ...
     def _storage_assigns(self, sig_value: str = '') -> str: ...
     def set(self, port_name: str, new_signal: SignalOrLogicLevel, idx: Union[int, List[int]] = 0) -> None: ...
     def evaluate(self) -> None: ...
@@ -193,6 +195,15 @@ class ClkMixin(BaseModel):
         sigs = super().verilog_net_map
         sigs.update({'CLK': clk})
         return sigs
+
+    def _v_header(self: ClockMixinProtocol, port: Port[Instance], polarity: Signal, idx: Optional[int] = None) -> str:
+        if port.width != 1 and idx is None:
+            raise WidthMismatchError(
+                f'Port {port.name} of {self.__class__.__name__} {self.raw_path} is part of a sensitivity list and should thus be exactly 1 bit wide, but is {port.width} bits wide.'
+            )
+        inc_idx = [idx] if idx is not None else None
+        wire = self.p2v(port, include_indices=inc_idx) if self.p2v(port, include_indices=inc_idx) != "1'bx" else ''
+        return ('posedge ' if polarity == Signal.HIGH else 'negedge ') + wire if wire else ''
 
     def update_parameters(self: ClockMixinProtocol) -> None:
         super().update_parameters()

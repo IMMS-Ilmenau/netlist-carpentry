@@ -10,8 +10,10 @@ from pydantic import BaseModel, PositiveInt
 from netlist_carpentry import CFG, CONST_MAP_YOSYS2OBJ, LOG, Direction, Instance, Module, NetlistElement, Port, Signal, Wire
 from netlist_carpentry.core.enums.signal import T_SIGNAL_STATES
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
+from netlist_carpentry.core.types import SignalArray
 from netlist_carpentry.utils.gate_lib import get
 from netlist_carpentry.utils.gate_lib_dataclasses import PortParams, WireParams
+from netlist_carpentry.utils.gate_lib_extras import BRAM
 
 BitAlias = Union[int, T_SIGNAL_STATES]
 PortDirections = Dict[str, Literal['input', 'output', 'inout']]
@@ -247,6 +249,8 @@ class CellData(NetlistContent):
         self._update_param_type(inst, 'CLR_POLARITY', 'CLR_POLARITY', Signal.get)
         self._update_param_type(inst, 'SET_POLARITY', 'SET_POLARITY', Signal.get)
         self._update_param_type(inst, 'EN_POLARITY', 'EN_POLARITY', Signal.get)
+        if isinstance(inst, BRAM):
+            self._bram_params(inst)
 
     def _update_param_type(
         self,
@@ -262,6 +266,24 @@ class CellData(NetlistContent):
                 setattr(inst.parameters, new_param_key, value_fnc(val_int))
                 if delete_old and hasattr(inst.parameters, old_param_key):
                     delattr(inst.parameters, old_param_key)
+
+    def _bram_params(self, inst: BRAM) -> None:
+        bram_params = [
+            'RD_CE_OVER_SRST',
+            'RD_CLK_ENABLE',
+            'RD_CLK_POLARITY',
+            'RD_COLLISION_X_MASK',
+            'RD_INIT_VALUE',
+            'RD_TRANSPARENCY_MASK',
+            'RD_WIDE_CONTINUATION',
+            'WR_CLK_ENABLE',
+            'WR_CLK_POLARITY',
+            'WR_PRIORITY_MASK',
+            'WR_WIDE_CONTINUATION',
+        ]
+        for param_key in bram_params:
+            if self.parameters and param_key in self.parameters:
+                setattr(inst.parameters, param_key, SignalArray.from_bin(self.parameters[param_key], fixed_width=len(self.parameters[param_key])))
 
 
 class WireData(NetlistContent):

@@ -1,21 +1,26 @@
 # Changelog 0.5.0
 
 ## ADDED
-- Implemented missing Yosys cell abstractions, including
-  - `SDFF` (synchronously resettable DFF),
-  - `SDFFCE` (synchronously resettable DFF with enable, where the enable takes precedence over the reset),
-  - `SDFFE` (synchronously resettable DFF with enable, where the reset takes precedence over the enable),
-  - `ALDFF` (asynchronous load DFF),
-  - `ALDFFE`(asynchronous load DFF with extra enable in the default use case),
-  - `DFFSR` (DFF with set and clear/reset ports),
-  - `DFFSRE` (DFF with set, clear/reset and enable ports),
-  - `SSHL` (arithmetic left-shift),
-  - `SSHR` (arithmetic right-shift),
-  - `EQX` (case equality),
-  - `NEX` (case inequality)
-  - `POW` (exponentiator, "A to the power of B")
-- Implemented factory methods for the mentioned Yosys cells
-- Implemented factory methods for `DIV` (divider) and `MOD` (modulo) cells
+- Implemented missing Yosys cell abstractions into the gate library, including
+  - `$sdff` (class is `SDFF`, synchronously resettable DFF),
+  - `$sdffce` (class is `SDFFCE`, synchronously resettable DFF with enable, where the enable takes precedence over the reset),
+  - `$sdffe` (class is `SDFFE`, synchronously resettable DFF with enable, where the reset takes precedence over the enable),
+  - `$aldff` (class is `ALDFF`, asynchronous load DFF),
+  - `$aldffe`(aclass is `ALDFFE` synchronous load DFF with extra enable in the default use case),
+  - `$dffsr` (class is `DFFSR`, DFF with set and clear/reset ports),
+  - `$dffsre` (class is `DFFSRE`, DFF with set, clear/reset and enable ports),
+  - `$sshl` (class is `ArithmeticShiftLeft`, implementing arithmetic left-shift operator),
+  - `$sshr` (class is `ArithmeticShiftRight`, implementing arithmetic right-shift operator),
+  - `$eqx` (class is `CaseEqual`, implementing the case equality operator),
+  - `$nex` (class is `CaseNotEqual`, implementing the case inequality operator),
+  - `$pow` (class is `Exponentiator`, implementing the "A to the power of B" operator)
+- Added a gatelib extension class `netlist_carpentry.utils.gate_lib_extras`, which currently only contains the `BRAM` (Block RAM) class, which is an implementation of the `mem_v2` cell
+  - The `BRAM` class models a memory cell
+  - When reading JSON netlists, the `get()` function from the gate library automatically transforms Yosys's `$mem_v2` cells into a `BRAM` instance
+  - Yosys only creates `$mem_v2` cells if `ReadConfig.keep_memory_cells` is `True` (defaults to `False`), otherwise the memory is mapped to flip-flops and muxes
+  - Currently, the verilog write-out works, but no evaluation algorithm is implemented
+- Implemented factory methods for the mentioned classes
+- Implemented factory methods for `Divider` (based on Yosys's `$div` cell) and `Modulo` (based on Yosys's `$mod` cell) classes
 - Added lots of docstrings
 - Added `netlist_carpentry.ON_WINDOWS` flag, which is used in several places to determine the OS Netlist Carpentry is running on
 - Added a Yosys reading config class `netlist_carpentry.ReadConfig`, which is now used to build the read script dynamically for more convenience - see the documentation of the class for more information

@@ -524,6 +524,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         width: PositiveInt = 1,
         offset: NonNegativeInt = 0,
         is_locked: bool = False,
+        create_associated_wire: bool = False,
     ) -> Port[Module]:
         """
         Creates a new port within the module and connects it to the specified wire segments.
@@ -538,6 +539,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             width (PositiveInt, optional): The width of the port. Defaults to 1, which means the port is 1 bit wide.
             offset (NonNegativeInt, optional): The index offset for port slices. Defaults to 0, which means the port indexing starts at 0.
             is_locked (bool, optional): Whether the port should be unchangeable after creation or not. Defaults to False.
+            create_associated_wire (bool, optional): Whether to also create a wire with the same name and connect it
 
         Returns:
             Port: The port that was successfully created and added.

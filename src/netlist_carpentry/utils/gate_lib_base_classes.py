@@ -15,7 +15,7 @@ from typing import Callable, Dict, Iterable, List, Literal, Optional, Tuple, Uni
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from typing_extensions import Self
 
-from netlist_carpentry import CFG, LOG, Direction, Instance, Module, Port, Signal, SignalArray
+from netlist_carpentry import CFG, LOG, Direction, Instance, Module, Port, PortSegment, Signal, SignalArray
 from netlist_carpentry.core.exceptions import EvaluationError, ObjectNotFoundError, UnsupportedOperationError, WidthMismatchError
 from netlist_carpentry.core.netlist_elements.port import ANY_PORT
 from netlist_carpentry.core.netlist_elements.wire_segment import CONST_MAP_VAL2OBJ, WIRE_SEGMENT_X, WireSegment
@@ -167,7 +167,7 @@ class PrimitiveGate(Instance, BaseModel):
 
         This method takes the connected wire segments of a Port object and converts them to their corresponding
         Verilog signal structure (p2v -> Port to Verilog signal syntax).
-        For each segment of the port, it checks whether a corresponding connected wire segment exists in the current module.
+        For each segment of the port, it checks whether a corresponding connected wire segment exists in the corresponding module.
         If the port is set to a constant, the corresponding constant wire segment placeholder is used instead.
         Port segments can be excluded from the conversion by providing a list of indices to the `exclude_indices` parameter,
         indicating which segments should be excluded from the conversion (e.g. segments that are known to be unconnected).
@@ -187,7 +187,6 @@ class PrimitiveGate(Instance, BaseModel):
             UnsupportedOperationError: If both `exclude_indices` and `include_indices` are specified.
                 Only one of both may be given when calling this method.
         """
-        from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
 
         if exclude_indices is not None and include_indices is not None:
             raise UnsupportedOperationError('Only one of `exclude_indices` and `include_indices` may be specified!')
@@ -198,19 +197,47 @@ class PrimitiveGate(Instance, BaseModel):
             inc_set = set(include_indices)
             offset = port.offset or 0
             exclude_indices = [idx for idx in range(offset, port.width + offset) if idx not in inc_set]
-        curr_module: Module = port.module
+        segs = {i: s for i, s in port.segments.items() if i not in exclude_indices}
+        return self.ps2v(segs)
+
+    def ps2v(self, ps_dict: Dict[int, PortSegment]) -> str:
+        """
+        Converts a PortSegment dictionary to its corresponding Verilog structure by using the connected wire segments.
+
+        This method takes the connected wire segments of a PortSegment dictionary and converts them to their corresponding
+        Verilog signal structure (ps2v -> PortSegment to Verilog signal syntax).
+        For each segment, it checks whether a corresponding connected wire segment exists in the corresponding module.
+        If the port segment is set to a constant, the corresponding constant wire segment placeholder is used instead.
+
+        Args:
+            ps_dict (Dict[int, PortSegment]): The PortSegment dictionary to convert. Each key (int) conforms to the index of the
+                associated PortSegment object.
+
+        Returns:
+            str: The Verilog signal structure as a string, e.g. `some_wire[3:0]` or `{w, 2'b01}`.
+
+        Raises:
+            ObjectNotFoundError: If the wire connected to a certain port segment could not be found.
+            UnsupportedOperationError: If both `exclude_indices` and `include_indices` are specified.
+                Only one of both may be given when calling this method.
+            UnsupportedOperationError: If two segments belong to different modules.
+        """
+        from netlist_carpentry.io.write.py2v import P2VTransformer as P2V
+
+        module: Module = next(iter(ps_dict.values())).parent.module
+        if any(ps.parent.module != module for ps in ps_dict.values()):
+            raise UnsupportedOperationError('Cannot transform Segments to verilog: Segments from the given dictionary belong to different modules!')
         wsegs: List[WireSegment] = []
-        for idx, ps in reversed(port.segments.items()):
-            if idx not in exclude_indices:
-                if not ps.is_tied:
-                    ws = curr_module.get_from_path(ps.ws_path)
-                    if ws is not None:
-                        wsegs.append(ws)
-                    else:
-                        raise ObjectNotFoundError(f'No wire found for path {ps.ws_path}!')
+        for ps in reversed(ps_dict.values()):
+            if not ps.is_tied:
+                ws = module.get_from_path(ps.ws_path)
+                if ws is not None:
+                    wsegs.append(ws)
                 else:
-                    wsegs.append(CONST_MAP_VAL2OBJ.get(ps.raw_ws_path, WIRE_SEGMENT_X))
-        return P2V.simplify_wire_segments(curr_module, wsegs)
+                    raise ObjectNotFoundError(f'No wire found for path {ps.ws_path}!')
+            else:
+                wsegs.append(CONST_MAP_VAL2OBJ.get(ps.raw_ws_path, WIRE_SEGMENT_X))
+        return P2V.simplify_wire_segments(module, wsegs)
 
     def _get_unconnected_idx(self, port: ANY_PORT) -> List[int]:
         exclude_indices = [idx for idx, ps in port.segments.items() if ps.is_unconnected]

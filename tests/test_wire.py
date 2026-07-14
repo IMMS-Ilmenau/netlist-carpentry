@@ -168,6 +168,9 @@ def test_wire_signed_unsigned(standard_wire: Wire) -> None:
     standard_wire.parameters['signed'] = False  # Should not happen, but then treat it as zero==>unsigned
     assert not standard_wire.signed
     assert standard_wire.unsigned
+    standard_wire.parameters['signed'] = None  # Initial case, unset
+    assert not standard_wire.signed
+    assert standard_wire.unsigned
 
 
 def test_add_wire_segment(standard_wire: Wire, locked_wire: Wire) -> None:

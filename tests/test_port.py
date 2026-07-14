@@ -311,6 +311,9 @@ def test_port_signed_unsigned(standard_port_out: Port[Module]) -> None:
     standard_port_out.parameters['signed'] = False  # Should not happen, but then treat it as zero==>unsigned
     assert not standard_port_out.signed
     assert standard_port_out.unsigned
+    standard_port_out.parameters['signed'] = None  # Initial case, unset
+    assert not standard_port_out.signed
+    assert standard_port_out.unsigned
 
 
 def test_port_is_input(standard_port_in: Port[Instance], standard_port_out: Port[Module]) -> None:

@@ -1759,6 +1759,8 @@ def get(instance_type: str) -> Union[type[PrimitiveGate], None]:
 
 
 def _build_gate_lib_map() -> None:
+    from netlist_carpentry.utils.gate_lib_extras import _build_gate_lib_map as _extras_build_gate_lib_map
+
     clsmembers: List[Tuple[str, type]] = inspect.getmembers(sys.modules[__name__], inspect.isclass)
     for _, c in clsmembers:
         # Iterate through all class members (i.e. all gates),
@@ -1771,3 +1773,4 @@ def _build_gate_lib_map() -> None:
             _gate_lib_map[c_inst.instance_type] = c
         except Exception:  # noqa: PERF203 YES, catching exceptions inside a loop might be bad, I just DONT CARE
             pass
+    _gate_lib_map.update(_extras_build_gate_lib_map())

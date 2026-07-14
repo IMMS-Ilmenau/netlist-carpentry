@@ -9,7 +9,7 @@ from netlist_carpentry import WIRE_SEGMENT_X, Port, SignalArray
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.enums.signal import Signal
-from netlist_carpentry.core.exceptions import InvalidSignalError, SignalAssignmentError, UnsupportedOperationError
+from netlist_carpentry.core.exceptions import InvalidSignalError, SignalAssignmentError, UnsupportedOperationError, WidthMismatchError
 from netlist_carpentry.core.netlist_elements.element_path import PortPath, WireSegmentPath
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
@@ -40,6 +40,7 @@ from netlist_carpentry.utils.gate_lib import (
     StorageGate,
     UnaryGate,
 )
+from netlist_carpentry.utils.gate_mixins import ClkMixin
 from netlist_carpentry.utils.log import LOG
 
 
@@ -100,7 +101,7 @@ def test_gate_lib_map(simple_module: Module) -> None:
     from netlist_carpentry.utils.gate_lib import _build_gate_lib_map, _gate_lib_map
 
     _build_gate_lib_map()
-    assert len(_gate_lib_map) == 58  # Currently 58 gates in library
+    assert len(_gate_lib_map) == 59  # Currently 59 gates in library
 
 
 def test_primitive_gate(primitive_gate: PrimitiveGate) -> None:
@@ -2613,8 +2614,6 @@ def test_exponentiator_behavior(simple_module: Module) -> None:
 
 
 def test_clocked_gate(simple_module: Module) -> None:
-    from netlist_carpentry.utils.gate_lib import ClkMixin
-
     class ClockedGate(ClkMixin, StorageGate):
         pass
 
@@ -2636,6 +2635,13 @@ def test_clocked_gate(simple_module: Module) -> None:
     assert not g.is_combinational
     assert g.is_sequential
     assert g.splittable
+
+    assert g._v_header(g.ports['CLK'], Signal.LOW) == ''
+    g.modify_connection('CLK', WireSegmentPath(raw='a.clk.0'), index=0)
+    assert g._v_header(g.ports['CLK'], Signal.LOW) == 'negedge clk'
+    g.modify_connection('CLK', WireSegmentPath(raw='a.clk.0'), index=1)  # now g.ports['CLK'] has a 2nd bit
+    with pytest.raises(WidthMismatchError):
+        g._v_header(g.ports['CLK'], Signal.LOW)
 
 
 def test_clocked_gate_split(simple_module: Module) -> None:
@@ -4072,6 +4078,26 @@ def test_get(simple_module: Module) -> None:
 
     invalid_class = get('invalid')
     assert invalid_class is None
+
+
+def test_deprecations() -> None:
+    warn = "The '{name}' class is deprecated and will be removed in v1.0.0. Use '{name}' from netlist_carpentry.utils.gate_mixins instead."
+    with pytest.warns(DeprecationWarning, match=warn.format(name='ClkMixin')):
+        from netlist_carpentry.utils.gate_lib_base_classes import ClkMixin
+
+        ClkMixin
+    with pytest.warns(DeprecationWarning, match=warn.format(name='RstMixin')):
+        from netlist_carpentry.utils.gate_lib_base_classes import RstMixin
+
+        RstMixin
+    with pytest.warns(DeprecationWarning, match=warn.format(name='EnMixin')):
+        from netlist_carpentry.utils.gate_lib_base_classes import EnMixin
+
+        EnMixin
+    with pytest.warns(DeprecationWarning, match=warn.format(name='ScanMixin')):
+        from netlist_carpentry.utils.gate_lib_base_classes import ScanMixin
+
+        ScanMixin
 
 
 if __name__ == '__main__':
