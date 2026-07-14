@@ -664,22 +664,34 @@ def test_create_blackbox_modules(connected_circuit: Circuit) -> None:
 
 def test_create_blackbox_modules_with_ports(connected_circuit: Circuit) -> None:
     m = Module(name='foo')
-    m.create_port('A')
-    m.create_port('B')
+    m.create_port('A', 'in')
+    m.create_port('B', 'inout', width=2, offset=1)
     m.create_port('C')
-    m.create_port('Q')
-    m.create_port('Y')
-    connected_circuit.first.create_instance(m, 'foo_inst')
+    m.create_port('Q', 'out')
+    m.create_port('Y', 'output')
+    inst = connected_circuit.first.create_instance(m, 'foo_inst')
+    assert m.ports['B'].offset == 1
+    assert inst.ports['B'].offset == 0  # Offset is not copied from the module in the instance already, all segments are moved downward to start at 0
     connected_circuit.modules.pop('foo')
 
     assert 'foo' not in connected_circuit
     connected_circuit.create_blackbox_modules()
     assert 'foo' in connected_circuit
     assert connected_circuit['foo'].ports['A'].direction is Direction.IN
-    assert connected_circuit['foo'].ports['B'].direction is Direction.IN
-    assert connected_circuit['foo'].ports['C'].direction is Direction.IN
+    assert connected_circuit['foo'].ports['A'].width == 1
+    assert connected_circuit['foo'].ports['A'].offset == 0
+    assert connected_circuit['foo'].ports['B'].direction is Direction.IN_OUT
+    assert connected_circuit['foo'].ports['B'].width == 2
+    assert connected_circuit['foo'].ports['B'].offset == 0
+    assert connected_circuit['foo'].ports['C'].direction is Direction.UNKNOWN
+    assert connected_circuit['foo'].ports['C'].width == 1
+    assert connected_circuit['foo'].ports['C'].offset == 0
     assert connected_circuit['foo'].ports['Q'].direction is Direction.OUT
+    assert connected_circuit['foo'].ports['Q'].width == 1
+    assert connected_circuit['foo'].ports['Q'].offset == 0
     assert connected_circuit['foo'].ports['Y'].direction is Direction.OUT
+    assert connected_circuit['foo'].ports['Y'].width == 1
+    assert connected_circuit['foo'].ports['Y'].offset == 0
 
 
 def test_connected_circuit(connected_circuit: Circuit) -> None:

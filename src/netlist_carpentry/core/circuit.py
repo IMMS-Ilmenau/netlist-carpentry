@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Callable, DefaultDict, Dict, Iterator, List, L
 
 from pydantic import BaseModel, NonNegativeInt
 
-from netlist_carpentry import Direction, Signal
+from netlist_carpentry import Signal
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.exceptions import ObjectNotFoundError, PathResolutionError, SignalAssignmentError
 from netlist_carpentry.core.netlist_elements.element_path import (
@@ -757,17 +757,14 @@ class Circuit(BaseModel):
 
         This method iterates through all instances of this circuit and checks whether the instance is a blackbox cell.
         If the instance is a blackbox, this method creates a module with the same interface as the blackbox cell,
-        i.e. the same ports while assuming directions based on common output port names (e.g. `Q`, `QN`, `Y` are common output names).
-        Every port with a name that is not a common output port name is automatically assumed to be an input port.
+        i.e. the same ports, copying their direction, width and offset.
         """
-        common_output_port_names = {'Q', 'QN', 'Y'}
         for m in list(self):
             for inst in m.instances.values():
                 if inst.is_blackbox and inst.instance_type not in self:
                     m = self.create_module(inst.instance_type)
-                    for pname in inst.ports:
-                        direction = Direction.OUT if pname in common_output_port_names else Direction.IN
-                        m.create_port(pname, direction)
+                    for pname, port in inst.ports.items():
+                        m.create_port(pname, port.direction, port.width, offset=port.offset or 0)
 
     @overload
     def set_signal(self, path: str, signal_value: LogicLevel) -> None: ...
