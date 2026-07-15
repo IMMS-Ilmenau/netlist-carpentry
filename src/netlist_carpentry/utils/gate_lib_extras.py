@@ -153,14 +153,7 @@ class BRAM(ClkMixin, PrimitiveGate):
         header = f'negedge {w}' if p is Signal.LOW else f'posedge {w}'
         return self._format_write_vpart(idx, header, en_ps, self.wr_addr_port, self.wr_data_port)
 
-    def _format_read_vpart(
-        self,
-        idx: int,
-        header: str,
-        en: PortSegment,
-        addr: PORT,
-        data: PORT,
-    ) -> str:
+    def _format_read_vpart(self, idx: int, header: str, en: PortSegment, addr: PORT, data: PORT) -> str:
         """Format a synchronous read-port always block.
 
         Priority order (when multiple features are active):
@@ -198,14 +191,7 @@ class BRAM(ClkMixin, PrimitiveGate):
 
         return f'always @({header}) begin\n{action}\nend'
 
-    def _format_write_vpart(
-        self,
-        idx: int,
-        header: str,
-        en: PortSegment,
-        addr: PORT,
-        data: PORT,
-    ) -> str:
+    def _format_write_vpart(self, idx: int, header: str, en: PortSegment, addr: PORT, data: PORT) -> str:
         """Format a write-port always block."""
         en_array = self._resolve_enable_array(en, self.wr_clk_port, port_idx=idx, slice_width=self.width)
         if en_array is None:
@@ -294,10 +280,7 @@ class BRAM(ClkMixin, PrimitiveGate):
         clk_en = self.parameters.RD_CLK_ENABLE
         return clk_en is not None and idx in clk_en and clk_en[idx] is Signal.HIGH
 
-    def _ce_over_srst_info(
-        self,
-        idx: int,
-    ) -> Tuple[bool, Optional[str]]:
+    def _ce_over_srst_info(self, idx: int) -> Tuple[bool, Optional[str]]:
         """Return (ce_over_srst_flag, srst_value_string) for a read port."""
         if (
             self.parameters.RD_CE_OVER_SRST is None
@@ -323,13 +306,7 @@ class BRAM(ClkMixin, PrimitiveGate):
         raw_bits = self.parameters.RD_SRST_VALUE[start : start + w]
         return f"{w}'b{raw_bits}"
 
-    def _resolve_enable_array(
-        self,
-        en: PortSegment,
-        clk_port: PORT,
-        port_idx: int = 0,
-        slice_width: int = 1,
-    ) -> Optional[Dict[int, PortSegment]]:
+    def _resolve_enable_array(self, en: PortSegment, clk_port: PORT, port_idx: int = 0, slice_width: int = 1) -> Optional[Dict[int, PortSegment]]:
         """Resolve an enable signal to a dict of bit-index → PortSegment.
 
         Returns ``None`` when the port is always inactive (EN tied LOW).
@@ -371,10 +348,7 @@ class BRAM(ClkMixin, PrimitiveGate):
         groups = self._group_en_array(en_array)
         return self.ps2v(groups[0])
 
-    def _group_en_array(
-        self,
-        en_array: Dict[int, PortSegment],
-    ) -> List[Dict[int, PortSegment]]:
+    def _group_en_array(self, en_array: Dict[int, PortSegment]) -> List[Dict[int, PortSegment]]:
         """Group consecutive enable elements that share the same wire path."""
         groups: List[Dict[int, PortSegment]] = []
         curr_group: Dict[int, PortSegment] = {}
@@ -405,16 +379,7 @@ class BRAM(ClkMixin, PrimitiveGate):
         data_segs = {i: data[i] for i in self._data_slice_indices(idx)}
         return self.ps2v(data_segs)
 
-    def _format_vpart(
-        self,
-        idx: int,
-        rw: Literal['r', 'w'],
-        cw: str,
-        cpol: Signal,
-        en: PortSegment,
-        addr: PORT,
-        data: PORT,
-    ) -> str:
+    def _format_vpart(self, idx: int, rw: Literal['r', 'w'], cw: str, cpol: Signal, en: PortSegment, addr: PORT, data: PORT) -> str:
         """Format a port always block (legacy/test-facing API).
 
         Kept for backward compatibility with existing tests.
@@ -427,11 +392,7 @@ class BRAM(ClkMixin, PrimitiveGate):
         else:
             return self._format_write_vpart(idx, header, en, addr, data)
 
-    def _verilog_template(
-        self,
-        idx: int,
-        rw: Literal['r', 'w'],
-    ) -> str:
+    def _verilog_template(self, idx: int, rw: Literal['r', 'w']) -> str:
         """Generate Verilog for a single port (legacy/test-facing API).
 
         Kept for backward compatibility with existing tests.
@@ -448,14 +409,7 @@ class BRAM(ClkMixin, PrimitiveGate):
             header = f'negedge {w}' if p is Signal.LOW else f'posedge {w}'
             return self._format_read_vpart(idx, header, en_ps, self.rd_addr_port, self.rd_data_port)
 
-    def _format_vpart_if_statement(
-        self,
-        idx: int,
-        en_array: Dict[int, PortSegment],
-        rw: Literal['r', 'w'],
-        addr: PORT,
-        data: PORT,
-    ) -> str:
+    def _format_vpart_if_statement(self, idx: int, en_array: Dict[int, PortSegment], rw: Literal['r', 'w'], addr: PORT, data: PORT) -> str:
         """Generate an if-statement (or chunked if-statements) for a port.
 
         Used by write ports and also available for read ports when needed.
@@ -465,12 +419,7 @@ class BRAM(ClkMixin, PrimitiveGate):
 
         data_segs = {i: data[i] for i in self._data_slice_indices(idx)}
         addr_segs = {i: addr[i] for i in self._addr_slice_indices(idx)}
-        action = tmpl.format(
-            data=self.ps2v(data_segs),
-            addr=self.ps2v(addr_segs),
-            mem=self.name,
-            ram_idx='',
-        )
+        action = tmpl.format(data=self.ps2v(data_segs), addr=self.ps2v(addr_segs), mem=self.name, ram_idx='')
 
         if not en_array:
             return transparency_str + action
@@ -489,12 +438,7 @@ class BRAM(ClkMixin, PrimitiveGate):
             ram_indices = [k - idx * self.width for k in reversed(keys)]
             idx_str = f'[{ram_indices[0]}]' if len(ram_indices) == 1 else f'[{ram_indices[0]}:{ram_indices[-1]}]'
             data_str = self.p2v(data, include_indices=keys)
-            action = tmpl.format(
-                data=data_str,
-                addr=self.ps2v(addr_segs),
-                mem=self.name,
-                ram_idx=idx_str,
-            )
+            action = tmpl.format(data=data_str, addr=self.ps2v(addr_segs), mem=self.name, ram_idx=idx_str)
             en_str = self.ps2v(g)
             elements.append(transparency_str + f'\tif ({en_str})\n\t{action}')
 
