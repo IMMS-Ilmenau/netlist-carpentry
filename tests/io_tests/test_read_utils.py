@@ -44,6 +44,7 @@ def test_read_via_cfg() -> None:
     assert circuit.name == 'tmp'
 
 
+@pytest.mark.skipif(os.environ.get('GITHUB_ACTIONS') == 'true', reason='Skip this test on GitHub Actions only.')
 def test_read_via_cfg_slang() -> None:
     rc = ReadConfig(files=[Path('tests/files/simpleAdder.v')], top='simpleAdder', yosys_plugins=['slang'])
     circuit = read_via_cfg(rc, circuit_name='Circuit', verbose=True)

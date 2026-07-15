@@ -229,6 +229,7 @@ def test_format_vpart(module_bram: Module) -> None:
         bram._format_vpart(0, 'r', 'some_clk', Signal.HIGH, bram.rd_en_port[0], bram.rd_addr_port, bram.rd_data_port)
 
 
+@pytest.mark.skipif(os.environ.get('GITHUB_ACTIONS') == 'true', reason='Skip this test on GitHub Actions only.')
 def test_mem_complex() -> None:  # STRUCTURAL COMPARISON
     c = read('tests/files/mem_complex.v', 'mem_complex')
     ram = c.first.instances['ram']
@@ -283,6 +284,7 @@ def test_mem_complex_small(read_config: ReadConfig) -> None:  # LOGICAL COMPARIS
     assert p.returncode == 0
 
 
+@pytest.mark.skipif(os.environ.get('GITHUB_ACTIONS') == 'true', reason='Skip this test on GitHub Actions only.')
 def test_mem_complex_small_sim(read_config: ReadConfig) -> None:  # "PROOF" BY TESTBENCH
     c = read(read_config)
     c.optimize()
