@@ -23,7 +23,7 @@ def test_default() -> None:
     assert rc.keep_memory_cells is False
     assert rc.insbuf is True
 
-    tmp = '{read}\n{hierarchy}\nproc; opt\n{memory}\n{techmaps}\n{share}\nopt; clean\n{insbuf}\n{write}\n'
+    tmp = '{read}\n{hierarchy}\nproc; opt\n{memory}\npmuxtree\n{techmaps}\n{share}\nopt; clean\n{insbuf}\n{write}\n'
     assert rc.script_template == tmp
 
 
@@ -166,11 +166,12 @@ def test_yosys_commands() -> None:
     assert found_cmds[1] == 'hierarchy -auto-top'
     assert found_cmds[2] == 'proc; opt'
     assert found_cmds[3] == 'memory'
-    assert found_cmds[4] == ''
+    assert found_cmds[4] == 'pmuxtree'
     assert found_cmds[5] == ''
-    assert found_cmds[6] == 'opt; clean'
-    assert found_cmds[7] == 'insbuf; proc'
-    assert 'write_json' in found_cmds[8] and '/a/b/c.json' in found_cmds[8]
+    assert found_cmds[6] == ''
+    assert found_cmds[7] == 'opt; clean'
+    assert found_cmds[8] == 'insbuf; proc'
+    assert 'write_json' in found_cmds[9] and '/a/b/c.json' in found_cmds[9]
 
 
 def test_shell_script() -> None:
@@ -187,13 +188,14 @@ def test_shell_script() -> None:
     assert found_cmds[1 + 3] == 'hierarchy -auto-top'
     assert found_cmds[2 + 3] == 'proc; opt'
     assert found_cmds[3 + 3] == 'memory'
-    assert found_cmds[4 + 3] == ''
+    assert found_cmds[4 + 3] == 'pmuxtree'
     assert found_cmds[5 + 3] == ''
-    assert found_cmds[6 + 3] == 'opt; clean'
-    assert found_cmds[7 + 3] == 'insbuf; proc'
-    assert 'write_json' in found_cmds[8 + 3] and '/a/b/c.json' in found_cmds[8 + 3]
+    assert found_cmds[6 + 3] == ''
+    assert found_cmds[7 + 3] == 'opt; clean'
+    assert found_cmds[8 + 3] == 'insbuf; proc'
+    assert 'write_json' in found_cmds[9 + 3] and '/a/b/c.json' in found_cmds[9 + 3]
 
-    assert found_cmds[12] == '"'  # End of Yosys command string
+    assert found_cmds[13] == '"'  # End of Yosys command string
 
 
 def test_shell_script_write() -> None:
@@ -221,13 +223,14 @@ def test_shell_script_write() -> None:
     assert cmd_lst[1 + 5] == 'hierarchy -auto-top'
     assert cmd_lst[2 + 5] == 'proc; opt'
     assert cmd_lst[3 + 5] == 'memory'
-    assert cmd_lst[4 + 5] == ''
+    assert cmd_lst[4 + 5] == 'pmuxtree'
     assert cmd_lst[5 + 5] == ''
-    assert cmd_lst[6 + 5] == 'opt; clean'
-    assert cmd_lst[7 + 5] == 'insbuf; proc'
-    assert 'write_json' in cmd_lst[8 + 5] and '/a/b/c.json' in cmd_lst[8 + 5]
+    assert cmd_lst[6 + 5] == ''
+    assert cmd_lst[7 + 5] == 'opt; clean'
+    assert cmd_lst[8 + 5] == 'insbuf; proc'
+    assert 'write_json' in cmd_lst[9 + 5] and '/a/b/c.json' in cmd_lst[9 + 5]
 
-    assert cmd_lst[14] == '"'  # End of Yosys command string
+    assert cmd_lst[15] == '"'  # End of Yosys command string
 
     tmp = CFG.yosys_executable
     CFG.yosys_executable = 'yowasp-yosys'
@@ -265,13 +268,14 @@ def test_shell_script_write_windows() -> None:
     assert found_cmds[1 + 3] == 'hierarchy -auto-top'
     assert found_cmds[2 + 3] == 'proc; opt'
     assert found_cmds[3 + 3] == 'memory'
-    assert found_cmds[4 + 3] == ''
+    assert found_cmds[4 + 3] == 'pmuxtree'
     assert found_cmds[5 + 3] == ''
-    assert found_cmds[6 + 3] == 'opt; clean'
-    assert found_cmds[7 + 3] == 'insbuf; proc'
-    assert 'write_json' in found_cmds[8 + 3] and '/a/b/c.json' in found_cmds[8 + 3]
+    assert found_cmds[6 + 3] == ''
+    assert found_cmds[7 + 3] == 'opt; clean'
+    assert found_cmds[8 + 3] == 'insbuf; proc'
+    assert 'write_json' in found_cmds[9 + 3] and '/a/b/c.json' in found_cmds[9 + 3]
 
-    assert found_cmds[12] == '"'  # End of Yosys command string
+    assert found_cmds[13] == '"'  # End of Yosys command string
 
     tmp_yosys = CFG.yosys_executable
     CFG.yosys_executable = 'yowasp-yosys'
@@ -300,6 +304,7 @@ read_verilog {p2}
 hierarchy -top hierarchicalAdder
 proc; opt
 memory -nomap
+pmuxtree
 
 share -aggressive
 opt; clean

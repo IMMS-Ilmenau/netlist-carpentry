@@ -69,6 +69,7 @@ class ReadConfig(BaseModel):
 {hierarchy}
 proc; opt
 {memory}
+pmuxtree
 {techmaps}
 {share}
 opt; clean
