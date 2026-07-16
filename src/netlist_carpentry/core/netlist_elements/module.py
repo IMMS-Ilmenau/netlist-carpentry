@@ -90,27 +90,6 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Returns:
             Instance: the instance that was added.
 
-        Example:
-            ```python
-            >>> m = Module(name='m')
-            >>> m.instances
-            {}
-            >>> inst = Instance(name='inst', instance_type='insttype')
-            >>> m.add_instance(inst)
-            Instance(insttype: m.inst)
-            >>> m.instances
-            {'inst': Instance(insttype: m.inst)}
-            >>> m.add_instance(inst)
-            Traceback (most recent call last):
-                ...
-            netlist_carpentry.core.exceptions.IdentifierConflictError: An object with name inst exists already in module m!
-            >>> inst2 = Instance(name='inst2', instance_type='insttype', module=Module(name='some_other_module'))
-            >>> m.add_instance(inst2)
-            Traceback (most recent call last):
-                ...
-            netlist_carpentry.core.exceptions.SingleOwnershipError: Instance inst2 belongs to module some_other_module. Cannot add it to module m!
-
-            ```
         """
         self._raise_if_occupied(instance.name)
         if instance.has_parent and instance.module is not self:
@@ -481,27 +460,6 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Returns:
             Port: The port that was added.
 
-        Example:
-            ```python
-            >>> m = Module(name='m')
-            >>> m.ports
-            {}
-            >>> port = Port(name='port', direction=Direction.IN, module_or_instance=None)  # Create empty port, no parent object
-            >>> m.add_port(port) # Notice width of 0, as no segments are initialized this way
-            Port(input port, 0 bit)
-            >>> m.ports
-            {'port': Port(input port, 0 bit)}
-            >>> m.add_port(port)
-            Traceback (most recent call last):
-                ...
-            netlist_carpentry.core.exceptions.IdentifierConflictError: An object with name port exists already in module m!
-            >>> port2 = Port(name='port2', direction=Direction.IN, module_or_instance=Module(name='some_other_module'))
-            >>> m.add_port(port2)
-            Traceback (most recent call last):
-                ...
-            netlist_carpentry.core.exceptions.SingleOwnershipError: Port port2 belongs to module some_other_module. Cannot add it to module m!
-
-            ```
         """
         if port.name in self.instances or port.name in self.ports:  # Ignore wires, as ports normally have a wire with the same name
             raise IdentifierConflictError(f'An object with name {port.name} exists already in module {self.name}!')

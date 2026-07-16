@@ -201,15 +201,6 @@ class Signal(Enum):
         Returns:
             Dict[int, Signal]: A dictionary where keys are integer indices (starting from 0
                 for the LSB) and values are Signal objects (HIGH or LOW).
-
-        Example:
-            >>> # 5 in binary is 101. MSB-first mapping:
-            >>> Signal.from_int(5)
-            {0: HIGH, 1: LOW, 2: HIGH}
-
-            >>> # -1 in 4-bit two's complement is 1111
-            >>> Signal.from_int(-1, fixed_width=4)
-            {0: HIGH, 1: HIGH, 2: HIGH, 3: HIGH}
         """
         from netlist_carpentry import SignalArray
 
@@ -322,15 +313,6 @@ class Signal(Enum):
 
         Raises:
             ValueError: If `sig_str` contains characters other than '0', '1', 'x', or 'z'.
-
-        Example:
-            >>> # Parsing a 4-bit MSB-first signal
-            >>> Signal.from_bin("10xz", msb_first=True)
-            {0: FLOATING, 1: UNDEFINED, 2: LOW, 3: HIGH}
-
-            >>> # Parsing with a fixed width (padding)
-            >>> Signal.from_bin("11", fixed_width=4)
-            {0: HIGH, 1: HIGH, 2: LOW, 3: LOW}
         """
         from netlist_carpentry import SignalArray
 
@@ -363,7 +345,7 @@ class Signal(Enum):
             pad_value (Literal['0', '1'], optional): The value used for padding. May be either 0 or 1. Defaults to 0.
 
         Returns:
-            int: The binary value represented by the signal list.
+            str: The binary value represented by the signal list.
 
         Example:
             >>> signals = [Signal.HIGH, Signal.LOW, Signal.HIGH]
