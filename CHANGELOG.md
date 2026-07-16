@@ -1,6 +1,15 @@
-# Changelog 0.5.0 (2026-07-14)
+# Changelog 0.5.1 (2026-07-16)
 
-## ADDED
+## FIXED
+- Fixed broken GitHub tests
+- Fixed BRAM formatting
+- Updated outdated documentation and notebooks
+
+# Older Versions
+
+## Changelog 0.5.0 (2026-07-14)
+
+### ADDED
 - Implemented missing Yosys cell abstractions into the gate library, including
   - `$sdff` (class is `SDFF`, synchronously resettable DFF),
   - `$sdffce` (class is `SDFFCE`, synchronously resettable DFF with enable, where the enable takes precedence over the reset),
@@ -46,7 +55,7 @@
 - Added Copilot skill files for the basics of Netlist Carpentry (accessible via /nc-basics) and for the API of Netlist Carpentry (accessible via /nc-api)
 - Added lots of code examples to the docstrings - code examples are tested via doctest (as part of the pytest run) when running tox
 
-## FIXED
+### FIXED
 - Fixed bug in signal evaluation process for DFFs with Enable, that arose whenever the Enable signal is undefined
 - Fixed default port widths for factory methods (`netlist_carpentry.utils.gate_lib_factory`), so port widths are now derived from given ports by default, as long as no conflicts would occur
   - Default width is still 1 (e.g. if no ports are given at all)
@@ -68,7 +77,7 @@
 - Fixed hidden bug in `Circuit.uniquify()`
 - Fixed bug in `Circuit.create_blackbox_modules()`, now port directions and widths are copied correctly
 
-## CHANGED
+### CHANGED
 - `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.ARST_POLARITY` → `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.RST_POLARITY`
 - `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.ARST_VALUE` → `netlist_carpentry.utils.gate_lib_dataclasses.ResetParamsMixin.RST_VALUE`
 - `netlist_carpentry.io.read.yosys_netlist` → `netlist_carpentry.io.read.yosys.netlist_reader`
@@ -99,8 +108,6 @@
 - For the Verilog write-out, the `port2v()`, `wire2v()` and `instance2v()` methods no longer require a Module Parameter - the module is now retrieved from the parent of the given instance
 
 
-# Older Versions
-
 ## Changelog 0.4.2 (2026-06-18)
 
 ### FIXED
@@ -126,7 +133,6 @@
 - Implemented missing `Signal.__int__()` (for `int(netlist_carpentry.Signal)`) for casting a `Signal` to an `int`
 - Implemented missing `Signal.__invert__()` (for `~netlist_carpentry.Signal`) for inversion of a signal; `Signal.invert()` still exists but now shows a `DeprecationWarning` along with a hint
 - Fixed some evaluation bugs for reduction gates
-
 
 
 ## Changelog 0.4.1 (2026-05-11)
