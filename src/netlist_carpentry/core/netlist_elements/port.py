@@ -1196,16 +1196,17 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
         return self.segments.get(index, None)
 
     @overload
-    def tie_signal(self, signal: LogicLevel, index: NonNegativeInt = 0) -> None: ...
+    def tie_signal(self, signal: LogicLevel, index: Optional[NonNegativeInt] = None) -> None: ...
     @overload
-    def tie_signal(self, signal: Signal, index: NonNegativeInt = 0) -> None: ...
+    def tie_signal(self, signal: Signal, index: Optional[NonNegativeInt] = None) -> None: ...
 
-    def tie_signal(self, signal: SignalOrLogicLevel, index: NonNegativeInt = 0) -> None:
+    def tie_signal(self, signal: SignalOrLogicLevel, index: Optional[NonNegativeInt] = None) -> None:
         """
         Ties a signal to a constant value on the specified port segment.
 
+        If index is `None`, the whole port gets tied to the given signal.
         If the specified index corresponds to an existing port segment, ties its
-        constant signal value and returns True. Otherwise, does nothing and returns False.
+        constant signal value and returns True. Otherwise it raises an ObjectNotFoundError.
 
         If `signal` is `X`, which is interpreted as `UNDEFINED`, the port segment is unconnected to achieve this.
 
@@ -1213,7 +1214,8 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Args:
             signal (SignalOrLogicLevel): The new constant signal value. **'X' unconnects the port**.
-            index (NonNegativeInt): The bit index of the port segment. Defaults to 0.
+            index (NonNegativeInt): The bit index of the port segment.
+                Defaults to None, in which case the whole port is tied to the given signal.
 
         Raises:
             ObjectNotFoundError: If no segment with the given index exists.
@@ -1237,18 +1239,24 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
             ```
         """
-        if index not in self.segments:
+        if index is None:
+            for idx, _ in self:
+                self.tie_signal(signal, idx)
+        elif index not in self.segments:
             raise ObjectNotFoundError(f'No PortSegment with index {index} exists in Port "{self.raw_path}"!')
-        return self[index].tie_signal(signal)
+        else:
+            return self[index].tie_signal(signal)
 
     @overload
-    def set_signal(self, signal: LogicLevel, index: NonNegativeInt = 0) -> None: ...
+    def set_signal(self, signal: LogicLevel, index: Optional[NonNegativeInt] = None) -> None: ...
     @overload
-    def set_signal(self, signal: Signal, index: NonNegativeInt = 0) -> None: ...
+    def set_signal(self, signal: Signal, index: Optional[NonNegativeInt] = None) -> None: ...
 
-    def set_signal(self, signal: SignalOrLogicLevel, index: NonNegativeInt = 0) -> None:
+    def set_signal(self, signal: SignalOrLogicLevel, index: Optional[NonNegativeInt] = None) -> None:
         """
         Sets the signal of the port segment at the given index to the given new signal.
+
+        If index is `None`, the whole port gets tied to the given signal.
 
         **Does only work for NON-CONSTANT port segments!** This method is intended to be used in
         the signal evaluation process, where constant signals should be treated accordingly.
@@ -1257,10 +1265,11 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
 
         Args:
             signal (SignalOrLogicLevel): The new signal to set on the port segment.
-            index (NonNegativeInt): The index of the port segment to set the signal on. Defaults to 0, which is the LSB of the port.
+            index (NonNegativeInt): The index of the port segment to set the signal on.
+                Defaults to None, in which case the whole port is set to the given signal.
 
         Raises:
-            ValueError: If the index is out of range of the port's segments.
+            IndexError: If the index is out of range of the port's segments.
 
         Example:
             ```python
@@ -1273,10 +1282,15 @@ class Port(NetlistElement, BaseModel, Generic[T_PARENT]):
             >>> p.set_signal(Signal.LOW, index=3)
             >>> p.signal_str
             '0101'
+            >>> p.set_signal(Signal.HIGH)
+            >>> p.signal_str
+            '1111'
 
             ```
         """
-        self[index].set_signal(signal)
+        idx_lst = [i for i in self.segments] if index is None else [index]
+        for idx in idx_lst:
+            self[idx].set_signal(signal)
 
     @overload
     def set_signals(self, signal: int) -> None: ...

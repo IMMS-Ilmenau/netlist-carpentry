@@ -1930,7 +1930,7 @@ def test_mux_behavior(simple_module: Module) -> None:
     m.modify_connection('Y', WireSegmentPath(raw='a.wmuxY_1.1'), index=1)
 
     # Data Ports
-    m.ports['D0'].set_signal(Signal.HIGH)
+    m.ports['D0'].set_signal(Signal.HIGH, index=0)
     m.ports['D1'].set_signal(Signal.LOW, index=1)
     m.ports['D2'].set_signal(Signal.FLOATING, index=2)
 
@@ -2080,7 +2080,7 @@ def test_demux_behavior(simple_module: Module) -> None:
     with pytest.raises(NotImplementedError):
         d.output_port
 
-    d.ports['D'].set_signal(Signal.HIGH)
+    d.ports['D'].set_signal(Signal.HIGH, index=0)
 
     # Change S
     d.ports['S'].set_signal(Signal.LOW, 1)  # => s_val = 1
@@ -2976,7 +2976,7 @@ def test_adffe_behavior_clk(simple_module: Module) -> None:
     assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     ff.set_en(Signal.HIGH)
 
-    ff.input_port.set_signal(Signal.HIGH)
+    ff.input_port.set_signal(Signal.HIGH, index=0)
     ff.input_port.set_signal(Signal.HIGH, index=1)
     assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
@@ -3001,12 +3001,12 @@ def test_adffe_behavior_4bit(simple_module: Module) -> None:
     ff.set_en(Signal.HIGH)
 
     # Set first bit, others are still undefined
-    ff.input_port.set_signal(Signal.HIGH)
+    ff.input_port.set_signal(Signal.HIGH, index=0)
     assert ff.output_port.signal_array.signals == {0: Signal.LOW, 1: Signal.LOW, 2: Signal.LOW, 3: Signal.LOW}
     _clk(ff)
     assert ff.output_port.signal_array.signals == {0: Signal.HIGH, 1: Signal.UNDEFINED, 2: Signal.UNDEFINED, 3: Signal.UNDEFINED}
 
-    ff.input_port.set_signal(Signal.LOW)
+    ff.input_port.set_signal(Signal.LOW, index=0)
     ff.input_port.set_signal(Signal.HIGH, index=1)
     ff.input_port.set_signal(Signal.HIGH, index=2)
     ff.input_port.set_signal(Signal.HIGH, index=3)

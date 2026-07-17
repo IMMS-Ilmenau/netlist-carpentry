@@ -527,6 +527,12 @@ def test_tie_signal(standard_port_in: Port[Instance]) -> None:
     assert standard_port_in.has_undefined_signals
     assert standard_port_in.is_tied_partly
 
+    standard_port_in.create_port_segments(3, 1)
+    standard_port_in.tie_signal(1)
+    for _, s in standard_port_in:
+        assert s.is_tied
+        assert s.signal is Signal.HIGH
+
 
 def test_set_signal(standard_port_in: Port[Instance]) -> None:
     assert standard_port_in.is_load
@@ -545,6 +551,18 @@ def test_set_signal(standard_port_in: Port[Instance]) -> None:
 
     standard_port_in.set_signal(signal=Signal.HIGH)
     assert standard_port_in.signal is Signal.HIGH
+
+    with pytest.raises(IndexError):
+        standard_port_in.set_signal(signal=Signal.HIGH, index=1)
+
+    standard_port_in.create_port_segments(3, 1)
+    standard_port_in[1].set_ws_path('test_module1.d.1')
+    standard_port_in[2].set_ws_path('test_module1.d.2')
+    standard_port_in[3].set_ws_path('test_module1.d.3')
+
+    standard_port_in.set_signal('0')
+    for _, s in standard_port_in:
+        assert s.signal is Signal.LOW
 
 
 def test_set_signals(standard_port_out: Port[Module]) -> None:
