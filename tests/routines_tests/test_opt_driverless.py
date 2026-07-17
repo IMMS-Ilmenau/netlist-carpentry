@@ -6,6 +6,7 @@ from utils import connected_module
 from netlist_carpentry.core.netlist_elements.module import Module
 from netlist_carpentry.routines import opt_driverless
 from netlist_carpentry.routines.opt.driverless import opt_driverless_instances, opt_driverless_wires
+from netlist_carpentry.utils.gate_factory import and_gate
 
 
 @pytest.fixture()
@@ -79,6 +80,31 @@ def test_opt_driverless_instances_simple(module: Module) -> None:
     any_removed = opt_driverless_instances(module)  # Removes now unused instance combining "in1" and "in2"
     assert any_removed
     assert len(module.instances) == 4
+
+    inputless_m = Module(name='inputless_m')
+    inputless_m.create_port('O', 'output')
+    inst = module.create_instance(inputless_m, 'I_inputless')
+    module.connect(inst.ports['O'], module.create_port('O', 'out'))
+    assert 'I_inputless' in module.instances
+    assert module.instances['I_inputless'] is inst
+    assert len(module.instances) == 5
+
+    any_removed = opt_driverless_instances(module)  # Does not remove inputless submodule
+    assert any_removed is False
+    assert 'I_inputless' in module.instances
+    assert module.instances['I_inputless'] is inst
+    assert len(module.instances) == 5
+
+    and_inst = and_gate(module, 'and_inst', Y=module.create_port('AndY', 'out'))
+    and_inst.ports.remove('A')
+    and_inst.ports.remove('B')  # No input ports anymore
+    assert 'and_inst' in module.instances
+    assert module.instances['and_inst'] is and_inst
+    assert len(module.instances) == 6
+    any_removed = opt_driverless_instances(module)
+    assert any_removed is True
+    assert 'and_inst' not in module.instances
+    assert len(module.instances) == 5
 
 
 if __name__ == '__main__':

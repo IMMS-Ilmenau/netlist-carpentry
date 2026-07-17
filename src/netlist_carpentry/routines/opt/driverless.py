@@ -53,11 +53,13 @@ def opt_driverless_instances(module: Module) -> bool:
     marked_for_deletion = set()
     for inst_name, inst in tqdm(module.instances.items(), leave=False):
         no_driver = True  # Will switch to false if at least 1 input port has driver
-        for p in inst.input_ports:
-            no_driver &= all(p.raw == 'X' or p.raw == '0' or p.raw == '1' for p in p.connected_wire_segments.values())
-        if no_driver:
-            LOG.debug(f'\tInstance {inst_name} has no drivers!')
-            marked_for_deletion.add(inst_name)
+        # Do not remove inputless submodule instances as they are probably used for signal generation
+        if inst.is_primitive:
+            for p in [p_in for p_in in inst.ports.values() if p_in.is_input]:
+                no_driver &= all(p.raw == 'X' or p.raw == '0' or p.raw == '1' for p in p.connected_wire_segments.values())
+            if no_driver:
+                LOG.debug(f'\tInstance {inst_name} has no drivers!')
+                marked_for_deletion.add(inst_name)
     if not marked_for_deletion:
         LOG.debug('No more instances to delete!')
         return False
