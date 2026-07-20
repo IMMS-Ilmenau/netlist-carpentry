@@ -1,4 +1,5 @@
-# mypy: disable-error-code="safe-super"
+# mypy: disable-error-code="safe-super,attr-defined,no-any-return,misc"
+# It's too complex and unnecessary to implement the missing properties, which would just raise an error either way
 import warnings
 from typing import Dict, Iterable, List, Optional, Protocol, Type, Union, runtime_checkable
 
@@ -173,7 +174,7 @@ class SelectMixin(BaseModel):
     """A mixin class for gates with select signals. These are multiplexers and demultiplexers, for example."""
 
     @property
-    def s_defined(self: SelectMixinProtocol) -> bool:
+    def s_defined(self) -> bool:
         """Whether all select signal bits are defined."""
         warnings.warn(
             f"'{self.__class__.__name__}.s_defined' is deprecated and will be removed in v1.0.0. Use '{self.__class__.__name__}.s_port.signal_array.is_defined' instead!",
@@ -183,7 +184,7 @@ class SelectMixin(BaseModel):
         return self.s_port.signal_array.is_defined
 
     @property
-    def s_val(self: SelectMixinProtocol) -> int:
+    def s_val(self) -> int:
         """Integer value of the select signals, or -1 if undefined."""
         warnings.warn(
             f"'{self.__class__.__name__}.s_val' is deprecated and will be removed in v1.0.0. Use '{self.__class__.__name__}.s_port.signal_int' or 'int({self.__class__.__name__}.s_port.signal_array)' instead!",
@@ -193,7 +194,7 @@ class SelectMixin(BaseModel):
         return self.s_port.signal_int if self.s_port.signal_int is not None else -1
 
     @property
-    def s_port(self: SelectMixinProtocol) -> Port[Instance]:
+    def s_port(self) -> Port[Instance]:
         """The select/control port."""
         return self.ports['S']
 
@@ -215,7 +216,7 @@ class ClkMixin(BaseModel):
     def clk_polarity(self, new_signal: Signal) -> None:
         self.parameters.CLK_POLARITY = new_signal
 
-    def model_post_init(self: ClockMixinProtocol, __context: object) -> None:
+    def model_post_init(self, __context: object) -> None:
         """
         Initializes the gate's ports and connections.
 
@@ -225,18 +226,18 @@ class ClkMixin(BaseModel):
         self.connect('CLK', None, direction=Direction.IN)
 
     @property
-    def clk_port(self: ClockMixinProtocol) -> Port[Instance]:
+    def clk_port(self) -> Port[Instance]:
         """The clock port of the gate."""
         return self.ports['CLK']
 
     @property
-    def verilog_net_map(self: ClockMixinProtocol) -> Dict[str, str]:
+    def verilog_net_map(self) -> Dict[str, str]:
         clk = self.p2v(self.clk_port) if self.p2v(self.clk_port) != "1'bx" else ''
         sigs = super().verilog_net_map
         sigs.update({'CLK': clk})
         return sigs
 
-    def _v_header(self: ClockMixinProtocol, port: Port[Instance], polarity: Signal, idx: Optional[int] = None) -> str:
+    def _v_header(self, port: Port[Instance], polarity: Signal, idx: Optional[int] = None) -> str:
         if port.width != 1 and idx is None:
             raise WidthMismatchError(
                 f'Port {port.name} of {self.__class__.__name__} {self.raw_path} is part of a sensitivity list and should thus be exactly 1 bit wide, but is {port.width} bits wide.'
@@ -245,11 +246,11 @@ class ClkMixin(BaseModel):
         wire = self.p2v(port, include_indices=inc_idx) if self.p2v(port, include_indices=inc_idx) != "1'bx" else ''
         return ('posedge ' if polarity == Signal.HIGH else 'negedge ') + wire if wire else ''
 
-    def update_parameters(self: ClockMixinProtocol) -> None:
+    def update_parameters(self) -> None:
         super().update_parameters()
         self.parameters.CLK_POLARITY = self.clk_polarity
 
-    def set_clk(self: ClockMixinProtocol, new_signal: SignalOrLogicLevel) -> None:
+    def set_clk(self, new_signal: SignalOrLogicLevel) -> None:
         """
         Sets the clock signal.
 
@@ -262,33 +263,33 @@ class ClkMixin(BaseModel):
 
 class EnMixin(BaseModel):
     @property
-    def en_polarity(self: EnableMixinProtocol) -> Signal:
+    def en_polarity(self) -> Signal:
         """Which EN-signal level enables writing on the data storage. Default is Signal.HIGH."""
         return self.parameters.EN_POLARITY if self.parameters.EN_POLARITY is not None else Signal.HIGH
 
     @en_polarity.setter
-    def en_polarity(self: EnableMixinProtocol, new_signal: Signal) -> None:
+    def en_polarity(self, new_signal: Signal) -> None:
         self.parameters.EN_POLARITY = new_signal
 
     @property
-    def en_port(self: EnableMixinProtocol) -> Port[Instance]:
+    def en_port(self) -> Port[Instance]:
         """The enable port of the gate."""
         return self.ports['EN']
 
     @property
-    def en_signal(self: EnableMixinProtocol) -> Signal:
+    def en_signal(self) -> Signal:
         """The enable signal of the gate."""
         return self.en_port.signal
 
     @property
-    def verilog_net_map(self: EnableMixinProtocol) -> Dict[str, str]:
+    def verilog_net_map(self) -> Dict[str, str]:
         en = self.p2v(self.en_port)
         sigs = super().verilog_net_map
         sigs.update({'EN': en})
         return sigs
 
     @property
-    def _verilog_en(self: EnableMixinProtocol) -> str:
+    def _verilog_en(self) -> str:
         """
         The verilog representation of the enable net.
 
@@ -299,21 +300,21 @@ class EnMixin(BaseModel):
         return inv + en_wire
 
     @property
-    def verilog_template(self: EnableMixinProtocol) -> str:
+    def verilog_template(self) -> str:
         return super().verilog_template.replace('{set_out}', 'if ({en}) begin\n\t\t{set_out}\n\tend')
 
     @property
-    def verilog_context_map(self: EnableMixinProtocol) -> SafeFormatDict:
+    def verilog_context_map(self) -> SafeFormatDict:
         context_map = super().verilog_context_map
         context_map.update(en=self._verilog_en)
         return context_map
 
-    def update_parameters(self: EnableMixinProtocol) -> Optional[Parameters]:
+    def update_parameters(self) -> Optional[Parameters]:
         super().update_parameters()
         self.parameters.EN_POLARITY = self.en_polarity
         return self.parameters
 
-    def set_en(self: EnableMixinProtocol, new_signal: SignalOrLogicLevel) -> None:
+    def set_en(self, new_signal: SignalOrLogicLevel) -> None:
         """
         Sets the enable signal.
 
@@ -322,11 +323,11 @@ class EnMixin(BaseModel):
         """
         self.set('EN', new_signal)
 
-    def model_post_init(self: EnableMixinProtocol, __context: object) -> None:
+    def model_post_init(self, __context: object) -> None:
         super().model_post_init(__context)
         self.connect('EN', None, direction=Direction.IN)
 
-    def _calc_output(self: EnableMixinProtocol) -> SignalArray:
+    def _calc_output(self) -> SignalArray:
         signals = {}
         for idx in range(self.data_width):
             if self.en_signal.is_undefined or (self.en_signal is self.en_polarity and self.input_port[idx].signal.is_undefined):
@@ -340,51 +341,51 @@ class EnMixin(BaseModel):
 
 class RstMixin(BaseModel):
     @property
-    def rst_polarity(self: ResetMixinProtocol) -> Signal:
+    def rst_polarity(self) -> Signal:
         """Which reset level resets the flip-flop. Default is Signal.HIGH: the flipflop is in reset, if the reset signal is HIGH."""
         return self.parameters.RST_POLARITY if self.parameters.RST_POLARITY is not None else Signal.HIGH
 
     @rst_polarity.setter
-    def rst_polarity(self: ResetMixinProtocol, new_signal: Signal) -> None:
+    def rst_polarity(self, new_signal: Signal) -> None:
         self.parameters.RST_POLARITY = new_signal
 
     @property
-    def rst_val_int(self: ResetMixinProtocol) -> int:
+    def rst_val_int(self) -> int:
         """Reset value of the flip-flop as integer. Default is 0."""
         return self.parameters.RST_VALUE or 0
 
     @rst_val_int.setter
-    def rst_val_int(self: ResetMixinProtocol, new_rst_val_int: int) -> None:
+    def rst_val_int(self, new_rst_val_int: int) -> None:
         self.parameters.RST_VALUE = new_rst_val_int
 
     @property
-    def rst_port(self: ResetMixinProtocol) -> Port[Instance]:
+    def rst_port(self) -> Port[Instance]:
         """The reset port of the gate."""
         return self.ports['RST']
 
     @property
-    def rst_val(self: ResetMixinProtocol) -> SignalArray:
+    def rst_val(self) -> SignalArray:
         """The value of the flipflop during and after reset. Default is Signal.LOW, i.e. the initial flipflop state is 0 by default."""
         return SignalArray.from_int(self.rst_val_int, fixed_width=self.data_width)
 
     @property
-    def in_reset(self: ResetMixinProtocol) -> bool:
+    def in_reset(self) -> bool:
         """True if the gate is currently in reset, False otherwise."""
         return self.rst_port.signal is self.rst_polarity
 
-    def model_post_init(self: ResetMixinProtocol, __context: object) -> None:
+    def model_post_init(self, __context: object) -> None:
         super().model_post_init(__context)
         self.connect('RST', None, direction=Direction.IN)
 
     @property
-    def verilog_net_map(self: ResetMixinProtocol) -> Dict[str, str]:
+    def verilog_net_map(self) -> Dict[str, str]:
         rst = self.p2v(self.rst_port)
         sigs = super().verilog_net_map
         sigs.update({'RST': rst})
         return sigs
 
     @property
-    def _verilog_rst(self: ResetMixinProtocol) -> str:
+    def _verilog_rst(self) -> str:
         """
         The verilog representation of the reset sensitivity list entry.
 
@@ -393,7 +394,7 @@ class RstMixin(BaseModel):
         return self._v_header(self.rst_port, self.rst_polarity)
 
     @property
-    def _verilog_rst_net(self: ResetMixinProtocol) -> str:
+    def _verilog_rst_net(self) -> str:
         """
         The verilog representation of the reset net.
 
@@ -403,31 +404,31 @@ class RstMixin(BaseModel):
         return rst_net if self.rst_polarity == Signal.HIGH else f'~{rst_net}'
 
     @property
-    def _verilog_rst_sig_val(self: ResetMixinProtocol) -> str:
-        return f"{self.output_port.width}'b{f'{Signal.dict_to_bin(self.rst_val)}'.zfill(self.output_port.width)}"
+    def _verilog_rst_sig_val(self) -> str:
+        return f"{self.output_port.width}'b{f'{Signal.dict_to_bin(self.rst_val.signals)}'.zfill(self.output_port.width)}"
 
     @property
-    def _verilog_header(self: ResetMixinProtocol) -> str:
+    def _verilog_header(self) -> str:
         return self._verilog_rst
 
     @property
-    def verilog_template(self: ResetMixinProtocol) -> str:
+    def verilog_template(self) -> str:
         return super().verilog_template.replace('{set_out}', 'if ({is_rst}) begin\n\t\t{rst_out}\n\tend else begin\n\t\t{set_out}\n\tend')
 
     @property
-    def verilog_context_map(self: ResetMixinProtocol) -> SafeFormatDict:
+    def verilog_context_map(self) -> SafeFormatDict:
         rst_out = super()._storage_assigns(sig_value=self._verilog_rst_sig_val)
         context_map = super().verilog_context_map
         context_map.update(header=self._verilog_header, is_rst=self._verilog_rst_net, rst_out=rst_out)
         return context_map
 
-    def update_parameters(self: ResetMixinProtocol) -> Optional[Parameters]:
+    def update_parameters(self) -> Optional[Parameters]:
         super().update_parameters()
         self.parameters.RST_POLARITY = self.rst_polarity
         self.parameters.RST_VALUE = self.rst_val_int
         return self.parameters
 
-    def set_rst(self: ResetMixinProtocol, new_signal: SignalOrLogicLevel) -> None:
+    def set_rst(self, new_signal: SignalOrLogicLevel) -> None:
         """
         Sets the reset signal.
 
@@ -437,12 +438,12 @@ class RstMixin(BaseModel):
         self.set(self.rst_port.name, new_signal)
         self.evaluate()
 
-    def _calc_output(self: ResetMixinProtocol) -> SignalArray:
+    def _calc_output(self) -> SignalArray:
         if self.rst_port.signal is self.rst_polarity:
             return SignalArray(signals={idx: self.rst_val[idx] for idx in range(self.data_width)})
         return super()._calc_output()
 
-    def _split_sync_params(self: ResetMixinProtocol, slices: Iterable[ResetMixinProtocol]) -> None:
+    def _split_sync_params(self, slices: Iterable[ResetMixinProtocol]) -> None:
         super()._split_sync_params(slices)
         idx = 0
         for slice in slices:
@@ -452,46 +453,46 @@ class RstMixin(BaseModel):
 
 class LoadMixin(BaseModel):
     @property
-    def load_polarity(self: LoadMixinProtocol) -> Signal:
+    def load_polarity(self) -> Signal:
         """Which load level loads the load value into flip-flop. Default is Signal.HIGH: the flipflop will load, if the load signal is HIGH."""
         return self.parameters.LOAD_POLARITY if self.parameters.LOAD_POLARITY is not None else Signal.HIGH
 
     @load_polarity.setter
-    def load_polarity(self: LoadMixinProtocol, new_signal: Signal) -> None:
+    def load_polarity(self, new_signal: Signal) -> None:
         self.parameters.LOAD_POLARITY = new_signal
 
     @property
-    def al_port(self: LoadMixinProtocol) -> Port[Instance]:
+    def al_port(self) -> Port[Instance]:
         """The asynchronous load enable port of the gate, i.e. the port that toggles whether to load data into the flip-flop."""
         return self.ports['AL']
 
     @property
-    def ad_port(self: LoadMixinProtocol) -> Port[Instance]:
+    def ad_port(self) -> Port[Instance]:
         """The asynchronous data load port of the gate, i.e. the port that holds the data to load into the flip-flop."""
         return self.ports['AD']
 
     @property
-    def load_val(self: LoadMixinProtocol) -> SignalArray:
+    def load_val(self) -> SignalArray:
         """The value of the flipflop during and after reset, retrieved from the load data port."""
         return self.ad_port.signal_array
 
     @property
-    def load_val_int(self: LoadMixinProtocol) -> Optional[int]:
+    def load_val_int(self) -> Optional[int]:
         """The value of the flipflop during and after reset as an integer, retrieved from the load data port."""
         return self.ad_port.signal_int
 
     @property
-    def in_load(self: LoadMixinProtocol) -> bool:
+    def in_load(self) -> bool:
         """True if the gate is currently in "load-value" mode, False otherwise."""
         return self.al_port.signal is self.load_polarity
 
-    def model_post_init(self: LoadMixinProtocol, __context: object) -> None:
+    def model_post_init(self, __context: object) -> None:
         super().model_post_init(__context)
         self.connect('AL', None, direction=Direction.IN)
         self.connect('AD', None, direction=Direction.IN, width=self.width)
 
     @property
-    def verilog_net_map(self: LoadMixinProtocol) -> Dict[str, str]:
+    def verilog_net_map(self) -> Dict[str, str]:
         al = self.p2v(self.al_port)
         ad = self.p2v(self.ad_port)
         sigs = super().verilog_net_map
@@ -499,7 +500,7 @@ class LoadMixin(BaseModel):
         return sigs
 
     @property
-    def _verilog_load(self: LoadMixinProtocol) -> str:
+    def _verilog_load(self) -> str:
         """
         The verilog representation of the load sensitivity list entry.
 
@@ -508,7 +509,7 @@ class LoadMixin(BaseModel):
         return self._v_header(self.al_port, self.load_polarity)
 
     @property
-    def _verilog_load_net(self: LoadMixinProtocol) -> str:
+    def _verilog_load_net(self) -> str:
         """
         The verilog representation of the reset net.
 
@@ -518,15 +519,15 @@ class LoadMixin(BaseModel):
         return load_net if self.load_polarity == Signal.HIGH else f'~{load_net}'
 
     @property
-    def _verilog_load_sig_val(self: LoadMixinProtocol) -> str:
-        return f"{self.output_port.width}'b{f'{Signal.dict_to_bin(self.load_val)}'.zfill(self.output_port.width)}"
+    def _verilog_load_sig_val(self) -> str:
+        return f"{self.output_port.width}'b{f'{Signal.dict_to_bin(self.load_val.signals)}'.zfill(self.output_port.width)}"
 
     @property
-    def _verilog_header(self: LoadMixinProtocol) -> str:
+    def _verilog_header(self) -> str:
         return self._verilog_load
 
     @property
-    def verilog_context_map(self: LoadMixinProtocol) -> SafeFormatDict:
+    def verilog_context_map(self) -> SafeFormatDict:
         ad = super()._storage_assigns(sig_value=self.p2v(self.ad_port))
         context_map = super().verilog_context_map
         header = f'{self._verilog_clk} or {self._verilog_header}'
@@ -534,14 +535,14 @@ class LoadMixin(BaseModel):
         return context_map
 
     @property
-    def verilog_template(self: LoadMixinProtocol) -> str:
+    def verilog_template(self) -> str:
         return super().verilog_template.replace('{set_out}', 'if ({is_al}) begin\n\t\t{ad}\n\tend else begin\n\t\t{set_out}\n\tend')
 
-    def update_parameters(self: LoadMixinProtocol) -> None:
+    def update_parameters(self) -> None:
         super().update_parameters()
         self.parameters.LOAD_POLARITY = self.load_polarity
 
-    def set_al(self: LoadMixinProtocol, new_signal: SignalOrLogicLevel) -> None:
+    def set_al(self, new_signal: SignalOrLogicLevel) -> None:
         """
         Sets the asynchronous load enable signal.
 
@@ -551,7 +552,7 @@ class LoadMixin(BaseModel):
         self.set(self.al_port.name, new_signal)
         self.evaluate()
 
-    def _calc_output(self: LoadMixinProtocol) -> SignalArray:
+    def _calc_output(self) -> SignalArray:
         if self.al_port.signal is self.load_polarity:
             return SignalArray(signals={idx: self.load_val[idx] for idx in range(self.data_width)})
         return super()._calc_output()
@@ -559,47 +560,47 @@ class LoadMixin(BaseModel):
 
 class SRMixin(BaseModel):
     @property
-    def clr_polarity(self: SRMixinProtocol) -> Signal:
+    def clr_polarity(self) -> Signal:
         """Which clear level clears the flip-flop. Default is Signal.HIGH: the flipflop goes to 0, if the clear signal is HIGH."""
         return self.parameters.CLR_POLARITY if self.parameters.CLR_POLARITY is not None else Signal.HIGH
 
     @clr_polarity.setter
-    def clr_polarity(self: SRMixinProtocol, new_signal: Signal) -> None:
+    def clr_polarity(self, new_signal: Signal) -> None:
         self.parameters.CLR_POLARITY = new_signal
 
     @property
-    def clr_port(self: SRMixinProtocol) -> Port[Instance]:
+    def clr_port(self) -> Port[Instance]:
         """The clear port of the gate."""
         return self.ports['CLR']
 
     @property
-    def set_polarity(self: SRMixinProtocol) -> Signal:
+    def set_polarity(self) -> Signal:
         """Which set level sets the flip-flop. Default is Signal.HIGH: the flipflop goes to 1, if the set signal is HIGH."""
         return self.parameters.SET_POLARITY if self.parameters.SET_POLARITY is not None else Signal.HIGH
 
     @set_polarity.setter
-    def set_polarity(self: SRMixinProtocol, new_signal: Signal) -> None:
+    def set_polarity(self, new_signal: Signal) -> None:
         self.parameters.SET_POLARITY = new_signal
 
     @property
-    def set_port(self: SRMixinProtocol) -> Port[Instance]:
+    def set_port(self) -> Port[Instance]:
         """The set port of the gate."""
         return self.ports['SET']
 
-    def model_post_init(self: SRMixinProtocol, __context: object) -> None:
+    def model_post_init(self, __context: object) -> None:
         super().model_post_init(__context)
         self.connect('CLR', None, direction=Direction.IN, width=self.width)
         self.connect('SET', None, direction=Direction.IN, width=self.width)
 
     @property
-    def verilog_net_map(self: SRMixinProtocol) -> Dict[str, str]:
+    def verilog_net_map(self) -> Dict[str, str]:
         clr_v = self.p2v(self.clr_port)
         set_v = self.p2v(self.set_port)
         sigs = super().verilog_net_map
         sigs.update({'CLR': clr_v, 'SET': set_v})
         return sigs
 
-    def _verilog_clr_net(self: SRMixinProtocol, idx: int) -> str:
+    def _verilog_clr_net(self, idx: int) -> str:
         """
         The verilog representation of the clear net.
 
@@ -609,7 +610,7 @@ class SRMixin(BaseModel):
         clr_net = clr_net if clr_net != "1'bx" else ''
         return clr_net if self.clr_polarity == Signal.HIGH else f'~{clr_net}'
 
-    def _verilog_set_net(self: SRMixinProtocol, idx: int) -> str:
+    def _verilog_set_net(self, idx: int) -> str:
         """
         The verilog representation of the set net.
 
@@ -619,11 +620,11 @@ class SRMixin(BaseModel):
         set_net = set_net if set_net != "1'bx" else ''
         return set_net if self.set_polarity == Signal.HIGH else f'~{set_net}'
 
-    def _verilog_header_sr(self: SRMixinProtocol, idx: int) -> str:
+    def _verilog_header_sr(self, idx: int) -> str:
         return self._v_header(self.clr_port, self.clr_polarity, idx) + ' or ' + self._v_header(self.set_port, self.set_polarity, idx)
 
     @property
-    def verilog_context_map(self: SRMixinProtocol) -> SafeFormatDict:
+    def verilog_context_map(self) -> SafeFormatDict:
         context_map = super().verilog_context_map
         if set(self.clr_port.segments.keys()) != set(self.set_port.segments.keys()):
             raise WidthMismatchError('CLR and SET port differ in width and/or offset!')
@@ -644,7 +645,7 @@ class SRMixin(BaseModel):
         return context_map
 
     @property
-    def verilog(self: SRMixinProtocol) -> str:
+    def verilog(self) -> str:
         context_map = self.verilog_context_map
         sr_instances = []
         for idx in self.clr_port.segments:
@@ -662,12 +663,12 @@ class SRMixin(BaseModel):
             sr_instances.append(v)
         return '\n'.join(sr_instances)
 
-    def update_parameters(self: SRMixinProtocol) -> None:
+    def update_parameters(self) -> None:
         super().update_parameters()
         self.parameters.CLR_POLARITY = self.clr_polarity
         self.parameters.SET_POLARITY = self.set_polarity
 
-    def set_clr(self: SRMixinProtocol, new_signal: SignalOrLogicLevel, idx: Union[int, List[int]]) -> None:
+    def set_clr(self, new_signal: SignalOrLogicLevel, idx: Union[int, List[int]]) -> None:
         """
         Sets the clear signal.
 
@@ -681,7 +682,7 @@ class SRMixin(BaseModel):
         self.set(self.clr_port.name, new_signal, idx)
         self.evaluate()
 
-    def set_set(self: SRMixinProtocol, new_signal: SignalOrLogicLevel, idx: Union[int, List[int]]) -> None:
+    def set_set(self, new_signal: SignalOrLogicLevel, idx: Union[int, List[int]]) -> None:
         """
         Sets the set signal.
 
@@ -695,7 +696,7 @@ class SRMixin(BaseModel):
         self.set(self.set_port.name, new_signal, idx)
         self.evaluate()
 
-    def _calc_output(self: SRMixinProtocol) -> SignalArray:
+    def _calc_output(self) -> SignalArray:
         signals = {}
         for idx in range(self.data_width):
             if self.clr_port[idx].signal is self.clr_polarity:
@@ -711,24 +712,24 @@ class ScanMixin(BaseModel):
     parameters: DFFParams = DFFParams()
 
     @property
-    def se_port(self: ScanMixinProtocol) -> Port[Instance]:
+    def se_port(self) -> Port[Instance]:
         return self.ports['SE']
 
     @property
-    def si_port(self: ScanMixinProtocol) -> Port[Instance]:
+    def si_port(self) -> Port[Instance]:
         return self.ports['SI']
 
     @property
-    def so_port(self: ScanMixinProtocol) -> Port[Instance]:
+    def so_port(self) -> Port[Instance]:
         return self.ports['SO']
 
     @property
-    def se_signal(self: ScanMixinProtocol) -> Signal:
+    def se_signal(self) -> Signal:
         """The scan enable signal of the gate."""
         return self.se_port.signal
 
     @property
-    def scan_ff_equivalent(self: ScanMixinProtocol) -> Type['ClkMixin']:
+    def scan_ff_equivalent(self) -> Type['ClkMixin']:
         """Returns the Scan-FF type equivalent for normal FF and the FF type equivalent for Scan-FF."""
         from netlist_carpentry.utils.gate_lib import ADFF, ADFFE, DFF, DFFE
 
@@ -741,7 +742,7 @@ class ScanMixin(BaseModel):
         return mapping[self.instance_type]
 
     @property
-    def verilog_template(self: ScanMixinProtocol) -> str:
+    def verilog_template(self) -> str:
         # TODO Very ugly, just like meee
         # But this property can be changed to be less ugly
         base_split = super().verilog_template.splitlines()
@@ -760,7 +761,7 @@ class ScanMixin(BaseModel):
         return '\n'.join(base_split)
 
     @property
-    def verilog_net_map(self: ScanMixinProtocol) -> Dict[str, str]:
+    def verilog_net_map(self) -> Dict[str, str]:
         se = self.p2v(self.se_port)
         si = self.p2v(self.si_port)
         so = self.p2v(self.so_port)
@@ -769,7 +770,7 @@ class ScanMixin(BaseModel):
         return sigs
 
     @property
-    def verilog_context_map(self: ScanMixinProtocol) -> SafeFormatDict:
+    def verilog_context_map(self) -> SafeFormatDict:
         se = self.verilog_net_map['SE']
         si = self.verilog_net_map['SI']
         so = self.verilog_net_map['SO']
@@ -780,7 +781,7 @@ class ScanMixin(BaseModel):
         context_map.update(se=se, si=si_str, so=so_str)
         return context_map
 
-    def set_se(self: ScanMixinProtocol, new_signal: SignalOrLogicLevel) -> None:
+    def set_se(self, new_signal: SignalOrLogicLevel) -> None:
         """
         Sets the scan enable signal.
 
@@ -789,23 +790,23 @@ class ScanMixin(BaseModel):
         """
         self.set('SE', new_signal)
 
-    def model_post_init(self: ScanMixinProtocol, __context: object) -> None:
+    def model_post_init(self, __context: object) -> None:
         super().model_post_init(__context)
         self.connect('SE', None, direction=Direction.IN)
         self.connect('SI', None, direction=Direction.IN, width=self.width)
         self.connect('SO', None, direction=Direction.OUT, width=self.width)
 
-    def _calc_output(self: ScanMixinProtocol) -> SignalArray:
+    def _calc_output(self) -> SignalArray:
         if self.se_signal is Signal.HIGH:
             return self.si_port.signal_array
         return super()._calc_output()
 
-    def _set_output(self: ScanMixinProtocol, new_signals: Dict[int, Signal]) -> None:
+    def _set_output(self, new_signals: Dict[int, Signal]) -> None:
         for idx, sig in new_signals.items():
             self.so_port.set_signal(signal=sig, index=idx)
         return super()._set_output(new_signals)
 
-    def pre_py2v_hook(self: ScanMixinProtocol) -> None:
+    def pre_py2v_hook(self) -> None:
         for _, ps in self.so_port:
             ps.ws.metadata.set('net_type', 'wire')
             ps.ws.parent.metadata.set('net_type', 'wire')
