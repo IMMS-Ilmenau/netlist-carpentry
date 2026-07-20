@@ -17,7 +17,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Type, Union
 from pydantic import BaseModel, NonNegativeInt
 from typing_extensions import Self
 
-from netlist_carpentry import CFG, Direction, Instance, Module, Port, Signal, SignalArray
+from netlist_carpentry import CFG, Direction, Instance, Module, Signal, SignalArray
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
 from netlist_carpentry.utils.gate_lib_base_classes import (
     ArithmeticGate,
@@ -811,30 +811,6 @@ class Multiplexer(NtoOneGate):
 
     instance_type: str = f'{CFG.id_internal}mux'
 
-    def model_post_init(self, __context: object) -> None:
-        for i in range(1 << self.bit_width):
-            self.connect(f'D{i}', None, direction=Direction.IN, width=self.y_width)
-        self.connect('S', None, direction=Direction.IN, width=self.bit_width)
-        self.connect('Y', None, direction=Direction.OUT, width=self.y_width)
-        return super().model_post_init(__context)
-
-    @property
-    def output_port(self) -> Port[Instance]:
-        return self.ports['Y']
-
-    @property
-    def d_ports(self) -> List[Port[Instance]]:
-        return list(filter(self.is_d_port, self.ports.values()))
-
-    @property
-    def active_input(self) -> Optional[Port[Instance]]:
-        if self.s_defined:
-            return self.ports[f'D{self.s_val}']
-        return None
-
-    def is_d_port(self, port: Port[Instance]) -> bool:
-        return 'D' in port.name and port.is_input
-
     def _split(self) -> Dict[NonNegativeInt, Self]:
         new_insts: Dict[NonNegativeInt, Self] = {}
         connections = self.connections
@@ -873,29 +849,6 @@ class Demultiplexer(OneToNGate):
     """
 
     instance_type: str = f'{CFG.id_internal}demux'
-    inactive_out_value: Signal = Signal.UNDEFINED
-
-    def model_post_init(self, __context: object) -> None:
-        self.connect('D', None, direction=Direction.IN, width=self.y_width)
-        self.connect('S', None, direction=Direction.IN, width=self.bit_width)
-        for i in range(1 << self.bit_width):
-            self.connect(f'Y{i}', None, direction=Direction.OUT, width=self.y_width)
-        return super().model_post_init(__context)
-
-    @property
-    def input_port(self) -> Port[Instance]:
-        return self.ports['D']
-
-    @property
-    def y_ports(self) -> List[Port[Instance]]:
-        return list(filter(self.is_y_port, self.ports.values()))
-
-    @property
-    def data_width(self) -> int:
-        return self.input_port.width
-
-    def is_y_port(self, port: Port[Instance]) -> bool:
-        return 'Y' in port.name and port.is_output
 
     def _split(self) -> Dict[NonNegativeInt, Self]:
         new_insts: Dict[NonNegativeInt, Self] = {}

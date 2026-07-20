@@ -936,24 +936,24 @@ class NtoOneGate(PrimitiveGate, BaseModel):
         self.parameters.WIDTH = value
 
     @property
-    def sel_port(self) -> Port[Instance]:
-        """The select/control port."""
-        return self.ports['S']
-
-    @property
     def s_defined(self) -> bool:
         """Whether all select signal bits are defined."""
-        return all(s.signal.is_defined for s in self.sel_port.segments.values())
+        return all(s.signal.is_defined for s in self.s_port.segments.values())
 
     @property
     def s_val(self) -> int:
         """Integer value of the select signals, or -1 if undefined."""
-        return self.sel_port.signal_int if self.sel_port.signal_int is not None else -1
+        warnings.warn(
+            f"'{self.__class__.__name__}.s_val' is deprecated and will be removed in v1.0.0. Use '{self.__class__.__name__}.s_port.signal_int' or 'int({self.__class__.__name__}.s_port.signal_array)' instead!",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.s_port.signal_int if self.s_port.signal_int is not None else -1
 
     @property
     def s_port(self) -> Port[Instance]:
-        """Alias for sel_port, for compatibility with existing tests."""
-        return self.sel_port
+        """The select/control port."""
+        return self.ports['S']
 
     @property
     def splittable(self) -> bool:
@@ -966,7 +966,7 @@ class NtoOneGate(PrimitiveGate, BaseModel):
     @property
     def verilog_net_map(self) -> Dict[str, str]:
         exclude_indices = self._get_unconnected_idx(self.output_port)
-        result: Dict[str, str] = {'Y': self.p2v(self.output_port, exclude_indices), 'S': self.p2v(self.sel_port)}
+        result: Dict[str, str] = {'Y': self.p2v(self.output_port, exclude_indices), 'S': self.p2v(self.s_port)}
         for i in range(1 << self.bit_width):
             result[f'D{i}'] = self.p2v(self.ports[f'D{i}'], exclude_indices)
         return result
@@ -987,19 +987,37 @@ class NtoOneGate(PrimitiveGate, BaseModel):
             out_signals = self.p2v(self.output_port, self._get_unconnected_idx(self.output_port))
             in_signals = self.p2v(d_port, self._get_unconnected_idx(d_port))
             cases += f"\t\t{self.bit_width}'b{format(i, f'0{self.bit_width}b')} : {out_signals} <= {in_signals};\n"
-        return self.verilog_template.format(sel=self.p2v(self.sel_port), cases=cases[:-1])
+        return self.verilog_template.format(sel=self.p2v(self.s_port), cases=cases[:-1])
 
     @property
     def _verilog_ternary_form(self) -> str:
         exclude_indices = self._get_unconnected_idx(self.output_port)
         out_signals = self.p2v(self.output_port, exclude_indices)
-        sel = self.p2v(self.sel_port)
+        sel = self.p2v(self.s_port)
         val_false = self.p2v(self.ports['D0'], exclude_indices)
         val_true = self.p2v(self.ports['D1'], exclude_indices)
         return f'assign\t{out_signals}\t= {sel} ? {val_true} : {val_false};'
 
+    def model_post_init(self, __context: object) -> None:
+        for i in range(1 << self.bit_width):
+            self.connect(f'D{i}', None, direction=Direction.IN, width=self.y_width)
+        self.connect('S', None, direction=Direction.IN, width=self.bit_width)
+        self.connect('Y', None, direction=Direction.OUT, width=self.y_width)
+        return super().model_post_init(__context)
+
+    @property
+    def output_port(self) -> Port[Instance]:
+        return self.ports['Y']
+
+    @property
+    def d_ports(self) -> List[Port[Instance]]:
+        return list(filter(self.is_d_port, self.ports.values()))
+
+    def is_d_port(self, port: Port[Instance]) -> bool:
+        return 'D' in port.name and port.is_input
+
     def _calc_output(self) -> SignalArray:
-        select = self.sel_port.signal_array
+        select = self.s_port.signal_array
         data = {f'D{i}': self.ports[f'D{i}'].signal_array for i in range(1 << self.bit_width)}
         return self.get_result_vector(select, data)
 
@@ -1015,9 +1033,7 @@ class NtoOneGate(PrimitiveGate, BaseModel):
     @property
     def active_input(self) -> Optional[Port[Instance]]:
         """The active input port based on select value."""
-        if self.s_defined:
-            return self.ports[f'D{self.s_val}']
-        return None
+        return self.ports[f'D{self.s_port.signal_int}'] if self.s_port.signal_int is not None else None
 
 
 class OneToNGate(PrimitiveGate, BaseModel):
@@ -1053,31 +1069,29 @@ class OneToNGate(PrimitiveGate, BaseModel):
         self.parameters.WIDTH = value
 
     @property
-    def sel_port(self) -> Port[Instance]:
-        """The select/control port."""
-        return self.ports['S']
-
-    @property
     def s_defined(self) -> bool:
         """Whether all select signal bits are defined."""
-        return all(s.signal.is_defined for s in self.sel_port.segments.values())
+        return all(s.signal.is_defined for s in self.s_port.segments.values())
 
     @property
     def s_val(self) -> int:
         """Integer value of the select signals, or -1 if undefined."""
-        return self.sel_port.signal_int if self.sel_port.signal_int is not None else -1
+        warnings.warn(
+            f"'{self.__class__.__name__}.s_val' is deprecated and will be removed in v1.0.0. Use '{self.__class__.__name__}.s_port.signal_int' or 'int({self.__class__.__name__}.s_port.signal_array)' instead!",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.s_port.signal_int if self.s_port.signal_int is not None else -1
 
     @property
     def active_output(self) -> Optional[Port[Instance]]:
         """The active output port based on select value."""
-        if self.s_defined:
-            return self.ports[f'Y{self.s_val}']
-        return None
+        return self.ports[f'Y{self.s_port.signal_int}'] if self.s_port.signal_int is not None else None
 
     @property
     def s_port(self) -> Port[Instance]:
-        """Alias for sel_port, for compatibility with existing tests."""
-        return self.sel_port
+        """The select/control port."""
+        return self.ports['S']
 
     @property
     def splittable(self) -> bool:
@@ -1090,7 +1104,7 @@ class OneToNGate(PrimitiveGate, BaseModel):
     @property
     def verilog_net_map(self) -> Dict[str, str]:
         exclude_indices = self._get_unconnected_idx(self.input_port)
-        result: Dict[str, str] = {'D': self.p2v(self.input_port, exclude_indices), 'S': self.p2v(self.sel_port)}
+        result: Dict[str, str] = {'D': self.p2v(self.input_port, exclude_indices), 'S': self.p2v(self.s_port)}
         for i in range(1 << self.bit_width):
             result[f'Y{i}'] = self.p2v(self.ports[f'Y{i}'], exclude_indices)
         return result
@@ -1109,7 +1123,29 @@ class OneToNGate(PrimitiveGate, BaseModel):
             out_signals = self.p2v(y_port, self._get_unconnected_idx(y_port))
             in_signals = self.p2v(self.input_port, self._get_unconnected_idx(self.input_port))
             cases += f"\t\t{self.bit_width}'b{format(i, f'0{self.bit_width}b')} : {out_signals} <= {in_signals};\n"
-        return self.verilog_template.format(sel=self.p2v(self.sel_port), cases=cases[:-1])
+        return self.verilog_template.format(sel=self.p2v(self.s_port), cases=cases[:-1])
+
+    def model_post_init(self, __context: object) -> None:
+        self.connect('D', None, direction=Direction.IN, width=self.y_width)
+        self.connect('S', None, direction=Direction.IN, width=self.bit_width)
+        for i in range(1 << self.bit_width):
+            self.connect(f'Y{i}', None, direction=Direction.OUT, width=self.y_width)
+        return super().model_post_init(__context)
+
+    @property
+    def input_port(self) -> Port[Instance]:
+        return self.ports['D']
+
+    @property
+    def y_ports(self) -> List[Port[Instance]]:
+        return list(filter(self.is_y_port, self.ports.values()))
+
+    @property
+    def data_width(self) -> int:
+        return self.input_port.width
+
+    def is_y_port(self, port: Port[Instance]) -> bool:
+        return 'Y' in port.name and port.is_output
 
     def _calc_output(self) -> SignalArray:
         """Returns the input signal (demux passes input through to active output)."""
@@ -1117,18 +1153,12 @@ class OneToNGate(PrimitiveGate, BaseModel):
 
     def _set_output(self, new_signals: SignalArray) -> None:
         """Route signals to the active output port; set inactive outputs to undefined."""
-        inactive = getattr(self, 'inactive_out_value', Signal.UNDEFINED)
         for y in self.y_ports:
             for idx in y.segments:
-                y.set_signal(inactive, index=idx)
+                y.set_signal(self.inactive_out_value, index=idx)
         if self.active_output is not None:
             for idx, sig in new_signals.items():
                 self.active_output.set_signal(sig if sig.is_defined else Signal.UNDEFINED, index=idx)
-
-    @property
-    def y_ports(self) -> List[Port[Instance]]:
-        """All output ports (Y0..Yn)."""
-        return [self.ports[f'Y{i}'] for i in range(1 << self.bit_width)]
 
     def update_parameters(self) -> None:
         super().update_parameters()

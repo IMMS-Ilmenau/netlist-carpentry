@@ -1833,7 +1833,8 @@ def test_mux_structure(simple_module: Module) -> None:
     assert m.ports['S'].width == 3
     assert m.ports['Y'].width == 4
     assert not m.s_defined
-    assert m.s_val == -1
+    with pytest.warns(DeprecationWarning):
+        assert m.s_val == -1
     assert m.active_input is None
     assert m.verilog_template == 'always @(*) begin\n\tcase ({sel})\n{cases}\n\tendcase\nend'
     assert m.output_port.signal is Signal.UNDEFINED
@@ -1920,7 +1921,8 @@ def test_mux_behavior(simple_module: Module) -> None:
     m.ports['S'].set_signal(Signal.LOW, 2)  # 4 => 0
 
     assert m.s_defined
-    assert m.s_val == 3  # S_0 + S_1 = 1 + 2 => s_val = 3
+    with pytest.warns(DeprecationWarning):
+        assert m.s_val == 3  # S_0 + S_1 = 1 + 2 => s_val = 3
     assert m.active_input == m.ports['D3']
     m.evaluate()
     assert m.output_port.signal is Signal.UNDEFINED
@@ -1985,7 +1987,8 @@ def test_demux_structure(simple_module: Module) -> None:
     assert d.ports['S'].width == 3
     assert d.ports['D'].width == 4
     assert not d.s_defined
-    assert d.s_val == -1
+    with pytest.warns(DeprecationWarning):
+        assert d.s_val == -1
     assert d.active_output is None
     assert d.verilog_template == 'always @(*) begin\n\tcase ({sel})\n{cases}\n\tendcase\nend'
     assert d.input_port.signal is Signal.UNDEFINED
@@ -2074,7 +2077,8 @@ def test_demux_behavior(simple_module: Module) -> None:
     d.ports['S'].set_signal(Signal.LOW, 2)  # 4 => 0
 
     assert d.s_defined
-    assert d.s_val == 3  # S_0 + S_1 = 1 + 2 => s_val = 3
+    with pytest.warns(DeprecationWarning):
+        assert d.s_val == 3  # S_0 + S_1 = 1 + 2 => s_val = 3
     assert d.active_output == d.ports['Y3']
     d.evaluate()
     with pytest.raises(NotImplementedError):
