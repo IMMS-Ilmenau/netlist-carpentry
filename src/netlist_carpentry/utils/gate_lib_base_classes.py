@@ -948,9 +948,7 @@ class NtoOneGate(PrimitiveGate, BaseModel):
     @property
     def s_val(self) -> int:
         """Integer value of the select signals, or -1 if undefined."""
-        if self.s_defined:
-            return sum(2 ** int(s.index) if s.signal is Signal.HIGH else 0 for s in self.sel_port.segments.values())
-        return -1
+        return self.sel_port.signal_int if self.sel_port.signal_int is not None else -1
 
     @property
     def s_port(self) -> Port[Instance]:
@@ -1067,9 +1065,7 @@ class OneToNGate(PrimitiveGate, BaseModel):
     @property
     def s_val(self) -> int:
         """Integer value of the select signals, or -1 if undefined."""
-        if self.s_defined:
-            return sum(2 ** int(s.index) if s.signal is Signal.HIGH else 0 for s in self.sel_port.segments.values())
-        return -1
+        return self.sel_port.signal_int if self.sel_port.signal_int is not None else -1
 
     @property
     def active_output(self) -> Optional[Port[Instance]]:
