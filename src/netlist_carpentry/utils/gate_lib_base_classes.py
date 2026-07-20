@@ -24,6 +24,7 @@ from netlist_carpentry.utils.gate_lib_dataclasses import (
     BinaryParams,
     DFFParams,
     GateParams,
+    MuxParams,
     Parameters,
     UnaryParams,
 )
@@ -901,6 +902,242 @@ class BinaryNto1Gate(_Out1BitMixin, BinaryGate, BaseModel):
         raise UnsupportedOperationError(
             f'{self.__class__.__name__}.get_result_vector() is not implemented: This gate requires vector-level comparison logic.'
         )
+
+
+class NtoOneGate(PrimitiveGate, BaseModel):
+    """
+    Base class for gates with N data inputs and 1 output (e.g., multiplexers).
+
+    Provides common infrastructure for dynamic port creation (D0..Dn), select signal handling,
+    and Verilog case-statement generation. Subclasses only need to implement `get_result_vector()`
+    for signal evaluation.
+    """
+
+    parameters: MuxParams = MuxParams()
+
+    @property
+    def bit_width(self) -> int:
+        """Width of the select/control signal."""
+        self._try_update_parameters()
+        return self.parameters.BIT_WIDTH or 1
+
+    @bit_width.setter
+    def bit_width(self, value: int) -> None:
+        self.parameters.BIT_WIDTH = value
+
+    @property
+    def y_width(self) -> PositiveInt:
+        """Width of the output/data port."""
+        self._try_update_parameters()
+        return self.parameters.WIDTH or 1
+
+    @y_width.setter
+    def y_width(self, value: PositiveInt) -> None:
+        self.parameters.WIDTH = value
+
+    @property
+    def sel_port(self) -> Port[Instance]:
+        """The select/control port."""
+        return self.ports['S']
+
+    @property
+    def s_defined(self) -> bool:
+        """Whether all select signal bits are defined."""
+        return all(s.signal.is_defined for s in self.sel_port.segments.values())
+
+    @property
+    def s_val(self) -> int:
+        """Integer value of the select signals, or -1 if undefined."""
+        if self.s_defined:
+            return sum(2 ** int(s.index) if s.signal is Signal.HIGH else 0 for s in self.sel_port.segments.values())
+        return -1
+
+    @property
+    def s_port(self) -> Port[Instance]:
+        """Alias for sel_port, for compatibility with existing tests."""
+        return self.sel_port
+
+    @property
+    def splittable(self) -> bool:
+        return True
+
+    @property
+    def verilog_template(self) -> str:
+        return 'always @(*) begin\n\tcase ({sel})\n{cases}\n\tendcase\nend'
+
+    @property
+    def verilog_net_map(self) -> Dict[str, str]:
+        exclude_indices = self._get_unconnected_idx(self.output_port)
+        result: Dict[str, str] = {'Y': self.p2v(self.output_port, exclude_indices), 'S': self.p2v(self.sel_port)}
+        for i in range(1 << self.bit_width):
+            result[f'D{i}'] = self.p2v(self.ports[f'D{i}'], exclude_indices)
+        return result
+
+    @property
+    def verilog(self) -> str:
+        if not any(self.output_port[i].is_connected for i in self.output_port.segments):
+            return ''
+        if self.bit_width <= 1:
+            return self._verilog_ternary_form
+        return self._verilog_case_form
+
+    @property
+    def _verilog_case_form(self) -> str:
+        cases = ''
+        for i in range(1 << self.bit_width):
+            d_port = self.ports[f'D{i}']
+            out_signals = self.p2v(self.output_port, self._get_unconnected_idx(self.output_port))
+            in_signals = self.p2v(d_port, self._get_unconnected_idx(d_port))
+            cases += f"\t\t{self.bit_width}'b{format(i, f'0{self.bit_width}b')} : {out_signals} <= {in_signals};\n"
+        return self.verilog_template.format(sel=self.p2v(self.sel_port), cases=cases[:-1])
+
+    @property
+    def _verilog_ternary_form(self) -> str:
+        exclude_indices = self._get_unconnected_idx(self.output_port)
+        out_signals = self.p2v(self.output_port, exclude_indices)
+        sel = self.p2v(self.sel_port)
+        val_false = self.p2v(self.ports['D0'], exclude_indices)
+        val_true = self.p2v(self.ports['D1'], exclude_indices)
+        return f'assign\t{out_signals}\t= {sel} ? {val_true} : {val_false};'
+
+    def _calc_output(self) -> SignalArray:
+        select = self.sel_port.signal_array
+        data = {f'D{i}': self.ports[f'D{i}'].signal_array for i in range(1 << self.bit_width)}
+        return self.get_result_vector(select, data)
+
+    def get_result_vector(self, select: SignalArray, data: Dict[str, SignalArray]) -> SignalArray:
+        """Calculate output from select value and data inputs. Subclasses must implement."""
+        raise UnsupportedOperationError(f'{self.__class__.__name__}.get_result_vector() is not implemented!')
+
+    def update_parameters(self) -> None:
+        super().update_parameters()
+        self.parameters.WIDTH = self.parameters.WIDTH or 1
+        self.parameters.BIT_WIDTH = self.parameters.BIT_WIDTH or 1
+
+    @property
+    def active_input(self) -> Optional[Port[Instance]]:
+        """The active input port based on select value."""
+        if self.s_defined:
+            return self.ports[f'D{self.s_val}']
+        return None
+
+
+class OneToNGate(PrimitiveGate, BaseModel):
+    """
+    Base class for gates with 1 input and N data outputs (e.g., demultiplexers).
+
+    Provides common infrastructure for dynamic port creation (Y0..Yn), select signal handling,
+    and Verilog case-statement generation. Subclasses only need to implement `_set_output()`
+    for routing logic.
+    """
+
+    parameters: MuxParams = MuxParams()
+    inactive_out_value: Signal = Signal.UNDEFINED
+
+    @property
+    def bit_width(self) -> int:
+        """Width of the select/control signal."""
+        self._try_update_parameters()
+        return self.parameters.BIT_WIDTH or 1
+
+    @bit_width.setter
+    def bit_width(self, value: int) -> None:
+        self.parameters.BIT_WIDTH = value
+
+    @property
+    def y_width(self) -> PositiveInt:
+        """Width of the input/data port."""
+        self._try_update_parameters()
+        return self.parameters.WIDTH or 1
+
+    @y_width.setter
+    def y_width(self, value: PositiveInt) -> None:
+        self.parameters.WIDTH = value
+
+    @property
+    def sel_port(self) -> Port[Instance]:
+        """The select/control port."""
+        return self.ports['S']
+
+    @property
+    def s_defined(self) -> bool:
+        """Whether all select signal bits are defined."""
+        return all(s.signal.is_defined for s in self.sel_port.segments.values())
+
+    @property
+    def s_val(self) -> int:
+        """Integer value of the select signals, or -1 if undefined."""
+        if self.s_defined:
+            return sum(2 ** int(s.index) if s.signal is Signal.HIGH else 0 for s in self.sel_port.segments.values())
+        return -1
+
+    @property
+    def active_output(self) -> Optional[Port[Instance]]:
+        """The active output port based on select value."""
+        if self.s_defined:
+            return self.ports[f'Y{self.s_val}']
+        return None
+
+    @property
+    def s_port(self) -> Port[Instance]:
+        """Alias for sel_port, for compatibility with existing tests."""
+        return self.sel_port
+
+    @property
+    def splittable(self) -> bool:
+        return True
+
+    @property
+    def verilog_template(self) -> str:
+        return 'always @(*) begin\n\tcase ({sel})\n{cases}\n\tendcase\nend'
+
+    @property
+    def verilog_net_map(self) -> Dict[str, str]:
+        exclude_indices = self._get_unconnected_idx(self.input_port)
+        result: Dict[str, str] = {'D': self.p2v(self.input_port, exclude_indices), 'S': self.p2v(self.sel_port)}
+        for i in range(1 << self.bit_width):
+            result[f'Y{i}'] = self.p2v(self.ports[f'Y{i}'], exclude_indices)
+        return result
+
+    @property
+    def verilog(self) -> str:
+        if not any(self.input_port[i].is_connected for i in self.input_port.segments):
+            return ''
+        return self._verilog_case_form
+
+    @property
+    def _verilog_case_form(self) -> str:
+        cases = ''
+        for i in range(1 << self.bit_width):
+            y_port = self.ports[f'Y{i}']
+            out_signals = self.p2v(y_port, self._get_unconnected_idx(y_port))
+            in_signals = self.p2v(self.input_port, self._get_unconnected_idx(self.input_port))
+            cases += f"\t\t{self.bit_width}'b{format(i, f'0{self.bit_width}b')} : {out_signals} <= {in_signals};\n"
+        return self.verilog_template.format(sel=self.p2v(self.sel_port), cases=cases[:-1])
+
+    def _calc_output(self) -> SignalArray:
+        """Returns the input signal (demux passes input through to active output)."""
+        return self.input_port.signal_array
+
+    def _set_output(self, new_signals: SignalArray) -> None:
+        """Route signals to the active output port; set inactive outputs to undefined."""
+        inactive = getattr(self, 'inactive_out_value', Signal.UNDEFINED)
+        for y in self.y_ports:
+            for idx in y.segments:
+                y.set_signal(inactive, index=idx)
+        if self.active_output is not None:
+            for idx, sig in new_signals.items():
+                self.active_output.set_signal(sig if sig.is_defined else Signal.UNDEFINED, index=idx)
+
+    @property
+    def y_ports(self) -> List[Port[Instance]]:
+        """All output ports (Y0..Yn)."""
+        return [self.ports[f'Y{i}'] for i in range(1 << self.bit_width)]
+
+    def update_parameters(self) -> None:
+        super().update_parameters()
+        self.parameters.WIDTH = self.parameters.WIDTH or 1
+        self.parameters.BIT_WIDTH = self.parameters.BIT_WIDTH or 1
 
 
 class StorageGate(PrimitiveGate, BaseModel):

@@ -14,7 +14,7 @@ import inspect
 import sys
 from typing import Callable, Dict, List, Optional, Tuple, Type, Union
 
-from pydantic import BaseModel, NonNegativeInt, PositiveInt
+from pydantic import BaseModel, NonNegativeInt
 from typing_extensions import Self
 
 from netlist_carpentry import CFG, Direction, Instance, Module, Port, Signal, SignalArray
@@ -23,13 +23,15 @@ from netlist_carpentry.utils.gate_lib_base_classes import (
     ArithmeticGate,
     BinaryGate,
     BinaryNto1Gate,
+    NtoOneGate,
+    OneToNGate,
     PrimitiveGate,
     ReduceGate,
     ShiftGate,
     StorageGate,
     UnaryGate,
 )
-from netlist_carpentry.utils.gate_lib_dataclasses import DFFParams, DLatchParams, MuxParams
+from netlist_carpentry.utils.gate_lib_dataclasses import DFFParams, DLatchParams
 from netlist_carpentry.utils.gate_mixins import ClkMixin, EnMixin, LoadMixin, RstMixin, ScanMixin, SRMixin
 from netlist_carpentry.utils.safe_format_dict import SafeFormatDict
 
@@ -800,24 +802,16 @@ class GreaterEqual(BinaryNto1Gate, BaseModel):
         return SignalArray(signals={0: Signal.UNDEFINED})
 
 
-class Multiplexer(PrimitiveGate, BaseModel):
+class Multiplexer(NtoOneGate):
     """
     A multiplexer.
 
     A multiplexer is a gate that selects one of its input signals to be its output signal, based on a control signal.
-        bit_width (PositiveInt): The width of the control signal.
     """
 
     instance_type: str = f'{CFG.id_internal}mux'
 
-    parameters: MuxParams = MuxParams()
-
     def model_post_init(self, __context: object) -> None:
-        """
-        Initializes the gate's ports and connections.
-
-        This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
-        """
         for i in range(1 << self.bit_width):
             self.connect(f'D{i}', None, direction=Direction.IN, width=self.y_width)
         self.connect('S', None, direction=Direction.IN, width=self.bit_width)
@@ -825,178 +819,20 @@ class Multiplexer(PrimitiveGate, BaseModel):
         return super().model_post_init(__context)
 
     @property
-    def y_width(self) -> PositiveInt:
-        """Width of the gate, based on a certain port's width, depending on the actual gate."""
-        return self.parameters.WIDTH or 1
-
-    @y_width.setter
-    def y_width(self, new_width: PositiveInt) -> None:
-        self.parameters.WIDTH = new_width
-
-    @property
-    def bit_width(self) -> int:
-        """
-        The width of the multiplexer's control signal.
-
-        Not to be confused with the data width of the multiplexer! The bit width indicates the width of the control signal,
-        which is used to switch between all input paths. The total number of input paths is "2 to the power of bit_width".
-
-        If bit_width is set to 1, there are 2^bitwidth = 2¹ = 2 input paths.
-        If bit_width is set to 2, there are 2² = 4 input paths. ...
-        """
-        return self.parameters.BIT_WIDTH or 1
-
-    @bit_width.setter
-    def bit_width(self, new_bit_width: int) -> None:
-        self.parameters.BIT_WIDTH = new_bit_width
-
-    @property
     def output_port(self) -> Port[Instance]:
-        """
-        The output port of the multiplexer.
-
-        Returns:
-            Port: The output port of the multiplexer.
-        """
         return self.ports['Y']
 
     @property
     def d_ports(self) -> List[Port[Instance]]:
-        """
-        The data ports of the multiplexer.
-
-        Returns:
-            List[Port]: The data ports of the multiplexer.
-        """
         return list(filter(self.is_d_port, self.ports.values()))
 
     @property
-    def s_port(self) -> Port[Instance]:
-        """
-        The select port of the multiplexer.
-
-        Returns:
-            Port: The select port of the multiplexer.
-        """
-        return self.ports['S']
-
-    @property
-    def s_defined(self) -> bool:
-        """
-        Whether the select signals are defined.
-
-        Returns:
-            bool: True if the select signals are defined, False otherwise.
-        """
-        return all(s.signal.is_defined for s in self.s_port.segments.values())
-
-    @property
-    def s_val(self) -> int:
-        """
-        The value of the select signals.
-
-        Returns:
-            int: The value of the select signals, or -1 if the select signals are not defined.
-        """
-        if self.s_defined:
-            # Adding the binary values of all S_.. ports, whose value is HIGH
-            # Example: S_2 == 1, S_1 == 1, and S_1 == 0
-            # This is equal to: 1*2^2 + 1*2^1 + 0*2^0 == 4+2 == 6,
-            # which is the binary representation of the select signals. Thus, s_val == 6!
-            return sum(2 ** int(s.index) if (s.signal is Signal.HIGH) else 0 for s in self.s_port.segments.values())
-        return -1
-
-    @property
     def active_input(self) -> Optional[Port[Instance]]:
-        """
-        The active input port of the gate.
-
-        Returns:
-            Port: The active input port of the gate, or None if the select signals are not defined.
-        """
         if self.s_defined:
             return self.ports[f'D{self.s_val}']
         return None
 
-    @property
-    def splittable(self) -> bool:
-        return True
-
-    @property
-    def verilog_template(self) -> str:
-        return 'always @(*) begin\n\tcase ({sel})\n{cases}\n\tendcase\nend'
-
-    @property
-    def verilog_net_map(self) -> Dict[str, str]:
-        exclude_indices = self._get_unconnected_idx(self.ports['Y'])
-        out_str = self.p2v(self.ports['Y'], exclude_indices)
-        s_str = self.p2v(self.ports['S'])
-        vnet_dict = {'Y': out_str, 'S': s_str}
-        for i in range(1 << self.bit_width):
-            vnet_dict[f'D{i}'] = self.p2v(self.ports[f'D{i}'], exclude_indices)
-        return vnet_dict
-
-    @property
-    def verilog(self) -> str:
-        """
-        Creates a Verilog multiplexer from the Python object.
-
-        This method generates the Verilog code for the multiplexer gate.
-        It uses the `verilog_template` property as a base and fills in the
-        select signal and cases.
-
-        The cases are generated by iterating over all possible values of the
-        select signal (i.e., from 0 to 2^bit_width - 1) and creating a case
-        for each value. In each case, the output signals are assigned the value
-        of the input signal if the current case matches the select signal.
-
-        Returns:
-            str: The Verilog code for the multiplexer gate.
-        """
-        cases = ''
-        exclude_indices = self._get_unconnected_idx(self.output_port)
-        if self.bit_width > 1:
-            for i in range(1 << self.bit_width):
-                d_port = self.ports[f'D{i}']
-                out_signals = self.p2v(self.output_port, exclude_indices)
-                in_signals = self.p2v(d_port, exclude_indices)
-                cases += f"\t\t{self.bit_width}'b{format(i, f'0{self.bit_width}b')} : {out_signals} <= {in_signals};\n"
-            return self.verilog_template.format(sel=self.p2v(self.ports['S']), cases=cases[:-1])
-        return self._verilog_ternary_form
-
-    @property
-    def _verilog_ternary_form(self) -> str:
-        """
-        Creates a Verilog string in ternary form for the multiplexer gate.
-
-        The ternary form follows the format:
-        assign `out_signal` = `condition` ? `value_if_true` : `value_if_false`;
-
-        Returns:
-            str: The Verilog code for the multiplexer gate in ternary form.
-        """
-        exclude_indices = self._get_unconnected_idx(self.output_port)
-        out_signals = self.p2v(self.output_port, exclude_indices)
-        sel = self.p2v(self.s_port)
-        val_false = self.p2v(self.ports['D0'], exclude_indices)
-        val_true = self.p2v(self.ports['D1'], exclude_indices)
-        return f'assign\t{out_signals}\t= {sel} ? {val_true} : {val_false};'
-
-    def update_parameters(self) -> None:
-        super().update_parameters()
-        self.parameters.WIDTH = self.y_width
-        self.parameters.BIT_WIDTH = self.bit_width
-
     def is_d_port(self, port: Port[Instance]) -> bool:
-        """
-        Whether a port is a data port.
-
-        Args:
-            port (Port): The port to check.
-
-        Returns:
-            bool: True if the port is a data port, False otherwise.
-        """
         return 'D' in port.name and port.is_input
 
     def _split(self) -> Dict[NonNegativeInt, Self]:
@@ -1015,22 +851,8 @@ class Multiplexer(PrimitiveGate, BaseModel):
                 else:
                     for conn_idx in connections[pname]:
                         super_module.connect(connections[pname][conn_idx], p[conn_idx])
-
             new_insts[idx] = inst
         return new_insts
-
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
-
-        For a multiplexer, the output signal is the signal from the selected input port.
-        """
-        return SignalArray(
-            signals={
-                idx: self.active_input.signal_array[idx] if self.active_input.signal_array[idx].is_defined else Signal.UNDEFINED
-                for idx in range(self.data_width)
-            }
-        )
 
     def get_result_vector(self, select: SignalArray, data: Dict[str, SignalArray]) -> SignalArray:
         if not select.is_defined:
@@ -1038,29 +860,22 @@ class Multiplexer(PrimitiveGate, BaseModel):
         sel_val = int(select)
         port_name = f'D{sel_val}'
         if port_name in data:
-            return data[port_name]
+            # Convert undefined signals (including FLOATING) to UNDEFINED
+            return SignalArray(signals={idx: sig if sig.is_defined else Signal.UNDEFINED for idx, sig in data[port_name].items()})
         return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.y_width)})
 
 
-class Demultiplexer(PrimitiveGate, BaseModel):
+class Demultiplexer(OneToNGate):
     """
     A demultiplexer.
 
     A demultiplexer is a gate that selects one of its output ports to be connected to its input signal, based on a control signal.
-        bit_width (PositiveInt): The width of the control signal.
     """
 
     instance_type: str = f'{CFG.id_internal}demux'
     inactive_out_value: Signal = Signal.UNDEFINED
 
-    parameters: MuxParams = MuxParams()
-
     def model_post_init(self, __context: object) -> None:
-        """
-        Initializes the gate's ports and connections.
-
-        This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
-        """
         self.connect('D', None, direction=Direction.IN, width=self.y_width)
         self.connect('S', None, direction=Direction.IN, width=self.bit_width)
         for i in range(1 << self.bit_width):
@@ -1068,187 +883,19 @@ class Demultiplexer(PrimitiveGate, BaseModel):
         return super().model_post_init(__context)
 
     @property
-    def y_width(self) -> PositiveInt:
-        """Width of the gate, based on a certain port's width, depending on the actual gate."""
-        return self.parameters.WIDTH or 1
-
-    @y_width.setter
-    def y_width(self, new_width: PositiveInt) -> None:
-        self.parameters.WIDTH = new_width
-
-    @property
-    def bit_width(self) -> PositiveInt:
-        """
-        The width of the demultiplexer's control signal.
-
-        Not to be confused with the data width of the demultiplexer! The bit width indicates the width of the control signal,
-        which is used to switch between all input paths. The total number of input paths is "2 to the power of bit_width".
-
-        If bit_width is set to 1, there are 2^bitwidth = 2¹ = 2 input paths.
-        If bit_width is set to 2, there are 2² = 4 input paths. ...
-        """
-        return self.parameters.BIT_WIDTH or 1
-
-    @bit_width.setter
-    def bit_width(self, new_bit_width: int) -> None:
-        self.parameters.BIT_WIDTH = new_bit_width
-
-    @property
     def input_port(self) -> Port[Instance]:
-        """
-        The input port of the gate.
-
-        Returns:
-            Port: The input port of the gate.
-        """
         return self.ports['D']
 
     @property
     def y_ports(self) -> List[Port[Instance]]:
-        """
-        The output ports of the gate.
-
-        Returns:
-            List[Port]: The output ports of the gate.
-        """
         return list(filter(self.is_y_port, self.ports.values()))
-
-    @property
-    def s_port(self) -> Port[Instance]:
-        """
-        The select ports of the gate.
-
-        Returns:
-            List[Port]: The select ports of the gate.
-        """
-        return self.ports['S']
-
-    @property
-    def s_defined(self) -> bool:
-        """
-        Whether the select signals are defined.
-
-        Returns:
-            bool: True if the select signals are defined, False otherwise.
-        """
-        return all(s.signal.is_defined for s in self.s_port.segments.values())
-
-    @property
-    def s_val(self) -> int:
-        """
-        Initializes the gate's ports and connections.
-
-        This method is called after the gate's attributes have been initialized, and it sets up the gate's ports and connections.
-        """
-        if self.s_defined:
-            # Adding the binary values of all S_.. ports, whose value is HIGH
-            # Example: S_2 == 1, S_1 == 1, and S_1 == 0
-            # This is equal to: 1*2^2 + 1*2^1 + 0*2^0 == 4+2 == 6,
-            # which is the binary representation of the select signals. Thus, s_val == 6!
-            return sum(2 ** int(s.index) if (s.signal is Signal.HIGH) else 0 for s in self.s_port.segments.values())
-        return -1
-
-    @property
-    def active_output(self) -> Optional[Port[Instance]]:
-        """
-        The active output port of the gate.
-
-        Returns:
-            Port: The active output port of the gate, or None if the select signals are not defined.
-        """
-        if self.s_defined:
-            return self.ports[f'Y{self.s_val}']
-        return None
 
     @property
     def data_width(self) -> int:
         return self.input_port.width
 
-    @property
-    def splittable(self) -> bool:
-        return True
-
-    @property
-    def verilog_template(self) -> str:
-        return 'always @(*) begin\n\tcase ({sel})\n{cases}\n\tendcase\nend'
-
-    @property
-    def verilog_net_map(self) -> Dict[str, str]:
-        exclude_indices = self._get_unconnected_idx(self.ports['D'])
-        in_str = self.p2v(self.ports['D'], exclude_indices)
-        s_str = self.p2v(self.ports['S'])
-        vnet_dict = {'D': in_str, 'S': s_str}
-        for i in range(1 << self.bit_width):
-            vnet_dict[f'Y{i}'] = self.p2v(self.ports[f'Y{i}'], exclude_indices)
-        return vnet_dict
-
-    @property
-    def verilog(self) -> str:
-        """
-        Creates a Verilog demultiplexer from the Python object.
-
-        This method generates the Verilog code for the demultiplexer gate.
-        It uses the `verilog_template` property as a base and fills in the
-        select signal and cases.
-
-        The cases are generated by iterating over all possible values of the
-        select signal (i.e., from 0 to 2^bit_width - 1) and creating a case
-        for each value. In each case, the output signals are assigned the value
-        of the input signal if the current case matches the select signal.
-
-        Returns:
-            str: The Verilog code for the demultiplexer gate.
-        """
-        cases = ''
-        for i in range(1 << self.bit_width):
-            y_port = self.ports[f'Y{i}']
-            exclude_indices = self._get_unconnected_idx(y_port)
-            out_signals = self.p2v(y_port, exclude_indices)
-            in_signals = self.p2v(self.input_port, exclude_indices)
-            cases += f"\t\t{self.bit_width}'b{format(i, f'0{self.bit_width}b')} : {out_signals} <= {in_signals};\n"
-        return self.verilog_template.format(sel=self.p2v(self.ports['S']), cases=cases[:-1])
-
-    def update_parameters(self) -> None:
-        super().update_parameters()
-        self.parameters.WIDTH = self.y_width
-        self.parameters.BIT_WIDTH = self.bit_width
-
     def is_y_port(self, port: Port[Instance]) -> bool:
-        """
-        Whether a port is an output port.
-
-        Args:
-            port (Port): The port to check.
-
-        Returns:
-            bool: True if the port is an output port, False otherwise.
-        """
         return 'Y' in port.name and port.is_output
-
-    def _calc_output(self) -> SignalArray:
-        """
-        Calculates the gate's output signal.
-
-        For a demultiplexer, the output signal is the input signal.
-        """
-        return self.input_port.signal_array
-
-    def _set_output(self, new_signals: SignalArray) -> None:
-        """
-        Sets the gate's output signal.
-
-        For a demultiplexer, the output signal is set on the active output port.
-
-        Args:
-            new_signals (SignalArray): A dictionary mapping the new output signal values to the indices of the output port.
-        """
-        # Set all undriven outputs to "z": only change the signal on the only active output path
-        for y in self.y_ports:
-            for idx in y.segments:
-                y.set_signal(self.inactive_out_value, index=idx)
-        if self.active_output is not None:
-            for idx, sig in new_signals.items():
-                self.active_output.set_signal(sig if sig.is_defined else Signal.UNDEFINED, index=idx)
 
     def _split(self) -> Dict[NonNegativeInt, Self]:
         new_insts: Dict[NonNegativeInt, Self] = {}
@@ -1266,7 +913,6 @@ class Demultiplexer(PrimitiveGate, BaseModel):
                 else:
                     for conn_idx in connections[pname]:
                         super_module.connect(connections[pname][conn_idx], p[conn_idx])
-
             new_insts[idx] = inst
         return new_insts
 
