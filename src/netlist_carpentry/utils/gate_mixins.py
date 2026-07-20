@@ -1,4 +1,5 @@
 # mypy: disable-error-code="safe-super"
+import warnings
 from typing import Dict, Iterable, List, Optional, Protocol, Type, Union, runtime_checkable
 
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
@@ -53,6 +54,16 @@ class GateProtocol(Protocol):
     def evaluate(self) -> None: ...
     def _calc_output(self, idx: NonNegativeInt = 0) -> SignalArray: ...
     def _set_output(self, new_signals: Dict[int, Signal]) -> None: ...
+
+
+@runtime_checkable
+class SelectMixinProtocol(GateProtocol, Protocol):
+    @property
+    def s_defined(self) -> bool: ...
+    @property
+    def s_val(self) -> int: ...
+    @property
+    def s_port(self) -> Port[Instance]: ...
 
 
 @runtime_checkable
@@ -156,6 +167,35 @@ class ScanMixinProtocol(GateProtocol, Protocol):
     @property
     def se_signal(self) -> Signal: ...
     def pre_py2v_hook(self) -> None: ...
+
+
+class SelectMixin(BaseModel):
+    """A mixin class for gates with select signals. These are multiplexers and demultiplexers, for example."""
+
+    @property
+    def s_defined(self: SelectMixinProtocol) -> bool:
+        """Whether all select signal bits are defined."""
+        warnings.warn(
+            f"'{self.__class__.__name__}.s_defined' is deprecated and will be removed in v1.0.0. Use '{self.__class__.__name__}.s_port.signal_array.is_defined' instead!",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.s_port.signal_array.is_defined
+
+    @property
+    def s_val(self: SelectMixinProtocol) -> int:
+        """Integer value of the select signals, or -1 if undefined."""
+        warnings.warn(
+            f"'{self.__class__.__name__}.s_val' is deprecated and will be removed in v1.0.0. Use '{self.__class__.__name__}.s_port.signal_int' or 'int({self.__class__.__name__}.s_port.signal_array)' instead!",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.s_port.signal_int if self.s_port.signal_int is not None else -1
+
+    @property
+    def s_port(self: SelectMixinProtocol) -> Port[Instance]:
+        """The select/control port."""
+        return self.ports['S']
 
 
 class ClkMixin(BaseModel):

@@ -28,6 +28,7 @@ from netlist_carpentry.utils.gate_lib_dataclasses import (
     Parameters,
     UnaryParams,
 )
+from netlist_carpentry.utils.gate_mixins import SelectMixin
 from netlist_carpentry.utils.safe_format_dict import SafeFormatDict
 
 
@@ -904,7 +905,7 @@ class BinaryNto1Gate(_Out1BitMixin, BinaryGate, BaseModel):
         )
 
 
-class NtoOneGate(PrimitiveGate, BaseModel):
+class NtoOneGate(SelectMixin, PrimitiveGate, BaseModel):
     """
     Base class for gates with N data inputs and 1 output (e.g., multiplexers).
 
@@ -934,31 +935,6 @@ class NtoOneGate(PrimitiveGate, BaseModel):
     @y_width.setter
     def y_width(self, value: PositiveInt) -> None:
         self.parameters.WIDTH = value
-
-    @property
-    def s_defined(self) -> bool:
-        """Whether all select signal bits are defined."""
-        warnings.warn(
-            f"'{self.__class__.__name__}.s_defined' is deprecated and will be removed in v1.0.0. Use '{self.__class__.__name__}.s_port.signal_array.is_defined' instead!",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.s_port.signal_array.is_defined
-
-    @property
-    def s_val(self) -> int:
-        """Integer value of the select signals, or -1 if undefined."""
-        warnings.warn(
-            f"'{self.__class__.__name__}.s_val' is deprecated and will be removed in v1.0.0. Use '{self.__class__.__name__}.s_port.signal_int' or 'int({self.__class__.__name__}.s_port.signal_array)' instead!",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.s_port.signal_int if self.s_port.signal_int is not None else -1
-
-    @property
-    def s_port(self) -> Port[Instance]:
-        """The select/control port."""
-        return self.ports['S']
 
     @property
     def active_input(self) -> Optional[Port[Instance]]:
@@ -1065,7 +1041,7 @@ class NtoOneGate(PrimitiveGate, BaseModel):
         return new_insts
 
 
-class OneToNGate(PrimitiveGate, BaseModel):
+class OneToNGate(SelectMixin, PrimitiveGate, BaseModel):
     """
     Base class for gates with 1 input and N data outputs (e.g., demultiplexers).
 
@@ -1098,34 +1074,9 @@ class OneToNGate(PrimitiveGate, BaseModel):
         self.parameters.WIDTH = value
 
     @property
-    def s_defined(self) -> bool:
-        """Whether all select signal bits are defined."""
-        warnings.warn(
-            f"'{self.__class__.__name__}.s_defined' is deprecated and will be removed in v1.0.0. Use '{self.__class__.__name__}.s_port.signal_array.is_defined' instead!",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.s_port.signal_array.is_defined
-
-    @property
-    def s_val(self) -> int:
-        """Integer value of the select signals, or -1 if undefined."""
-        warnings.warn(
-            f"'{self.__class__.__name__}.s_val' is deprecated and will be removed in v1.0.0. Use '{self.__class__.__name__}.s_port.signal_int' or 'int({self.__class__.__name__}.s_port.signal_array)' instead!",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.s_port.signal_int if self.s_port.signal_int is not None else -1
-
-    @property
     def active_output(self) -> Optional[Port[Instance]]:
         """The active output port based on select value."""
         return self.ports[f'Y{self.s_port.signal_int}'] if self.s_port.signal_int is not None else None
-
-    @property
-    def s_port(self) -> Port[Instance]:
-        """The select/control port."""
-        return self.ports['S']
 
     @property
     def splittable(self) -> bool:
