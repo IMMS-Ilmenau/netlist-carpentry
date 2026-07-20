@@ -1,4 +1,5 @@
 """A collection of constant folding algorithms."""
+# mypy: disable-error-code="unreachable"
 
 from typing import Dict, List
 
@@ -9,7 +10,7 @@ from netlist_carpentry.core.exceptions import EvaluationError
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
 from netlist_carpentry.utils.gate_lib import DFF, DLatch
 from netlist_carpentry.utils.gate_lib_base_classes import PrimitiveGate
-from netlist_carpentry.utils.gate_mixins import ClockMixinProtocol, EnableMixinProtocol, ResetMixinProtocol
+from netlist_carpentry.utils.gate_mixins import EnMixin, RstMixin
 
 
 def opt_constant(module: Module) -> bool:
@@ -186,44 +187,28 @@ def _opt_constant_propagate_sequential(module: Module, inst: PrimitiveGate) -> b
     return False
 
 
-def _tied_rst_active(inst: ResetMixinProtocol) -> bool:
-    return inst.rst_port.is_tied_defined and inst.rst_polarity is inst.rst_port.signal
-
-
-def _tied_clk(inst: ClockMixinProtocol) -> bool:
-    return inst.clk_port.is_tied
-
-
-def _tied_en_inactive(inst: EnableMixinProtocol) -> bool:
-    return inst.en_port.is_tied and inst.en_polarity is not inst.en_port.signal
-
-
-def _tied_en_active(inst: EnableMixinProtocol) -> bool:
-    return inst.en_port.is_tied and inst.en_polarity is inst.en_port.signal
-
-
 def _opt_constant_propagate_dff(module: Module, inst: DFF) -> bool:
     # Order: Reset highest prio, then clk, then data
     ff_id = f'{inst.__class__.__name__} {inst.raw_path}'
-    propagates = False
-    if isinstance(inst, ResetMixinProtocol):
-        if _tied_rst_active(inst):  # Propagate, RST is constant and always in reset
+    if inst.has_rst and isinstance(inst, RstMixin):
+        # Propagate, RST is constant and always in reset
+        if inst.ports['RST'].is_tied_defined and inst.rst_polarity is inst.ports['RST'].signal:
             _propagate_output_port(module, inst, 'Q', inst.rst_val)  # Propagate reset value
-            propagates = True
-    if _tied_clk(inst):  # TODO: How can this case be simplified?
-        LOG.warn(
-            f"Found {ff_id} with tied Clock signal '{inst.clk_port.signal_str}' ({ff_id} never active, except for reset). Constant propagation not implemented for this edge case!"
-        )
-    if isinstance(inst, EnableMixinProtocol):
-        if _tied_en_inactive(inst):  # Never active
-            LOG.warn(
-                f'Found {ff_id} with disabled Enable signal ({ff_id} never active, except for reset). Constant propagation not implemented for this edge case!'
-            )
+            return True
+    if inst.ports['CLK'].is_tied:  # TODO: How can this case be simplified?
+        warn_str = f"Found {ff_id} with tied Clock signal '{inst.ports['CLK'].signal_str}' ({ff_id} never active, except for reset). Constant propagation not implemented for this edge case!"
+        LOG.warn(warn_str)
+    if isinstance(inst, EnMixin):
+        # Never active
+        if inst.en_port.is_tied and inst.en_polarity is not inst.en_port.signal:
+            warn_str = f'Found {ff_id} with disabled Enable signal ({ff_id} never active, except for reset). Constant propagation not implemented for this edge case!'
+            LOG.warn(warn_str)
 
-    if inst.ports['D'].is_tied and not _tied_clk(inst) and (isinstance(inst, EnableMixinProtocol) and _tied_en_active(inst)):
-        _propagate_output_port(module, inst, 'Q', inst.ports['D'].signal_array)  # Propagate data to output
-        propagates = True
-    return propagates
+    if inst.ports['D'].is_tied and not inst.ports['CLK'].is_tied:
+        if isinstance(inst, EnMixin) and inst.en_port.is_tied and inst.en_polarity is inst.en_port.signal:  # Tied EN active
+            _propagate_output_port(module, inst, 'Q', inst.ports['D'].signal_array)  # Propagate data to output
+            return True
+    return False
 
 
 def _opt_constant_propagate_dlatch(module: Module, inst: DLatch) -> bool:
