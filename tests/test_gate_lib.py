@@ -1832,7 +1832,8 @@ def test_mux_structure(simple_module: Module) -> None:
     assert m.ports['D0'].width == 4
     assert m.ports['S'].width == 3
     assert m.ports['Y'].width == 4
-    assert not m.s_defined
+    with pytest.warns(DeprecationWarning):
+        assert not m.s_defined
     with pytest.warns(DeprecationWarning):
         assert m.s_val == -1
     assert m.active_input is None
@@ -1920,7 +1921,8 @@ def test_mux_behavior(simple_module: Module) -> None:
     m.ports['S'].set_signal(Signal.HIGH, 1)  # 2 => 1
     m.ports['S'].set_signal(Signal.LOW, 2)  # 4 => 0
 
-    assert m.s_defined
+    with pytest.warns(DeprecationWarning):
+        assert m.s_defined
     with pytest.warns(DeprecationWarning):
         assert m.s_val == 3  # S_0 + S_1 = 1 + 2 => s_val = 3
     assert m.active_input == m.ports['D3']
@@ -1986,7 +1988,8 @@ def test_demux_structure(simple_module: Module) -> None:
     assert d.ports['Y0'].width == 4
     assert d.ports['S'].width == 3
     assert d.ports['D'].width == 4
-    assert not d.s_defined
+    with pytest.warns(DeprecationWarning):
+        assert not d.s_defined
     with pytest.warns(DeprecationWarning):
         assert d.s_val == -1
     assert d.active_output is None
@@ -2076,7 +2079,8 @@ def test_demux_behavior(simple_module: Module) -> None:
     d.ports['S'].set_signal(Signal.HIGH, 1)  # 2 => 1
     d.ports['S'].set_signal(Signal.LOW, 2)  # 4 => 0
 
-    assert d.s_defined
+    with pytest.warns(DeprecationWarning):
+        assert d.s_defined
     with pytest.warns(DeprecationWarning):
         assert d.s_val == 3  # S_0 + S_1 = 1 + 2 => s_val = 3
     assert d.active_output == d.ports['Y3']
