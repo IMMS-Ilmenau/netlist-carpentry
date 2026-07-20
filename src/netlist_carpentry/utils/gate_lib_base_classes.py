@@ -961,6 +961,11 @@ class NtoOneGate(PrimitiveGate, BaseModel):
         return self.ports['S']
 
     @property
+    def active_input(self) -> Optional[Port[Instance]]:
+        """The active input port based on select value."""
+        return self.ports[f'D{self.s_port.signal_int}'] if self.s_port.signal_int is not None else None
+
+    @property
     def splittable(self) -> bool:
         return True
 
@@ -1027,18 +1032,37 @@ class NtoOneGate(PrimitiveGate, BaseModel):
         return self.get_result_vector(select, data)
 
     def get_result_vector(self, select: SignalArray, data: Dict[str, SignalArray]) -> SignalArray:
-        """Calculate output from select value and data inputs. Subclasses must implement."""
-        raise UnsupportedOperationError(f'{self.__class__.__name__}.get_result_vector() is not implemented!')
+        """Calculate output from select value and data inputs."""
+        if not select.is_defined:
+            return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.y_width)})
+        port_name = f'D{int(select)}'
+        if port_name in data:
+            # Convert undefined signals (including FLOATING) to UNDEFINED
+            return SignalArray(signals={idx: sig if sig.is_defined else Signal.UNDEFINED for idx, sig in data[port_name].items()})
+        raise ObjectNotFoundError(f'No port {port_name!r} exists in {self.__class__.__name__} {self.raw_path}!')
 
     def update_parameters(self) -> None:
         super().update_parameters()
         self.parameters.WIDTH = self.parameters.WIDTH or 1
         self.parameters.BIT_WIDTH = self.parameters.BIT_WIDTH or 1
 
-    @property
-    def active_input(self) -> Optional[Port[Instance]]:
-        """The active input port based on select value."""
-        return self.ports[f'D{self.s_port.signal_int}'] if self.s_port.signal_int is not None else None
+    def _split(self) -> Dict[NonNegativeInt, Self]:
+        new_insts: Dict[NonNegativeInt, Self] = {}
+        connections = self.connections
+        self.update_parameters()
+        for idx in range(self.data_width):
+            self.parameters.WIDTH = 1
+            inst: Self = self.__class__(name=f'{self.name}_{idx}', parameters=self.parameters, module=self.parent)
+            for pname in list(inst.ports.keys()):
+                p = inst.ports[pname]
+                if pname != 'S':
+                    self.parent.connect(connections[pname][idx], p[0])
+                else:
+                    for conn_idx in connections[pname]:
+                        self.parent.connect(connections[pname][conn_idx], p[conn_idx])
+            new_insts[idx] = inst
+        self.parent.remove_instance(self.name)
+        return new_insts
 
 
 class OneToNGate(PrimitiveGate, BaseModel):
@@ -1174,6 +1198,24 @@ class OneToNGate(PrimitiveGate, BaseModel):
         super().update_parameters()
         self.parameters.WIDTH = self.parameters.WIDTH or 1
         self.parameters.BIT_WIDTH = self.parameters.BIT_WIDTH or 1
+
+    def _split(self) -> Dict[NonNegativeInt, Self]:
+        new_insts: Dict[NonNegativeInt, Self] = {}
+        connections = self.connections
+        self.update_parameters()
+        for idx in range(self.data_width):
+            self.parameters.WIDTH = 1
+            inst: Self = self.__class__(name=f'{self.name}_{idx}', parameters=self.parameters, module=self.parent)
+            for pname in list(inst.ports.keys()):
+                p = inst.ports[pname]
+                if pname != 'S':
+                    self.parent.connect(connections[pname][idx], p[0])
+                else:
+                    for conn_idx in connections[pname]:
+                        self.parent.connect(connections[pname][conn_idx], p[conn_idx])
+            new_insts[idx] = inst
+        self.parent.remove_instance(self.name)
+        return new_insts
 
 
 class StorageGate(PrimitiveGate, BaseModel):

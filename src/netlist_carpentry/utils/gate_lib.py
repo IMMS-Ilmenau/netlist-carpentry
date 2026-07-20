@@ -14,8 +14,7 @@ import inspect
 import sys
 from typing import Callable, Dict, List, Optional, Tuple, Type, Union
 
-from pydantic import BaseModel, NonNegativeInt
-from typing_extensions import Self
+from pydantic import BaseModel
 
 from netlist_carpentry import CFG, Direction, Instance, Module, Signal, SignalArray
 from netlist_carpentry.core.protocols.signals import SignalOrLogicLevel
@@ -811,35 +810,6 @@ class Multiplexer(NtoOneGate):
 
     instance_type: str = f'{CFG.id_internal}mux'
 
-    def _split(self) -> Dict[NonNegativeInt, Self]:
-        new_insts: Dict[NonNegativeInt, Self] = {}
-        connections = self.connections
-        super_module = self.parent
-        super_module.remove_instance(self.name)
-        self.update_parameters()
-        for idx in range(self.data_width):
-            self.parameters.WIDTH = 1
-            inst: Self = self.__class__(name=f'{self.name}_{idx}', parameters=self.parameters, module=super_module)
-            for pname in list(inst.ports.keys()):
-                p = inst.ports[pname]
-                if pname != 'S':
-                    super_module.connect(connections[pname][idx], p[0])
-                else:
-                    for conn_idx in connections[pname]:
-                        super_module.connect(connections[pname][conn_idx], p[conn_idx])
-            new_insts[idx] = inst
-        return new_insts
-
-    def get_result_vector(self, select: SignalArray, data: Dict[str, SignalArray]) -> SignalArray:
-        if not select.is_defined:
-            return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.y_width)})
-        sel_val = int(select)
-        port_name = f'D{sel_val}'
-        if port_name in data:
-            # Convert undefined signals (including FLOATING) to UNDEFINED
-            return SignalArray(signals={idx: sig if sig.is_defined else Signal.UNDEFINED for idx, sig in data[port_name].items()})
-        return SignalArray(signals={idx: Signal.UNDEFINED for idx in range(self.y_width)})
-
 
 class Demultiplexer(OneToNGate):
     """
@@ -849,25 +819,6 @@ class Demultiplexer(OneToNGate):
     """
 
     instance_type: str = f'{CFG.id_internal}demux'
-
-    def _split(self) -> Dict[NonNegativeInt, Self]:
-        new_insts: Dict[NonNegativeInt, Self] = {}
-        connections = self.connections
-        super_module = self.parent
-        super_module.remove_instance(self.name)
-        self.update_parameters()
-        for idx in range(self.data_width):
-            self.parameters.WIDTH = 1
-            inst: Self = self.__class__(name=f'{self.name}_{idx}', parameters=self.parameters, module=super_module)
-            for pname in list(inst.ports.keys()):
-                p = inst.ports[pname]
-                if pname != 'S':
-                    super_module.connect(connections[pname][idx], p[0])
-                else:
-                    for conn_idx in connections[pname]:
-                        super_module.connect(connections[pname][conn_idx], p[conn_idx])
-            new_insts[idx] = inst
-        return new_insts
 
 
 class Adder(ArithmeticGate, BaseModel):

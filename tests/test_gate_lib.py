@@ -9,7 +9,13 @@ from netlist_carpentry import WIRE_SEGMENT_X, Port, SignalArray
 from netlist_carpentry.core.enums.direction import Direction
 from netlist_carpentry.core.enums.element_type import EType
 from netlist_carpentry.core.enums.signal import Signal
-from netlist_carpentry.core.exceptions import InvalidSignalError, SignalAssignmentError, UnsupportedOperationError, WidthMismatchError
+from netlist_carpentry.core.exceptions import (
+    InvalidSignalError,
+    ObjectNotFoundError,
+    SignalAssignmentError,
+    UnsupportedOperationError,
+    WidthMismatchError,
+)
 from netlist_carpentry.core.netlist_elements.element_path import PortPath, WireSegmentPath
 from netlist_carpentry.core.netlist_elements.instance import Instance
 from netlist_carpentry.core.netlist_elements.module import Module
@@ -1840,6 +1846,9 @@ def test_mux_structure(simple_module: Module) -> None:
     assert m.verilog_template == 'always @(*) begin\n\tcase ({sel})\n{cases}\n\tendcase\nend'
     assert m.output_port.signal is Signal.UNDEFINED
     assert m.splittable
+
+    with pytest.raises(ObjectNotFoundError):
+        m.get_result_vector(SignalArray.create(1), {})
 
     _init_mux_structure(m)
     case_str = ''
