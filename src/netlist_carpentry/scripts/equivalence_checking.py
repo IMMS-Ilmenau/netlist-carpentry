@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, List, Optional, Tuple, Union, overload
 from pydantic import PositiveInt
 
 import netlist_carpentry.scripts.script_caller as sc
+from netlist_carpentry.utils.cfg import CFG
 
 if TYPE_CHECKING:
     from netlist_carpentry import Circuit
@@ -346,7 +347,7 @@ def run_equiv(
         with open(script_path, 'w') as f:
             f.write(EQUIV_TEMPLATE.format(equiv_cmds=equiv_cmds))
         script_path.chmod(script_path.stat().st_mode | 0o111)
-        return sc.call(['yosys', '-p', f'"{equiv_cmds}"'], not quiet)
+        return sc.call([CFG.yosys_executable, '-p', f'"{equiv_cmds}"'], not quiet)
 
 
 EQUIV_MITER_TEMPLATE = """#!/bin/env bash
@@ -434,4 +435,4 @@ def run_equiv_miter(
             f.write(_equiv_miter_template(gold_path, gate_path, gold_top, gate_top, cycles=cycles))
         cmds = _equiv_miter_template(gold_path, gate_path, gold_top, gate_top, cycles=cycles)
         script_path.chmod(script_path.stat().st_mode | 0o111)
-        return sc.call(['yosys', '-p', f'"{cmds}"'], verbose=not quiet)
+        return sc.call([CFG.yosys_executable, '-p', f'"{cmds}"'], verbose=not quiet)
