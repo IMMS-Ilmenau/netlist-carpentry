@@ -356,13 +356,13 @@ yosys -p "{equiv_miter_cmds}"
 
 EQUIV_MITER_CMDS = """read_verilog {gold} # Load the "Gold" (Reference) design
 prep -top {gold_top}
-techmap; flatten; abc -fast; clk2fflogic; opt_clean
+techmap; flatten; abc; clk2fflogic; opt_clean
 rename {gold_top} gold
 design -stash gold
 
 read_verilog {gate} # Load the "Gate" (Implementation) design
 prep -top {gate_top}
-techmap; flatten; abc -fast; clk2fflogic; opt_clean
+techmap; flatten; abc; clk2fflogic; opt_clean
 rename {gate_top} gate
 design -stash gate
 

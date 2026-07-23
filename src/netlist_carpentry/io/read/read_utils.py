@@ -53,9 +53,10 @@ def read_via_cfg(cfg: ReadConfig, circuit_name: Optional[str] = None, verbose: b
         start = time()
         gen_process = sc.call(cfg.shell_script(), verbose)
         errors = gen_process.stderr if gen_process.stderr is not None else ''
-        if errors:
+        # Check for both: non-lethal errors (returncode=0) may pass,
+        # as well as faulty return codes (returncode!=0, but no errors), which may happen with yowasp-yosys
+        if int(gen_process.returncode) != 0 and errors:
             LOG.error(str(errors))
-        if int(gen_process.returncode) != 0:
             stdout = gen_process.stdout if gen_process.stdout else ''
             raise YosysError(f'Failed to generate JSON netlist:\n{stdout}\n{errors}')
         LOG.debug(f'Generated Yosys netlist from {len(cfg.files)} files in {round(time() - start, 2)}s!')
