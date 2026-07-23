@@ -1,11 +1,25 @@
-# Changelog 0.5.1 (2026-07-16)
+# Changelog 0.5.2 (2026-07-23)
 
 ## FIXED
+- Fixed API inconsistency for `Port.tie_signal()` and `Port.set_signal()`
+- Fixed issue with `$pmux` instances by including pmuxtree pass in Yosys config to resolve priority mux instances into normal mux instances
+- Fixed issue with optimization algorithm for inputless submodules
+- Fixed hidden issues in constant propagation methods
+- Fixed fallthrough issue when reading files with `yowasp-yosys`, where the file gets generated successfully but the return code is nonzero
+- Fixed issue with `run_equiv()` and `run_equiv_miter()` methods trying to execute `'yosys'` even though Yosys was not found and `yowasp-yosys` was used as fallback
+- Removed wrongly displayed deprecation warnings
+- Lots of minor fixes and clean-ups in `Multiplexer`/`Demultiplexer` classes, while introducing some DeprecationWarnings hinting to preferred usage
+
+
+# Older Versions
+
+## Changelog 0.5.1 (2026-07-16)
+
+### FIXED
 - Fixed broken GitHub tests
 - Fixed BRAM formatting
 - Updated outdated documentation and notebooks
 
-# Older Versions
 
 ## Changelog 0.5.0 (2026-07-14)
 
