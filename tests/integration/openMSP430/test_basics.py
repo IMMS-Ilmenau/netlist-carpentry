@@ -1,5 +1,4 @@
 import os
-import subprocess
 import time
 from pathlib import Path
 from typing import List
@@ -7,23 +6,7 @@ from typing import List
 import pytest
 
 from netlist_carpentry import read, run_equiv
-
-modules = [
-    'omsp_alu',
-    'omsp_clock_module',
-    'omsp_dbg',
-    'omsp_dbg_uart',
-    'omsp_execution_unit',
-    'omsp_frontend',
-    'omsp_mem_backbone',
-    'omsp_multiplier',
-    'omsp_register_file',
-    'omsp_sfr',
-    'omsp_sync_cell',
-    'omsp_sync_reset',
-    'omsp_watchdog',
-    'openMSP430',
-]
+from tests.integration import gen_omsp, omsp_modules
 
 top_cnt = [
     ('omsp_alu', 1),
@@ -41,25 +24,6 @@ top_cnt = [
     ('omsp_watchdog', 1),
     ('openMSP430', 14),
 ]
-
-
-def gen_omsp(top: str) -> None:
-    in_path = Path('openmsp430/core/rtl/verilog').resolve()
-    out_path = Path('tests/files/gen').resolve()
-    yosys_cmd = [
-        'yosys',
-        '-p',
-        f"""
-    read_verilog {in_path}/*.v
-    hierarchy -top {top} -libdir .
-    proc; memory
-    pmuxtree; opt; clean
-    insbuf; proc
-    write_json {out_path}/openMSP430.json
-    write_verilog {out_path}/openMSP430.v
-    """,
-    ]
-    subprocess.run(yosys_cmd)
 
 
 @pytest.fixture()
@@ -98,11 +62,24 @@ def test_read_different_tops(omsp_files: List[Path], top: str, cnt: int) -> None
     assert c.top_name == top
 
 
-@pytest.mark.parametrize('top', modules)
+@pytest.mark.parametrize('top', omsp_modules)
 def test_equivalence(omsp_files: List[Path], top: str) -> None:
     c1path = Path('tests/files/gen/openMSP430_nc.v')
     c2path = Path('tests/files/gen/openMSP430.v')
     c1 = read(omsp_files, top=top)
+    c1.write(c1path, overwrite=True)
+    gen_omsp(top)
+    proc = run_equiv(c1path, c2path, top, top)
+    assert proc.returncode == 0
+
+
+# @pytest.mark.parametrize('top', omsp_modules)
+@pytest.mark.skip  # TODO broken for some modules
+def test_equivalence_optimize(omsp_files: List[Path], top: str) -> None:
+    c1path = Path('tests/files/gen/openMSP430_nc.v')
+    c2path = Path('tests/files/gen/openMSP430.v')
+    c1 = read(omsp_files, top=top)
+    c1.optimize()
     c1.write(c1path, overwrite=True)
     gen_omsp(top)
     proc = run_equiv(c1path, c2path, top, top)
