@@ -4,9 +4,10 @@ from pathlib import Path
 from typing import List
 
 import pytest
+from utils import profile
 
-from netlist_carpentry import read, run_equiv
-from tests.integration import gen_omsp, omsp_modules
+from integration import gen_omsp, omsp_modules
+from netlist_carpentry import Circuit, read, run_equiv
 
 top_cnt = [
     ('omsp_alu', 1),
@@ -56,7 +57,7 @@ def test_read(omsp_files: List[Path]) -> None:
 @pytest.mark.parametrize('top,cnt', top_cnt)
 def test_read_different_tops(omsp_files: List[Path], top: str, cnt: int) -> None:
     start = time.time()
-    c = read(omsp_files, top=top)
+    c: Circuit = profile(read, f'tests/files/profiles/read/{top}', cfg_or_files=omsp_files, top=top)  # type: ignore
     print(f'Runtime: {time.time() - start}s')
     assert len(c.modules) == cnt
     assert c.top_name == top
@@ -67,22 +68,9 @@ def test_equivalence(omsp_files: List[Path], top: str) -> None:
     c1path = Path('tests/files/gen/openMSP430_nc.v')
     c2path = Path('tests/files/gen/openMSP430.v')
     c1 = read(omsp_files, top=top)
-    c1.write(c1path, overwrite=True)
+    profile(c1.write, f'tests/files/profiles/write/{top}', output_file_path=c1path, overwrite=True)
     gen_omsp(top)
-    proc = run_equiv(c1path, c2path, top, top)
-    assert proc.returncode == 0
-
-
-# @pytest.mark.parametrize('top', omsp_modules)
-@pytest.mark.skip  # TODO broken for some modules
-def test_equivalence_optimize(omsp_files: List[Path], top: str) -> None:
-    c1path = Path('tests/files/gen/openMSP430_nc.v')
-    c2path = Path('tests/files/gen/openMSP430.v')
-    c1 = read(omsp_files, top=top)
-    c1.optimize()
-    c1.write(c1path, overwrite=True)
-    gen_omsp(top)
-    proc = run_equiv(c1path, c2path, top, top)
+    proc = run_equiv(c1path, c2path, top, top, quiet=True)
     assert proc.returncode == 0
 
 

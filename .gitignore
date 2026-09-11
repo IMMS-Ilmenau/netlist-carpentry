@@ -16,6 +16,7 @@ docs/site
 
 *.log
 tests/files/gen*
+tests/files/profiles*
 .VSCodeCounter
 *txt
 xrun
