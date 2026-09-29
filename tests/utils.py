@@ -33,7 +33,9 @@ def save_results(text_to_save: str, format_extension: str = '', additional_name:
         f.write(text_to_save)
 
 
-def profile(fnc: Callable[..., Union[None, object]], path: str, **kwargs: object) -> object:
+def profile(fnc: Callable[..., Union[None, object]], path: Union[str, Path], **kwargs: object) -> object:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w') as f:
         profiler = cProfile.Profile()
         profiler.enable()
