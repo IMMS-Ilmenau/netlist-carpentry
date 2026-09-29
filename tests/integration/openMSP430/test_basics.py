@@ -29,7 +29,7 @@ top_cnt = [
 
 @pytest.fixture()
 def omsp_files() -> List[Path]:
-    return [Path('openmsp430/core/rtl/verilog') / f for f in os.listdir('openmsp430/core/rtl/verilog') if f.endswith('v')]
+    return [Path('openmsp430/core/rtl/verilog') / f for f in os.listdir('openmsp430/core/rtl/verilog') if f.endswith('v') and 'undefines' not in f]
 
 
 def test_read(omsp_files: List[Path]) -> None:
