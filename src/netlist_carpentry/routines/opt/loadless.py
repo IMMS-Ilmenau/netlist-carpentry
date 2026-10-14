@@ -1,8 +1,7 @@
 """A collection of optimization algorithms removing loadless elements from a given circuit module."""
 
-from tqdm import tqdm
-
-from netlist_carpentry import CFG, LOG, Module
+from netlist_carpentry import LOG, Module
+from netlist_carpentry.utils import progress_bar
 
 
 def opt_loadless(module: Module) -> bool:
@@ -41,7 +40,7 @@ def opt_loadless_wires(module: Module) -> bool:
         True if any wires were removed, False otherwise.
     """
     marked_for_deletion = set()
-    for wname, w in tqdm(module.wires.items(), leave=False, disable=CFG.disable_tqdm):
+    for wname, w in progress_bar(module.wires.items()):
         if w.has_no_loads():
             LOG.debug(f'\tWire {w.name} has no loads!')
             marked_for_deletion.add(wname)
@@ -68,7 +67,7 @@ def opt_loadless_instances(module: Module) -> bool:
         True if any instances were removed, False otherwise.
     """
     marked_for_deletion = set()
-    for inst_name, inst in tqdm(module.instances.items(), leave=False, disable=CFG.disable_tqdm):
+    for inst_name, inst in progress_bar(module.instances.items()):
         no_load = True  # Will switch to false if at least 1 output port has load
         for p in inst.output_ports:
             no_load &= all(p.raw.lower() == 'x' or p.raw == '' for p in p.connected_wire_segments.values())

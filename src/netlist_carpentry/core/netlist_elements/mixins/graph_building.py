@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from typing import Callable, List
 
-from tqdm import tqdm
-
 from netlist_carpentry.core.exceptions import PathResolutionError
 from netlist_carpentry.core.graph.module_graph import ModuleGraph
 from netlist_carpentry.core.netlist_elements.element_path import WireSegmentPath
 from netlist_carpentry.core.netlist_elements.mixins.module_base import ModuleBaseMixin
 from netlist_carpentry.core.netlist_elements.port import ANY_PORT
 from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
+from netlist_carpentry.utils import progress_bar
 from netlist_carpentry.utils.cfg import CFG
 
 
@@ -89,10 +88,10 @@ class GraphBuildingMixin(ModuleBaseMixin):
             g (ModuleGraph): The current state of the module graph.
         """
         if self.instances:  # Suppresses tqdm output if empty
-            for inst in tqdm(self.instances.values(), desc='Building Instance Nodes', leave=False, disable=CFG.disable_tqdm):
+            for inst in progress_bar(self.instances.values(), desc='Building Instance Nodes'):
                 g.add_node(inst.name, ntype=inst.type.name, nsubtype=inst.instance_type, ndata=inst)
         if self.ports:  # Suppresses tqdm output if empty
-            for port in tqdm(self.ports.values(), desc='Building Port Nodes', leave=False, disable=CFG.disable_tqdm):
+            for port in progress_bar(self.ports.values(), desc='Building Port Nodes'):
                 g.add_node(port.name, ntype=port.type.name, nsubtype=port.direction.value, ndata=port)
 
     def _build_edges(self, g: ModuleGraph) -> None:
@@ -120,7 +119,7 @@ class GraphBuildingMixin(ModuleBaseMixin):
             g (ModuleGraph): The current state of the module graph.
         """
         if self.wires:  # Suppresses tqdm output if empty
-            for wire in tqdm(self.wires.values(), desc='Building Edges', leave=False, disable=CFG.disable_tqdm):
+            for wire in progress_bar(self.wires.values(), desc='Building Edges'):
                 for wire_seg in wire.segments.values():
                     drivers = [ps for ps in wire_seg.port_segments if ps.is_driver]
                     loads = [ps for ps in wire_seg.port_segments if ps.is_load]

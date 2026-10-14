@@ -1,9 +1,8 @@
 """A collection of optimization algorithms removing driverless elements from a given circuit module."""
 
-from tqdm import tqdm
-
 from netlist_carpentry.core.netlist_elements.module import Module
-from netlist_carpentry.utils.log import CFG, LOG
+from netlist_carpentry.utils import progress_bar
+from netlist_carpentry.utils.log import LOG
 
 
 def opt_driverless(module: Module) -> bool:
@@ -32,7 +31,7 @@ def opt_driverless(module: Module) -> bool:
 
 def opt_driverless_wires(module: Module) -> bool:
     marked_for_deletion = set()
-    for wname, w in tqdm(module.wires.items(), leave=False, disable=CFG.disable_tqdm):
+    for wname, w in progress_bar(module.wires.items()):
         for ws in w.segments.values():
             if ws.has_no_driver():
                 LOG.debug(f'\tWireSegment {ws.path} has no driver!')
@@ -51,7 +50,7 @@ def opt_driverless_wires(module: Module) -> bool:
 
 def opt_driverless_instances(module: Module) -> bool:
     marked_for_deletion = set()
-    for inst_name, inst in tqdm(module.instances.items(), leave=False, disable=CFG.disable_tqdm):
+    for inst_name, inst in progress_bar(module.instances.items()):
         no_driver = True  # Will switch to false if at least 1 input port has driver
         # Do not remove inputless submodule instances as they are probably used for signal generation
         if inst.is_primitive:

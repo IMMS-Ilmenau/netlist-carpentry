@@ -3,11 +3,10 @@
 
 from typing import Dict, List
 
-from tqdm import tqdm
-
-from netlist_carpentry import CFG, LOG, Instance, Module, Signal, SignalArray
+from netlist_carpentry import LOG, Instance, Module, Signal, SignalArray
 from netlist_carpentry.core.exceptions import EvaluationError
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
+from netlist_carpentry.utils import progress_bar
 from netlist_carpentry.utils.gate_lib import DFF, DLatch
 from netlist_carpentry.utils.gate_lib_base_classes import PrimitiveGate
 from netlist_carpentry.utils.gate_mixins import EnMixin, RstMixin
@@ -51,7 +50,7 @@ def opt_constant_mux_inputs(module: Module) -> bool:
     """
     inst_to_remove: List[Instance] = []
 
-    for inst in tqdm(module.instances.values(), leave=False, disable=CFG.disable_tqdm):
+    for inst in progress_bar(module.instances.values()):
         if inst.instance_type == '§mux':
             D0 = inst.connection_str_paths['D0'].values()
             D1 = inst.connection_str_paths['D1'].values()
@@ -106,7 +105,7 @@ def _opt_constant_propagation_single_iter(module: Module) -> bool:
         bool: True if at least one instance was removed due to constant propagation, False otherwise.
     """
     mark_delete: List[Instance] = []
-    for inst in tqdm(module.instances.values(), leave=False, disable=CFG.disable_tqdm):
+    for inst in progress_bar(module.instances.values()):
         if isinstance(inst, PrimitiveGate):
             if getattr(inst, 'is_combinational', False):  # type: ignore[misc]
                 if _opt_constant_propagate_combinational(module, inst):
