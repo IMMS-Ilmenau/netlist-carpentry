@@ -127,7 +127,6 @@ plugins:
     ignore_h1_titles: true
     execute: true
     execute_ignore:
-    - "user_guide/02_access_circuit_data.ipynb" # Broken
     - "user_guide/05_module_graphs.ipynb" # Too large
     - "user_guide/09_equivalence_checking.ipynb" # EQY missing
     - "user_guide/10_custom_search_and_replace.ipynb" # Too large
