@@ -1,5 +1,8 @@
 """Module for handling global configuration of Netlist Carpentry."""
 
+import os
+from typing import Optional
+
 
 class Config:
     """
@@ -39,6 +42,22 @@ class Config:
 
         self.yosys_executable: str = 'yosys'
         """The shell command to start Yosys. Defaults to `yosys`, which is the standard command to run Yosys."""
+
+        self._disable_tqdm_user_set: Optional[bool] = None
+
+    @property
+    def disable_tqdm(self) -> bool:
+        """Whether to show progress bars. If `True`, progress bars are hidden.
+
+        By default, progress bars are only hidden when building the documentation using MkDocs.
+        """
+        if self._disable_tqdm_user_set is None:
+            return os.getenv('NC_MKDOCS_BUILD') == '1'
+        return self._disable_tqdm_user_set
+
+    @disable_tqdm.setter
+    def disable_tqdm(self, val: object) -> None:
+        self._disable_tqdm_user_set = val
 
 
 CFG = Config()

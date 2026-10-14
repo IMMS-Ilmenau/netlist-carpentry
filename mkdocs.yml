@@ -122,8 +122,25 @@ plugins:
 - literate-nav:
     # Navigation file must not use .md ending, to hide it from search indexing
     nav_file: summary.nav
+- tqdm-docs-flag
 - mkdocs-jupyter:
     ignore_h1_titles: true
+    execute: true
+    execute_ignore:
+    - "user_guide/02_access_circuit_data.ipynb" # Broken
+    - "user_guide/05_module_graphs.ipynb" # Too large
+    - "user_guide/09_equivalence_checking.ipynb" # EQY missing
+    - "user_guide/10_custom_search_and_replace.ipynb" # Too large
+    - "user_guide/11_custom_search_and_replace_advanced.ipynb" # Too large
+    - "user_guide/12_gate_chain_optimizer.ipynb" # Must be updated
+    - "user_guide/routines/scan_chain_insertion/01_scan_chain_insertion.ipynb" # Some FutureWarning/DeprecationWarning -> must be updated
+    - "user_guide/routines/scan_chain_insertion/02_DEF_output.ipynb" # Some FutureWarning/DeprecationWarning -> must be updated
+    - "user_guide/vcd/01_basics.ipynb" # VCD/pywellen missing
+    - "user_guide/vcd/02_mapping.ipynb" # VCD/pywellen missing
+    - "user_guide/vcd/03_signal_grouping.ipynb" # VCD/pywellen missing
+    - "user_guide/visualization/03_exporting_graphs.ipynb" # Must be updated
+    allow_errors: true
+    include_requirejs: true
 - mkdocstrings:
     default_handler: python
     enable_inventory: true

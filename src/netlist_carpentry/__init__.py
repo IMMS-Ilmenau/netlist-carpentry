@@ -1,4 +1,4 @@
-# ruff: noqa: E402 # Module imports are not at top because of required constants
+# ruff: noqa: E402, RUF100 # Module imports are not at top because of required constants
 # isort: skip_file
 import os
 import platform
@@ -118,3 +118,13 @@ yosys_path = shutil.which('yosys')
 if not yosys_path:
     CFG.yosys_executable = 'yowasp-yosys'
     LOG.warn("Unable to locate default Yosys command 'yosys'. Falling back to 'yowasp-yosys'!")
+
+
+def _in_jupyter() -> bool:
+    try:
+        from IPython import get_ipython  # type: ignore[attr-defined]
+    except ImportError:
+        return False
+
+    shell = get_ipython()  # type: ignore
+    return shell is not None and shell.__class__.__name__ == 'ZMQInteractiveShell'  # type: ignore

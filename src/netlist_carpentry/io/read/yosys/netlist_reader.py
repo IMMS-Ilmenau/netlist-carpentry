@@ -157,7 +157,7 @@ class YosysNetlistReader(AbstractReader):
         if module_dict.netnames:
             LOG.debug(f'Building {len(module_dict.netnames)} wires...')
             start = time()
-            for wire_name, wire_data in tqdm(module_dict.netnames.items(), desc='Wire building progress', leave=False):
+            for wire_name, wire_data in tqdm(module_dict.netnames.items(), desc='Wire building progress', leave=False, disable=CFG.disable_tqdm):
                 wire_data.build_wire(self.net_number_mapping[module.name], module, wire_name)
             LOG.debug(f'Built {len(module_dict.netnames)} wires in {time() - start:.2f}s.')
 
@@ -165,7 +165,7 @@ class YosysNetlistReader(AbstractReader):
         if module_dict.ports:
             LOG.debug(f'Building {len(module_dict.ports)} module ports...')
             start = time()
-            for port_name, port_data in tqdm(module_dict.ports.items(), desc='Port building progress', leave=False):
+            for port_name, port_data in tqdm(module_dict.ports.items(), desc='Port building progress', leave=False, disable=CFG.disable_tqdm):
                 port_data.build_port(self.net_number_mapping[module.name], module, port_name)
             LOG.debug(f'Built {len(module_dict.ports)} module ports in {time() - start:.2f}s.')
 
@@ -173,7 +173,7 @@ class YosysNetlistReader(AbstractReader):
         if module_dict.cells:
             LOG.debug(f'Building {len(module_dict.cells)} instances...')
             start = time()
-            for inst_name, inst_data in tqdm(module_dict.cells.items(), desc='Instance building progress', leave=False):
+            for inst_name, inst_data in tqdm(module_dict.cells.items(), desc='Instance building progress', leave=False, disable=CFG.disable_tqdm):
                 inst = inst_data.build_instance(self.module_definitions, self.net_number_mapping[module.name], module, inst_name)
                 if not inst.is_primitive:
                     self._module_instantiations.add(inst.instance_type)

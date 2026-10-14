@@ -89,10 +89,10 @@ class GraphBuildingMixin(ModuleBaseMixin):
             g (ModuleGraph): The current state of the module graph.
         """
         if self.instances:  # Suppresses tqdm output if empty
-            for inst in tqdm(self.instances.values(), desc='Building Instance Nodes', leave=False):
+            for inst in tqdm(self.instances.values(), desc='Building Instance Nodes', leave=False, disable=CFG.disable_tqdm):
                 g.add_node(inst.name, ntype=inst.type.name, nsubtype=inst.instance_type, ndata=inst)
         if self.ports:  # Suppresses tqdm output if empty
-            for port in tqdm(self.ports.values(), desc='Building Port Nodes', leave=False):
+            for port in tqdm(self.ports.values(), desc='Building Port Nodes', leave=False, disable=CFG.disable_tqdm):
                 g.add_node(port.name, ntype=port.type.name, nsubtype=port.direction.value, ndata=port)
 
     def _build_edges(self, g: ModuleGraph) -> None:
@@ -120,7 +120,7 @@ class GraphBuildingMixin(ModuleBaseMixin):
             g (ModuleGraph): The current state of the module graph.
         """
         if self.wires:  # Suppresses tqdm output if empty
-            for wire in tqdm(self.wires.values(), desc='Building Edges', leave=False):
+            for wire in tqdm(self.wires.values(), desc='Building Edges', leave=False, disable=CFG.disable_tqdm):
                 for wire_seg in wire.segments.values():
                     drivers = [ps for ps in wire_seg.port_segments if ps.is_driver]
                     loads = [ps for ps in wire_seg.port_segments if ps.is_load]

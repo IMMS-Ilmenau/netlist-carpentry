@@ -41,6 +41,9 @@ vcd = [
 Homepage = "https://github.com/IMMS-Ilmenau/netlist-carpentry"
 Documentation = "https://IMMS-Ilmenau.github.io/netlist-carpentry"
 
+[project.entry-points."mkdocs.plugins"]
+tqdm-docs-flag = "netlist_carpentry.utils.mkdocs:TqdmDocsFlagPlugin"
+
 # Build System
 [build-system]
 requires = ["hatchling"]
