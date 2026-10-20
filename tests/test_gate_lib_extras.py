@@ -229,7 +229,7 @@ def test_format_vpart(module_bram: Module) -> None:
         bram._format_vpart(0, 'r', 'some_clk', Signal.HIGH, bram.rd_en_port[0], bram.rd_addr_port, bram.rd_data_port)
 
 
-@pytest.mark.skipif(os.environ.get('GITHUB_ACTIONS') == 'true', reason='Skip this test on GitHub Actions only.')
+@pytest.mark.skipif(os.environ.get('GITHUB_ACTIONS') == 'true' or os.environ.get('EQY_MISSING') == 'true', reason='Skip this test on GitHub Actions only.')
 def test_mem_complex() -> None:  # STRUCTURAL COMPARISON
     c = read('tests/files/mem_complex.v', 'mem_complex')
     ram = c.first.instances['ram']

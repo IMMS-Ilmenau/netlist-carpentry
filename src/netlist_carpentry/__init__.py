@@ -27,7 +27,8 @@ __version__ = _nc_version()
 
 NC_DIR = os.path.dirname(os.path.abspath(__file__))
 """The root directory of Netlist Carpentry."""
-ON_WINDOWS = 'win' in platform.system().lower()
+# Older windows Versions have 'win32', newer ones have 'Windows', hence this rather weird check
+ON_WINDOWS = 'win' in platform.system().lower() and 'darwin' not in platform.system().lower()
 """Whether Netlist Carpentry is running on Windows."""
 
 
