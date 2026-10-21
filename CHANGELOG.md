@@ -1,6 +1,19 @@
-# Changelog 0.6.0 (2026-09-07)
+# Changelog 0.6.1
 
 ## ADDED
+- Added `netlist_carpentry.utils.progress_bar()` function that wraps TQDM with common parameters for convenience
+
+## FIXED
+- Fixed issues with graph representation in notebooks
+- Fixed TQDM artifacts in notebook visible in online documentation
+- Fixed some broken notebooks
+- Fixed bug on Mac systems, where Netlist Carpentry thinks it runs on Windows (due to "darwin" containing "win")
+
+# Older Versions
+
+## Changelog 0.6.0 (2026-09-07)
+
+### ADDED
 - Added `netlist_carpentry.vis` package for graph visualization, with package `dynamic` for ipycytoscape-based interactive graphs and package `styling` for graph formatting
 - Added `Formats` class (similar to previous `Format` class) that holds a bunch of defined formats (`FormatDefinition`) and a mapping containing nodes and their formats
 - Added `FormatDefinition` class which holds the format definition of nodes or edges and can be applied via `Formats.format_nodes()`
@@ -18,7 +31,7 @@
   - For one-line primitive gates that, the output now looks like this: `assign a = b & c; // AndGate myAndInstance`
   - For multiline gates (e.g. `@always` blocks), the header receives a comment `// Start of DFF myDffInstance` and the ending line receives a note in the form of `// DFF myInstance (5 lines)`
 
-## CHANGED
+### CHANGED
 - `Wire.connected_port_segments` → `Wire.connections` (old property is still present, but emits a deprecation warning now)
 - **`Port.driver()` and `Port.loads()` NOW RETURN `ConnectivityData` OBJECTS INSTEAD OF BARE DICTIONARIES**
   - Since `ConnectivityData` is a `MutableMapping`, normal dictionary methods work as well
@@ -42,7 +55,7 @@
 - Updated lots of docstrings, examples and tests
 - Updated and improved skill files
 
-## FIXED
+### FIXED
 - Fixed fallthrough issue when reading files with yowasp-yosys, where the file gets generated successfully but the return code is nonzero
 - Fixed a bug in `Ports.loads()` for partially connected ports
 - Fixed a bug in `Ports.loads()` where the port itself was included if the port itself is a load port
@@ -58,8 +71,6 @@
 - Fixed some other corner cases in `Module.connect()`, where indexing sometimes breaks if segments are connected bit-by-bit
 - Fixed output of subprocesses, where previously all environment variables and functions get dumped before the actual script output
 
-
-# Older Versions
 
 ## Changelog 0.5.3 (2026-08-13)
 
