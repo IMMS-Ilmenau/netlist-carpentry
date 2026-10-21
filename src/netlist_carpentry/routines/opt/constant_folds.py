@@ -1,15 +1,44 @@
 """A collection of constant folding algorithms."""
 # mypy: disable-error-code="unreachable"
 
-from typing import Dict, List
+from enum import Enum, auto
+from typing import Dict, List, Optional, Tuple, Union
+
+from tqdm import tqdm
 
 from netlist_carpentry import LOG, Instance, Module, Signal, SignalArray
 from netlist_carpentry.core.exceptions import EvaluationError
+from netlist_carpentry.core.netlist_elements.port_segment import PortSegment
 from netlist_carpentry.core.netlist_elements.wire_segment import WireSegment
-from netlist_carpentry.utils import progress_bar
-from netlist_carpentry.utils.gate_lib import DFF, DLatch
-from netlist_carpentry.utils.gate_lib_base_classes import PrimitiveGate
+from netlist_carpentry.utils.gate_lib import DFF, DLatch, NotGate
+from netlist_carpentry.utils.gate_lib_base_classes import BinaryGate, NtoOneGate, PrimitiveGate
 from netlist_carpentry.utils.gate_mixins import EnMixin, RstMixin
+
+
+class _Act(Enum):
+    PASS = auto()
+    INVERT = auto()
+
+
+_LOW, _HIGH = Signal.LOW, Signal.HIGH
+
+_RULES: Dict[Tuple[str, Signal], Union[Signal, _Act]] = {
+    ('§and', _LOW): _LOW,
+    ('§and', _HIGH): _Act.PASS,
+    ('§nand', _LOW): _HIGH,
+    ('§nand', _HIGH): _Act.INVERT,
+    ('§or', _HIGH): _HIGH,
+    ('§or', _LOW): _Act.PASS,
+    ('§nor', _HIGH): _LOW,
+    ('§nor', _LOW): _Act.INVERT,
+    ('§xor', _LOW): _Act.PASS,
+    ('§xor', _HIGH): _Act.INVERT,
+    ('§xnor', _LOW): _Act.INVERT,
+    ('§xnor', _HIGH): _Act.PASS,
+}
+_RULE_TYPES = {gate_type for gate_type, _ in _RULES}
+
+_Rule = Union[Signal, Tuple[_Act, PortSegment]]
 
 
 def opt_constant(module: Module) -> bool:
@@ -50,7 +79,7 @@ def opt_constant_mux_inputs(module: Module) -> bool:
     """
     inst_to_remove: List[Instance] = []
 
-    for inst in progress_bar(module.instances.values()):
+    for inst in tqdm(module.instances.values(), leave=False):
         if inst.instance_type == '§mux':
             D0 = inst.connection_str_paths['D0'].values()
             D1 = inst.connection_str_paths['D1'].values()
@@ -105,7 +134,7 @@ def _opt_constant_propagation_single_iter(module: Module) -> bool:
         bool: True if at least one instance was removed due to constant propagation, False otherwise.
     """
     mark_delete: List[Instance] = []
-    for inst in progress_bar(module.instances.values()):
+    for inst in tqdm(list(module.instances.values()), leave=False):
         if isinstance(inst, PrimitiveGate):
             if getattr(inst, 'is_combinational', False):  # type: ignore[misc]
                 if _opt_constant_propagate_combinational(module, inst):
@@ -120,6 +149,8 @@ def _opt_constant_propagation_single_iter(module: Module) -> bool:
 
 def _propagate_output_port(module: Module, inst: PrimitiveGate, port_name: str, signals: SignalArray) -> None:
     for idx, ps in inst.ports[port_name]:
+        if idx not in signals.signals or ps.is_unconnected:
+            continue
         ws = ps.ws
         w = ws.parent
         for ld in ws.loads():
@@ -132,8 +163,10 @@ def _propagate_output_port(module: Module, inst: PrimitiveGate, port_name: str, 
             module.remove_wire(w)
 
 
-def _propagate_pass_wire(module: Module, inst: PrimitiveGate, port_name: str, wires: Dict[int, WireSegment]) -> None:
+def _propagate_pass_wire(module: Module, inst: PrimitiveGate, port_name: str, wires: Dict[int, Union[WireSegment, PortSegment]]) -> None:
     for idx, ps in inst.ports[port_name]:
+        if idx not in wires or ps.is_unconnected:
+            continue
         ws = ps.ws
         w = ws.parent
         for ld in ws.loads():
@@ -146,8 +179,64 @@ def _propagate_pass_wire(module: Module, inst: PrimitiveGate, port_name: str, wi
             module.remove_wire(w)
 
 
+def _bit_rule(inst: PrimitiveGate, idx: int) -> Optional[_Rule]:
+    """Looks how output bit `idx` can be simplified or returns None if no rule was found."""
+    if isinstance(inst, NtoOneGate):
+        if not inst.s_port.is_tied_defined or inst.active_input is None:
+            return None
+        seg = inst.active_input[idx]
+        return _Act.PASS, seg
+    if isinstance(inst, BinaryGate) and inst.instance_type in _RULE_TYPES:
+        if any(idx not in p.segments for p in inst.input_ports):
+            return None
+        a, b = (p[idx] for p in inst.input_ports)
+        if a.is_tied != b.is_tied:
+            tied, free = (a, b) if a.is_tied else (b, a)
+            rule = _RULES.get((inst.instance_type, tied.signal))
+            if isinstance(rule, _Act):
+                return rule, free
+            return rule
+    return None
+
+
+def _opt_constant_propagate_rules(module: Module, inst: PrimitiveGate) -> bool:
+    """Simplifies an instance with partially constant inputs, if every output bit matches a known rule.
+
+    Args:
+        module (Module): The module in which constants should be propagated.
+        inst (PrimitiveGate): The combinational instance.
+
+    Returns:
+        bool: True, if the instance was simplified, False otherwise.
+    """
+    rules: Dict[int, _Rule] = {}
+    for idx, _ in inst.output_port:
+        rule = _bit_rule(inst, idx)
+        if rule is None:
+            return False
+        rules[idx] = rule
+    consts: Dict[int, Signal] = {}
+    wires: Dict[int, Union[WireSegment, PortSegment]] = {}
+    for idx, rule in rules.items():
+        if isinstance(rule, Signal):
+            consts[idx] = rule
+            continue
+        act, seg = rule
+        if act is _Act.PASS:
+            wires[idx] = seg.ws
+        else:
+            inv = module.create_instance(NotGate, f'{inst.name}_inv{idx}')
+            module.connect(seg.ws, inv.ports['A'][0])
+            wires[idx] = inv.ports['Y'][0]
+    _propagate_output_port(module, inst, inst.output_port.name, SignalArray(signals=consts))
+    _propagate_pass_wire(module, inst, inst.output_port.name, wires)
+    return True
+
+
 def _opt_constant_propagate_combinational(module: Module, inst: PrimitiveGate) -> bool:
     """Executes constant propagation for combinational instances.
+
+    An instance is simplified if all of its inputs are constant, or if its partially constant inputs match a known rule (see `_RULES`).
 
     Args:
         module (Module): The module in which constants should be propagated.
@@ -159,13 +248,13 @@ def _opt_constant_propagate_combinational(module: Module, inst: PrimitiveGate) -
     if all(p.is_tied_defined for p in inst.input_ports):
         try:
             inst.evaluate()
-        except (EvaluationError, NotImplementedError) as e:
+        except (EvaluationError, NotImplementedError, ArithmeticError) as e:
             LOG.warn(f'Unable to evaluate instance {inst.raw_path}: {e}!')
             return False
         for p in inst.output_ports:
             _propagate_output_port(module, inst, p.name, p.signal_array)
         return True
-    return False
+    return _opt_constant_propagate_rules(module, inst)
 
 
 def _opt_constant_propagate_sequential(module: Module, inst: PrimitiveGate) -> bool:
@@ -206,7 +295,7 @@ def _opt_constant_propagate_dff(module: Module, inst: DFF) -> bool:
             LOG.warn(warn_str)
 
     if inst.ports['D'].is_tied and not inst.ports['CLK'].is_tied:
-        if isinstance(inst, EnMixin) and inst.en_port.is_tied and inst.en_polarity is inst.en_port.signal:  # Tied EN active
+        if not isinstance(inst, EnMixin) or (inst.en_port.is_tied and inst.en_polarity is inst.en_port.signal):  # No EN, or tied EN active
             _propagate_output_port(module, inst, 'Q', inst.ports['D'].signal_array)  # Propagate data to output
             return True
     return False
