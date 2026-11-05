@@ -119,6 +119,8 @@ yosys_path = shutil.which('yosys')
 if not yosys_path:
     CFG.yosys_executable = 'yowasp-yosys'
     LOG.warn("Unable to locate default Yosys command 'yosys'. Falling back to 'yowasp-yosys'!")
+    LOG.warn("'yowasp-yosys' lacks plugin support (e.g. GHDL is not supported, so VHDL designs cannot be read).")
+    LOG.warn("Also, 'yowasp-yosys' cannot access files outside the current working directory, so reading designs from other directories will fail.")
 
 
 def _in_jupyter() -> bool:
