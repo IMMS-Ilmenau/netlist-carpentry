@@ -6,7 +6,7 @@ import netlist_carpentry as nc
 
 
 def test_version() -> None:
-    assert nc.__version__ == '0.6.0'
+    assert nc.__version__ == '0.6.1'
 
 
 def test_yosys_path() -> None:
