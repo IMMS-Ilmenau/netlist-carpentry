@@ -405,7 +405,7 @@ def test_driver() -> None:
     assert dr is None
 
     # Now gets driver
-    m.connect(m.ports['out3'][0].ws, m.create_port('in2', 'in'))
+    m.connect(m.create_port('in2', 'in'), m.ports['out3'])
     dr = m.ports['out3'][0].driver()
     assert dr == m.ports['in2'][0]
     dr = m.ports['out4'][0].driver()

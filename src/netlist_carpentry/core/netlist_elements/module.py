@@ -100,9 +100,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         return self.instances.add(instance.name, instance, locked=self.locked)  # type: ignore[return-value]
 
     @overload
-    def create_instance(
-        self, interface_definition: Type[T_INSTANCE], name: Optional[str] = None, params: Optional[PARAMETERS] = None
-    ) -> T_INSTANCE: ...
+    def create_instance(self, interface_definition: Type[T_INSTANCE], name: Optional[str] = None, params: Optional[PARAMETERS] = None) -> T_INSTANCE: ...
     @overload
     def create_instance(self, interface_definition: Module, name: Optional[str] = None, params: Optional[PARAMETERS] = None) -> Instance: ...
 
@@ -398,9 +396,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         """
         return self.instances.get(name, None)
 
-    def get_instances(
-        self, *, name: Optional[str] = None, type: Optional[str] = None, fuzzy: bool = False, recursive: bool = False
-    ) -> List[Instance]:
+    def get_instances(self, *, name: Optional[str] = None, type: Optional[str] = None, fuzzy: bool = False, recursive: bool = False) -> List[Instance]:
         """
         Retrieves a list of instances based on the given criteria.
 
@@ -443,9 +439,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         if name is not None:
             return [self.instances[i_name] for i_name in self.instances if (name in i_name and fuzzy) or (name == i_name)] + sub_insts
         if type is not None:
-            inst_list = CustomList(
-                [self.instances_by_types[i_type] for i_type in self.instances_by_types if (type in i_type and fuzzy) or (type == i_type)]
-            )
+            inst_list = CustomList([self.instances_by_types[i_type] for i_type in self.instances_by_types if (type in i_type and fuzzy) or (type == i_type)])
             return inst_list.flatten() + sub_insts
         LOG.warn(f'At least "name" or "type" must be set to get instances, but name was "{name}" and type was "{type}"!')
         return []
@@ -838,12 +832,14 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         Wire / WireSegment         Port / PortSegment                   Connect target to the given wire
         Port (unconnected)         Port (unconnected)                   Create a new wire, connect both
         Port (connected)           Port (unconnected)                   Connect target to source's wire
+        Driving Port (unconnected) Port (on shared, driverless net)     Add the input as the net's driver
         PortSegment                PortSegment                          Connect via source's wire or new wire
         =========================  ===================================  ==================================
 
         **Requirements:**
 
-        * The **target** must be unconnected (no existing wire attachment, but can be tied to 0/1/Z).
+        * The **target** must be unconnected (Exception: unconnected module input (or instance output) may drive an
+          existing driverless net shared by multiple loads.
         * Source and target must be compatible: either both are segments, or both have matching widths.
         * Path objects (``PortPath``, ``WirePath``, ``PortSegmentPath``, ``WireSegmentPath``) are accepted as well.
 
@@ -856,7 +852,8 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 unconnected ports/segments). If ``None``, a generic name is generated.
 
         Raises:
-            AlreadyConnectedError: If the target port/segment is already connected to a wire.
+            AlreadyConnectedError: If the target port/segment is already connected to a wire. **Is not raised** when an
+                unconnected module input is added as the driver of an existing shared, driverless net.
             InvalidDirectionError: If the target is a driver port (both source and target cannot drive).
             WidthMismatchError: If source and target have incompatible widths.
             UnsupportedOperationError: If mixing segment-level and non-segment-level objects.
@@ -890,9 +887,20 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
         source_obj = self._get_from_path_or_object(source)
         target_obj = self._get_from_path_or_object(target)
 
-        # Validate: target must be unconnected (only meaningful for port segments)
+        # A driver may be added to an existing net only when that net has no driver.
         if hasattr(target_obj, 'is_tied') and not target_obj.is_tied:
-            raise AlreadyConnectedError(f'{target_obj.type.value} {target_obj.raw_path} must be unconnected before attempting to connect it!')
+            # This is pretty ugly but it basically looks whether the source is an unconnected signal driver (module input/instance output)
+            # Also, the target must be a load port and not have a driver already (for this, iterating through the segments and look if it has a driver)
+            can_drive_existing_net = (
+                isinstance(source_obj, Port)
+                and isinstance(target_obj, Port)
+                and source_obj.is_driver
+                and source_obj.is_unconnected
+                and target_obj.is_load
+                and all(seg.is_unconnected or (not seg.ws.is_constant and seg.ws.has_no_driver() and seg.ws.nr_connected_ports > 1) for _, seg in target_obj)
+            )
+            if not can_drive_existing_net:
+                raise AlreadyConnectedError(f'{target_obj.type.value} {target_obj.raw_path} must be unconnected before attempting to connect it!')
 
         width1: int = 1 if source_obj.type.is_segment else source_obj.width  # type: ignore[misc, union-attr]
         width2: int = 1 if target_obj.type.is_segment else target_obj.width  # type: ignore[misc, union-attr]
@@ -971,6 +979,18 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             return self.get_from_path(path_or_object)
         return path_or_object
 
+    def _connect_ports_get_wire(self, driver: T_PORT, load: T_PORT, wname: Optional[str]) -> Optional[Wire]:
+        # Determine the wire name when creating a new wire for an unconnected driver, also check if a wire with that name already exists to avoid conflicts.
+        # If the driver is a module port and no explicit name is given, use the port name (so the generated Verilog has `wire <port_name>` matching the port).
+        if driver.is_unconnected_partly and load.is_unconnected_partly:
+            if wname is None and driver.is_module_port:  # Use Input Port name as wire name first
+                wname = driver.name
+            elif wname is None and load.is_module_port:  # Then use Output Port name as wire name (if applicable)
+                wname = load.name
+            # In any other case, a generic wire is generated, since wname stays None (if it is not connected to a port)
+            return self.wires[wname] if wname and wname in self.wires else self.create_wire(wname, width=driver.width, offset=driver.offset or 0)
+        return None
+
     def _connect_ports_full(self, driver: T_PORT, load: T_PORT, wname: Optional[str] = None) -> None:
         """Connect two full ports bit-by-bit.
 
@@ -1001,27 +1021,24 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
                 '\tconnect(port.segment[1], port.segment[4])'
             )
 
-        # Determine the wire name when creating a new wire for an unconnected driver, also check if a wire with that name already exists to avoid conflicts.
-        # If the driver is a module port and no explicit name is given, use the port name (so the generated Verilog has `wire <port_name>` matching the port).
-        if driver.is_unconnected_partly:
-            if wname is None and driver.is_module_port:  # Use Input Port name as wire name first
-                wname = driver.name
-            elif wname is None and load.is_module_port:  # Then use Output Port name as wire name (if applicable)
-                wname = load.name
-            # In any other case, a generic wire is generated, since wname stays None (if it is not connected to a port)
-            wire = self.wires[wname] if wname and wname in self.wires else self.create_wire(wname, width=driver.width, offset=driver.offset or 0)
-        else:
-            wire = None
-
+        wire = self._connect_ports_get_wire(driver, load, wname)
         offset = (load.offset or 0) - (driver.offset or 0)
         for idx, dr_seg in driver:
+            load_seg = load[idx + offset]
             # Pick the wire segment: reuse existing or use newly created
-            ws = dr_seg.ws if dr_seg.is_connected or wire is None else wire[idx]
+            if dr_seg.is_connected:
+                ws = dr_seg.ws
+            elif load_seg.is_connected:
+                ws = load_seg.ws
+            else:
+                assert wire is not None
+                ws = wire[idx]
 
-            # Connect driver segment (if unconnected) and load segment to the same wire
+            # Connect any unconnected segments to the selected wire
             if dr_seg.is_unconnected:
                 self._connect_to_wire_segment(dr_seg, ws)
-            self._connect_to_wire_segment(load[idx + offset], ws)
+            if load_seg.is_unconnected:
+                self._connect_to_wire_segment(load_seg, ws)
 
     def _connect_wire_to_port(self, wire_like: Union[WireSegment, Wire], port_like: Union[PortSegment, T_PORT]) -> None:
         """Connect a wire (or wire segment) to a port (or port segment).
@@ -1050,9 +1067,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
 
         # Check lock status before proceeding
         if port_seg.locked or (wire_seg.locked and not wire_seg.is_constant) or self.locked:
-            LOG.error(
-                f'Unable to connect port segment at {port_seg.raw_path} to wire segment {wire_seg.raw_path} in module {self.name}: locked object!'
-            )
+            LOG.error(f'Unable to connect port segment at {port_seg.raw_path} to wire segment {wire_seg.raw_path} in module {self.name}: locked object!')
             return
 
         self._connect_to_wire_segment(port_seg, wire_seg)
@@ -1114,9 +1129,7 @@ class Module(GraphBuildingMixin, EvaluationMixin, ModuleBfsMixin, ModuleDfsMixin
             p = port_like
         w = self.get_from_path(p.ws_path)
         if p.locked or (w.locked and not w.is_constant) or self.locked:
-            raise ObjectLockedError(
-                f'Unable to disconnect port segment at {p.raw_path} from wire segment {w.raw_path} in module {self.name}: locked object!'
-            )
+            raise ObjectLockedError(f'Unable to disconnect port segment at {p.raw_path} from wire segment {w.raw_path} in module {self.name}: locked object!')
         self._disconnect(p, w)
 
     def _disconnect_port(self, p: T_PORT) -> None:

@@ -1180,6 +1180,21 @@ def test_connect_cases(empty_module: Module) -> None:
         empty_module.connect(L, D)  # Forbidden case: second element may not be a driver!
 
 
+def test_connect_driver_to_connected_driverless_net() -> None:
+    m = Module(name='m')
+    out1 = m.create_port('out1', direction=Dir.OUT)
+    out2 = m.create_port('out2', direction=Dir.OUT)
+    port_in = m.create_port('Port_in', direction=Dir.IN)
+
+    m.connect(out1, out2)
+    m.connect(port_in, out1)
+
+    wire_segment = out1[0].ws
+    assert out1[0].ws_path == out2[0].ws_path == port_in[0].ws_path
+    assert wire_segment.driver() == [port_in[0]]
+    assert wire_segment.loads() == [out1[0], out2[0]]
+
+
 def test_disconnect(connected_module: Module) -> None:
     pseg = connected_module.ports['in1'][0]
 
