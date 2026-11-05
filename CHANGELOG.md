@@ -1,13 +1,20 @@
-# Changelog 0.6.1
+# Changelog 0.6.1 (2026-11-05)
 
 ## ADDED
 - Added `netlist_carpentry.utils.progress_bar()` function that wraps TQDM with common parameters for convenience
+- Added warnings about `yowasp-yosys` limitations (no plugins, no files outside workdir), if `yowasp-yosys` is used
 
 ## FIXED
+- Fixed constant folding for partially constant gates (i.e. gates with one tied input that can be simplified)
 - Fixed issues with graph representation in notebooks
 - Fixed TQDM artifacts in notebook visible in online documentation
 - Fixed some broken notebooks
 - Fixed bug on Mac systems, where Netlist Carpentry thinks it runs on Windows (due to "darwin" containing "win")
+- Fixed `PortSegment.driver()` bug, where Netlist Carpentry crashed if a `PortSegment` instance is connected to `WireSegment` without driver; now it correctly returns `None` instead
+- Fixed `Module.connect()` bug
+  - If `Module.connect()` was called with an unconnected driving port (module input/instance output) as source and a connected (but undriven) load port as target, the function previously raised `AlreadyConnectedError`
+  - Now the method connects the unconnected driving port to the load port at the undriven wire correctly
+  - This only works if the wire (to which the load port is connected) does not have a driver, otherwise the error is still raised
 
 # Older Versions
 
