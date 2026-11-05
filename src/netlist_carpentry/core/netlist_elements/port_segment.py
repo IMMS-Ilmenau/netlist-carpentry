@@ -406,9 +406,7 @@ class PortSegment(_Segment, BaseModel):
                 f'Cannot tie constant signal on instance output port segment {self.raw_path}, since it is driven by the instance it belongs to!'
             )
         if signal_val not in ['0', '1', 'Z', 'X']:
-            raise InvalidSignalError(
-                f"Unable to tie signal on port segment {self.raw_path} to value {signal_val}: Value must be one of '0', '1', 'Z' or 'X'."
-            )
+            raise InvalidSignalError(f"Unable to tie signal on port segment {self.raw_path} to value {signal_val}: Value must be one of '0', '1', 'Z' or 'X'.")
         LOG.debug(f'Tieing constant signal {signal_val} on port segment {self.raw_path}.')
         self.set_ws_path(str(signal_val))
 
@@ -474,7 +472,10 @@ class PortSegment(_Segment, BaseModel):
             )
         if self.is_unconnected:
             return None
-        return self.parent.module.wires[self.ws_path.parent.name].driver()[self.index][0]
+        driver_list = self.parent.module.wires[self.ws_path.parent.name].driver()[self.index]
+        if not driver_list:
+            return None
+        return driver_list[0]
 
     def loads(self) -> List[PortSegment]:
         """

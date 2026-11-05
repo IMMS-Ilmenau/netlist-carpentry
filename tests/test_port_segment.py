@@ -397,6 +397,20 @@ def test_driver() -> None:
     with pytest.raises(InvalidDirectionError):
         in1[0].driver()
 
+    # Multiple loads, no driver
+    m.connect(m.create_port('out3', 'out'), m.create_port('out4', 'out'))
+    dr = m.ports['out3'][0].driver()
+    assert dr is None
+    dr = m.ports['out4'][0].driver()
+    assert dr is None
+
+    # Now gets driver
+    m.connect(m.ports['out3'][0].ws, m.create_port('in2', 'in'))
+    dr = m.ports['out3'][0].driver()
+    assert dr == m.ports['in2'][0]
+    dr = m.ports['out4'][0].driver()
+    assert dr == m.ports['in2'][0]
+
 
 def test_loads() -> None:
     m = Module(name='m')
