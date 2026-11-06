@@ -1,10 +1,22 @@
-# Changelog 0.6.1 (2026-11-05)
+# Changelog 0.6.2
 
 ## ADDED
+- Added support for include files when reading designs: `ReadConfig.includes` can be set to a list of include directories, which are loaded in Yosys via `verilog_defaults`
+- Added `read_yosys()` function (`from netlist_carpentry import read_yosys`), which can be used to generate a JSON netlist with a custom Yosys script; `read_yosys()` returns a `Circuit` from the given Yosys script
+
+## FIXED
+- Fixed missing docstrings
+
+
+# Older Versions
+
+## Changelog 0.6.1 (2026-11-05)
+
+### ADDED
 - Added `netlist_carpentry.utils.progress_bar()` function that wraps TQDM with common parameters for convenience
 - Added warnings about `yowasp-yosys` limitations (no plugins, no files outside workdir), if `yowasp-yosys` is used
 
-## FIXED
+### FIXED
 - Fixed constant folding for partially constant gates (i.e. gates with one tied input that can be simplified)
 - Fixed issues with graph representation in notebooks
 - Fixed TQDM artifacts in notebook visible in online documentation
@@ -16,7 +28,6 @@
   - Now the method connects the unconnected driving port to the load port at the undriven wire correctly
   - This only works if the wire (to which the load port is connected) does not have a driver, otherwise the error is still raised
 
-# Older Versions
 
 ## Changelog 0.6.0 (2026-09-07)
 
