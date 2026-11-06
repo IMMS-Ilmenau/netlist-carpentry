@@ -1,0 +1,4 @@
+read_verilog tests/files/simpleAdder.v
+hierarchy -auto-top
+proc; opt; check
+read_verilog -sv nonexisting_file.sv

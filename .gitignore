@@ -21,7 +21,6 @@ tests/files/profiles*
 *txt
 xrun
 *.il
-*.ys
 *.ids
 cov_dir
 xcelium.d
