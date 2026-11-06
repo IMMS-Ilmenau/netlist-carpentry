@@ -53,6 +53,7 @@ def test_exports() -> None:
         'read',
         'read_json',
         'read_via_cfg',
+        'read_yosys',
         'run_equiv',
         'run_equiv_miter',
         'run_eqy',

@@ -58,7 +58,7 @@ from netlist_carpentry.core.graph import ModuleGraph
 from netlist_carpentry.core.graph.pattern import EMPTY_PATTERN
 from netlist_carpentry.utils import gate_factory, gate_lib
 from netlist_carpentry.io.read.yosys import ReadConfig
-from netlist_carpentry.io.read.read_utils import read_json, read, read_via_cfg, generate_json
+from netlist_carpentry.io.read.read_utils import read_json, read, read_via_cfg, generate_json, read_yosys
 from netlist_carpentry.io.write.write_utils import write
 from netlist_carpentry.scripts import NC_SCRIPTS_DIR, run_equiv, run_eqy, run_equiv_miter
 from netlist_carpentry.vis import show
@@ -103,6 +103,7 @@ __all__ = [
     'read',
     'read_json',
     'read_via_cfg',
+    'read_yosys',
     'run_equiv',
     'run_equiv_miter',
     'run_eqy',

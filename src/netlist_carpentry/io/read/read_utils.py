@@ -127,6 +127,21 @@ def read(
     return read_via_cfg(cfg_or_files, circuit_name, verbose)
 
 
+def read_yosys(yosys_script: Union[str, Path], yosys_executable: str = 'yosys', modules: Optional[List[str]] = None, verbose: bool = False) -> Circuit:
+    yosys_script = Path(yosys_script)
+    with TemporaryDirectory(dir=os.getcwd()) as tmpdir:
+        json_out = Path(tmpdir) / 'tmp.json'
+        module_str = ' '.join(f'-m {m}' for m in modules or [])
+        yosys_cmd = f'{yosys_executable} {module_str} -p "\n'
+        with open(yosys_script) as f:
+            cmds = f.read().splitlines()
+        for cmd in cmds:
+            yosys_cmd += cmd + '\n'
+        yosys_cmd += f'write_json {json_out.expanduser().resolve().as_posix()}\n"'
+        _run_yosys(sc.prepare_call(yosys_cmd), verbose)
+        return read_json(json_out)
+
+
 @overload
 def generate_json(
     cfg_or_files: List[Path], yosys_script_path: Optional[Path] = None, verbose: bool = False, overwrite: bool = False

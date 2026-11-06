@@ -6,7 +6,7 @@ sys.path.append('.')
 
 import pytest
 
-from netlist_carpentry import ReadConfig, read, read_json, read_via_cfg
+from netlist_carpentry import ReadConfig, read, read_json, read_via_cfg, read_yosys
 from netlist_carpentry.core.circuit import Circuit
 from netlist_carpentry.core.exceptions import YosysError
 
@@ -62,6 +62,26 @@ def test_read_via_cfg_slang() -> None:
 
     circuit = read_via_cfg(ReadConfig(files=[Path('tests/files/simpleAdder.v')], top='simpleAdder'), verbose=True)
     assert circuit.name == 'tmp'
+
+
+def test_read_yosys() -> None:
+    circuit = read_yosys(Path('tests/files/read_simpleAdder.ys'))
+    assert isinstance(circuit, Circuit)
+    assert 'simpleAdder' in circuit
+
+    with pytest.raises(FileNotFoundError):
+        read_yosys('invalid')  # Script does not exist
+
+    match_str = r'invalid-yosys: command not found'
+    with pytest.raises(YosysError, match=match_str):  # No JSON generated for invalid executable
+        read_yosys(Path('tests/files/read_simpleAdder.ys'), yosys_executable='invalid-yosys')
+
+    circuit = read_yosys(Path('tests/files/read_empty.ys'))
+    assert circuit.modules == {}  # Empty circuit
+
+    match_str = r"ERROR: File `nonexisting_file.sv' not found or is a directory"
+    with pytest.raises(YosysError, match=match_str):
+        read_yosys(Path('tests/files/read_invalid.ys'))
 
 
 def test_static_read_verilog() -> None:

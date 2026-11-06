@@ -5012,7 +5012,7 @@ dev = [
     { name = "ruff" },
     { name = "tox", version = "4.30.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "tox", version = "4.65.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*'" },
-    { name = "tox", version = "4.67.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "tox", version = "4.67.13", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "tox-uv", version = "1.28.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "tox-uv", version = "1.36.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*'" },
     { name = "tox-uv", version = "1.37.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -6608,16 +6608,16 @@ wheels = [
 
 [[package]]
 name = "python-discovery"
-version = "1.9.4"
+version = "1.9.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock", version = "3.19.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "filelock", version = "4.1.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*'" },
     { name = "filelock", version = "4.2.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0f/d7/1e94df7d1636bf00b9f261bf88a4adc0414f14931ff60511eb0f34c250d1/python_discovery-1.9.4.tar.gz", hash = "sha256:c01b45fe515c1d268b57c57d554bb0e1d320b8e9eb5490bb2f4f577be26e4380", size = 140385, upload-time = "2026-11-04T05:25:52.097Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/68/55/70b46fae646bc6f5cb5e82569949d925cff1c7b5ce20ec4a11e0d977f8c6/python_discovery-1.9.5.tar.gz", hash = "sha256:86279f5d2728bc067de28b7ddc571be2eacc2ae0e7048f8629d2481a0f8848a2", size = 141121, upload-time = "2026-11-06T15:32:11.331Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c5/44/b248f3b1a23f44d8de172e2767748082c41cbd9353009af72f4b11b00afa/python_discovery-1.9.4-py3-none-any.whl", hash = "sha256:b468f365040b40f4cb39918b0766d3e5a2f340968e07df752fbc96f1bb4641ab", size = 44220, upload-time = "2026-11-04T05:25:50.514Z" },
+    { url = "https://files.pythonhosted.org/packages/ac/35/25bd092ca8a7e71192afdca67fbff4f797da74408e74ac3626e13b409ec0/python_discovery-1.9.5-py3-none-any.whl", hash = "sha256:a1fae8fca11e4bc61e38491c2aafff29e430b3c5e272d51ae52fb895bc4c0fac", size = 44377, upload-time = "2026-11-06T15:32:09.821Z" },
 ]
 
 [[package]]
@@ -8181,7 +8181,7 @@ wheels = [
 
 [[package]]
 name = "tox"
-version = "4.67.12"
+version = "4.67.13"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -8202,9 +8202,9 @@ dependencies = [
     { name = "typing-extensions", marker = "python_full_version >= '3.11' and python_full_version < '3.13'" },
     { name = "virtualenv", marker = "python_full_version >= '3.11'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8c/41/3e3d9dee587244fadd8f4227958a19cf83eb2f5a4df7318fb4e2b19d12bb/tox-4.67.12.tar.gz", hash = "sha256:d94739a6830f8a8b113cc0f95a505bdfd34289a237c70160c8ba785b7fceef6c", size = 424991, upload-time = "2026-11-05T23:31:33.879Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/da/4e/703160b580afbecef60e764708adbbf37f102aadfcbce9bb122e924e994d/tox-4.67.13.tar.gz", hash = "sha256:9f70b44ca2e31d91d8fe2e2917f505554950adc3961c0ee70bb42db16d903f62", size = 425618, upload-time = "2026-11-06T15:33:01.95Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6f/8d/20c1fd28ed9b899a518bab1908e519454ea383f588b659627c2f0b5c6c07/tox-4.67.12-py3-none-any.whl", hash = "sha256:d3ba259e8e28d3a2c69219d1aa979acfcc6a031a41d4b5ce099667bb47fccbfb", size = 263266, upload-time = "2026-11-05T23:31:31.905Z" },
+    { url = "https://files.pythonhosted.org/packages/d2/f0/f32e73acb872b67b97b51d67d7241838136f58127d763afcde7762832655/tox-4.67.13-py3-none-any.whl", hash = "sha256:4d6fa08dbe5e841f2abfee1dd4f5cdf31af30d68a3d78b85a7bf57eced5f3c6c", size = 263353, upload-time = "2026-11-06T15:33:00.306Z" },
 ]
 
 [[package]]
@@ -8289,7 +8289,7 @@ resolution-markers = [
 ]
 dependencies = [
     { name = "packaging", marker = "python_full_version >= '3.11'" },
-    { name = "tox", version = "4.67.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "tox", version = "4.67.13", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/51/4f/d8909e69db5697e3eb41d662fd240ae95287e842362c2e9d5c5ec076890d/tox_uv_bare-1.37.5.tar.gz", hash = "sha256:65026a7964c610c84f30f8e7e9d27f69109bcd0e303e31693015be4e8db568bf", size = 34955, upload-time = "2026-11-04T05:49:02.217Z" }
 wheels = [
