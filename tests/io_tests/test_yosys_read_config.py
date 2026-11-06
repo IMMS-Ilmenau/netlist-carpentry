@@ -264,10 +264,14 @@ def test_shell_script_write() -> None:
 
 def test_shell_script_write_windows() -> None:
     import netlist_carpentry.io.read.yosys.read_config
+    import netlist_carpentry.scripts.script_caller
 
     tmp = netlist_carpentry.io.read.yosys.read_config.ON_WINDOWS
+    tmp = netlist_carpentry.scripts.script_caller.ON_WINDOWS
     setattr(netlist_carpentry.io.read.yosys.read_config, 'ON_WINDOWS', True)
+    setattr(netlist_carpentry.scripts.script_caller, 'ON_WINDOWS', True)
     assert netlist_carpentry.io.read.yosys.read_config.ON_WINDOWS is True
+    assert netlist_carpentry.scripts.script_caller.ON_WINDOWS is True
     rc = ReadConfig(files=[Path('tests/files/simpleAdder.v')], output=Path('a/b/c.json'))
     script_path = Path('tests/files/gen/shell_script.sh')
     if script_path.exists():
@@ -306,6 +310,7 @@ def test_shell_script_write_windows() -> None:
     CFG.yosys_executable = tmp_yosys
     assert found_cmds[2] == 'yowasp-yosys  -p "'
     setattr(netlist_carpentry.io.read.yosys.read_config, 'ON_WINDOWS', tmp)
+    setattr(netlist_carpentry.scripts.script_caller, 'ON_WINDOWS', tmp)
 
 
 def test_example() -> None:

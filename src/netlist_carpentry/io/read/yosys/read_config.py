@@ -4,6 +4,7 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel
 
+import netlist_carpentry.scripts.script_caller as sc
 from netlist_carpentry import CFG, ON_WINDOWS
 from netlist_carpentry.core.exceptions import YosysError
 
@@ -236,15 +237,9 @@ opt; clean
             str: The content of the shell script (setup and yosys commands)
         """
         init = '#!/bin/env bash\n\n' if not ON_WINDOWS and path is not None else ''
-        fail_on_error = "$ErrorActionPreference = 'Stop'" if ON_WINDOWS else 'set -e'
-        script = f'{fail_on_error}\n{self.environment_activation}\n{self.yosys_executable} {self.yosys_plugin_str} -p "\n{self.yosys_commands()}"\n'
-        if ON_WINDOWS:
-            # Windows → PowerShell
-            shell_cmd = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script]
-        else:
-            # Linux/macOS → bash
-            shell_cmd = [script]
+        script = f'{self.environment_activation}\n{self.yosys_executable} {self.yosys_plugin_str} -p "\n{self.yosys_commands()}"\n'
+        shell_cmd = sc.prepare_call(script)
         if path is not None:
             with open(path, 'w') as f:
-                f.write(init + script)
+                f.write(init + shell_cmd[-1])  # shell_cmd[-1] is the actual yosys call, including "set -e" or ErrorActionPreference
         return shell_cmd
