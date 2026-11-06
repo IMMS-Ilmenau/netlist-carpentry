@@ -28,6 +28,8 @@ class ReadConfig(BaseModel):
     """The top module to set. If None, the top module is auto-selected. Defaults to None."""
     json_path: Optional[Path] = None
     """The path where to save the intermediate JSON netlist. If None, it is only temporarily created and removed afterwards. Defaults to None."""
+    includes: Optional[List[Path]] = None
+    """A list of include directory paths. Defaults to None, in which case no include directories are read."""
     techmaps: Optional[List[Path]] = None
     """Any techmaps to apply. Defaults to None, in which case no techmaps are applied."""
     share: ShareStrategy = 'off'
@@ -65,7 +67,7 @@ class ReadConfig(BaseModel):
     @property
     def script_template(self) -> str:
         return """\
-{read}
+{includes}{read}
 {hierarchy}
 proc; opt
 {memory}
@@ -104,6 +106,19 @@ opt; clean
             return [f'{ext_dict[f.suffix.lower()]} {f.expanduser().resolve().as_posix()}']
         else:
             raise YosysError(f'Cannot find a Yosys read pass for {f.name!r}: Unknown format {f.suffix!r}!')
+
+    @property
+    def include_pass(self) -> str:
+        if self.includes is None:
+            return ''
+        inc = ''
+        for p in self.includes:
+            if not p.exists():
+                raise FileNotFoundError(f"Include path '{p!s}' does not exist!")
+            if not p.is_dir():
+                raise NotADirectoryError(f"Include path '{p!s}' is not a directory!")
+            inc += f'verilog_defaults -add -I {p.expanduser().resolve().as_posix()}\n'
+        return inc
 
     @property
     def write_pass(self) -> str:
@@ -172,6 +187,7 @@ opt; clean
                 that produces a generic netlist for the current properties of this ReadConfig.
         """
         return self.script_template.format(
+            includes=self.include_pass,
             read=self.read_pass,
             hierarchy=self.hierarchy_pass,
             memory=self.memory_pass,

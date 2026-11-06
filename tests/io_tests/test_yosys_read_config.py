@@ -15,6 +15,7 @@ def test_default() -> None:
     assert rc.output == Path('/a/b/c.v')
     assert rc.top is None
     assert rc.json_path is None
+    assert rc.includes is None
     assert rc.techmaps is None
     assert rc.share == 'off'
     assert rc.environments is None
@@ -23,7 +24,7 @@ def test_default() -> None:
     assert rc.keep_memory_cells is False
     assert rc.insbuf is True
 
-    tmp = '{read}\n{hierarchy}\nproc; opt\n{memory}\npmuxtree\n{techmaps}\n{share}\nopt; clean\n{insbuf}\n{write}\n'
+    tmp = '{includes}{read}\n{hierarchy}\nproc; opt\n{memory}\npmuxtree\n{techmaps}\n{share}\nopt; clean\n{insbuf}\n{write}\n'
     assert rc.script_template == tmp
 
 
@@ -63,6 +64,34 @@ def test_some_paths() -> None:
     rc.files = [Path('tests/files/empty_directory')]
     with pytest.raises(YosysError, match=re.escape('No files to read! Input file list was [tests/files/empty_directory]')):
         rc.read_pass
+
+
+def test_includes() -> None:
+    rc = ReadConfig(files=[])
+    assert rc.include_pass == ''
+    rc = ReadConfig(files=[], includes=[Path('/a/b/c')])
+    match_str = r"Include path '/a/b/c' does not exist!"
+    with pytest.raises(FileNotFoundError, match=match_str):
+        rc.include_pass
+    rc = ReadConfig(files=[], includes=[Path('tests/files/simpleAdder.v')])
+    match_str = r"Include path 'tests/files/simpleAdder.v' is not a directory!"
+    with pytest.raises(NotADirectoryError, match=match_str):
+        rc.include_pass
+    rc = ReadConfig(files=[Path('tests/files/simpleAdder.v')], includes=[Path('tests/files'), Path('tests/files/gen/')])
+
+    inc_lns = rc.include_pass.splitlines()
+    assert 'verilog_defaults -add -I /' in inc_lns[0]
+    assert '/tests/files' in inc_lns[0]  # Expanded with / in beginning
+    assert 'verilog_defaults -add -I /' in inc_lns[1]
+    assert '/tests/files/gen' in inc_lns[1]  # Expanded with / in beginning, but last "/" is remuved
+
+    cmds = rc.yosys_commands().splitlines()
+    assert 'verilog_defaults -add -I /' in cmds[0]
+    assert '/tests/files' in cmds[0]  # Expanded with / in beginning
+    assert 'verilog_defaults -add -I /' in cmds[1]
+    assert '/tests/files/gen' in cmds[1]  # Expanded with / in beginning, but last "/" is remuved
+    assert 'read_verilog /' in cmds[2]  # File reading comes afterwards
+    assert '/tests/files/simpleAdder.v' in cmds[2]  # File reading comes afterwards
 
 
 def test_output() -> None:
