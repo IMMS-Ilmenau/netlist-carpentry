@@ -16,6 +16,20 @@ from netlist_carpentry.io.read.yosys.netlist_reader import YosysNetlistReader
 
 
 def _run_yosys(cmds: List[str], verbose: bool, env: Optional[Dict[str, str]] = None) -> None:
+    """Runs the given shell commands (typically a Yosys invocation) and checks the result for errors.
+
+    A failure is detected only if the process return code is non-zero AND stderr contains output.
+    Non-lethal errors (return code 0 with warnings on stderr) pass, as do faulty return codes
+    without stderr output, which can happen with `yowasp-yosys`.
+
+    Args:
+        cmds (List[str]): The shell commands to execute.
+        verbose (bool): Whether to show the process output.
+        env (Optional[Dict[str, str]], optional): Additional environment variables for the process. Defaults to None.
+
+    Raises:
+        YosysError: If the process fails (non-zero return code with stderr output). Includes the stdout and stderr of the process.
+    """
     gen_process = sc.call(cmds, verbose, env)
     errors = gen_process.stderr if gen_process.stderr is not None else ''
     # Check for both: non-lethal errors (returncode=0) may pass,
@@ -128,6 +142,24 @@ def read(
 
 
 def read_yosys(yosys_script: Union[str, Path], yosys_executable: str = 'yosys', modules: Optional[List[str]] = None, verbose: bool = False) -> Circuit:
+    """Reads a circuit by executing a custom Yosys script and converting the resulting JSON netlist to a Circuit object.
+
+    The given script is executed as-is, with a `write_json` pass appended at the end that writes the
+    netlist to a temporary file. That file is then read via `read_json` to produce the circuit.
+
+    Args:
+        yosys_script (Union[str, Path]): The path to a Yosys script (one command per line, or commands separated by a semicolon) to execute.
+        yosys_executable (str, optional): The Yosys executable to use. Defaults to 'yosys'.
+            Requires the executable to be a shell command. To use Yowasp-Yosys, use 'yowasp-yosys'.
+        modules (Optional[List[str]], optional): Any Yosys modules (plugins) to load, e.g. `['ghdl', 'slang']`. Defaults to None.
+        verbose (bool, optional): Whether to show Yosys output. Defaults to False (suppresses output).
+
+    Returns:
+        Circuit: A Circuit object representing the circuit produced by the Yosys script.
+
+    Raises:
+        YosysError: Whenever Yosys fails to generate a JSON netlist. Also shows what exactly went wrong.
+    """
     yosys_script = Path(yosys_script)
     with TemporaryDirectory(dir=os.getcwd()) as tmpdir:
         json_out = Path(tmpdir) / 'tmp.json'
@@ -153,6 +185,27 @@ def generate_json(
 def generate_json(
     cfg_or_files: Union[ReadConfig, List[Path]], yosys_script_path: Optional[Path] = None, verbose: bool = False, overwrite: bool = False
 ) -> subprocess.CompletedProcess[str]:
+    """Generates a JSON netlist from the given ReadConfig or list of RTL files using Yosys.
+
+    If a list of files is given, a default `ReadConfig` is created from it. If no `json_path` is set
+    on the config, the JSON netlist is written next to the first input file, using its stem as the name.
+    The shell script is only written to a file if `yosys_script_path` is given.
+
+    Args:
+        cfg_or_files (Union[ReadConfig, List[Path]]): The ReadConfig object containing the data and settings
+            required to generate the netlist, or a list of paths to RTL files from which a default config is built.
+        yosys_script_path (Optional[Path], optional): The path where to save the generated shell script.
+            If None, the script is not written to a file. Defaults to None.
+        verbose (bool, optional): Whether to show Yosys output. Defaults to False (suppresses output).
+        overwrite (bool, optional): Whether to overwrite an existing JSON netlist at the target path. Defaults to False.
+
+    Returns:
+        subprocess.CompletedProcess[str]: The return object of the subprocess that executed Yosys.
+
+    Raises:
+        YosysError: If any form of error arises during the generation process. Prints the encountered error.
+        FileExistsError: If a file already exists at the JSON netlist path and `overwrite` is False.
+    """
     if isinstance(cfg_or_files, list):
         if not cfg_or_files:
             raise YosysError('Cannot create JSON netlist: The given file list is empty!')
