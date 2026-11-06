@@ -6,13 +6,26 @@ import warnings
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import time
-from typing import List, Optional, Union, overload
+from typing import Dict, List, Optional, Union, overload
 
 import netlist_carpentry.scripts.script_caller as sc
 from netlist_carpentry import CFG, LOG, Circuit
 from netlist_carpentry.core.exceptions import YosysError
 from netlist_carpentry.io.read.yosys import ReadConfig
 from netlist_carpentry.io.read.yosys.netlist_reader import YosysNetlistReader
+
+
+def _run_yosys(cmds: List[str], verbose: bool, env: Optional[Dict[str, str]] = None) -> None:
+    gen_process = sc.call(cmds, verbose, env)
+    errors = gen_process.stderr if gen_process.stderr is not None else ''
+    # Check for both: non-lethal errors (returncode=0) may pass,
+    # as well as faulty return codes (returncode!=0, but no errors), which may happen with yowasp-yosys
+    if int(gen_process.returncode) != 0 and errors:
+        LOG.error(str(errors))
+        if CFG.yosys_executable == 'yowasp-yosys' and 'file' in errors.lower() and 'not found' in errors.lower():
+            LOG.warn("'yowasp-yosys' cannot read files outside its directory! It might be necessary to switch to Yosys for this.")
+        stdout = gen_process.stdout if gen_process.stdout else ''
+        raise YosysError(f'Failed to generate JSON netlist:\n{stdout}\n{errors}')
 
 
 def read_json(json_path: Union[str, Path], circuit_name: Optional[str] = None) -> Circuit:
@@ -51,16 +64,7 @@ def read_via_cfg(cfg: ReadConfig, circuit_name: Optional[str] = None, verbose: b
             cfg.json_path = Path(tmpdir) / 'tmp.json'
         LOG.debug(f'Generating Yosys netlist from {len(cfg.files)} files...')
         start = time()
-        gen_process = sc.call(cfg.shell_script(), verbose)
-        errors = gen_process.stderr if gen_process.stderr is not None else ''
-        # Check for both: non-lethal errors (returncode=0) may pass,
-        # as well as faulty return codes (returncode!=0, but no errors), which may happen with yowasp-yosys
-        if int(gen_process.returncode) != 0 and errors:
-            LOG.error(str(errors))
-            if CFG.yosys_executable == 'yowasp-yosys' and 'file' in errors.lower() and 'not found' in errors.lower() and all(f.exists() for f in cfg.files):
-                LOG.warn("'yowasp-yosys' cannot read files outside its directory! Switch to Yosys for this.")
-            stdout = gen_process.stdout if gen_process.stdout else ''
-            raise YosysError(f'Failed to generate JSON netlist:\n{stdout}\n{errors}')
+        _run_yosys(cfg.shell_script(), verbose)
         LOG.debug(f'Generated Yosys netlist from {len(cfg.files)} files in {round(time() - start, 2)}s!')
         return read_json(cfg.json_path, circuit_name)
 
