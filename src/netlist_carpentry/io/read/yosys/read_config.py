@@ -66,6 +66,18 @@ class ReadConfig(BaseModel):
 
     @property
     def script_template(self) -> str:
+        """The template for the Yosys synthesis script.
+
+        The placeholders are filled by the corresponding properties of this class:
+        - `{includes}`: include directories, via `ReadConfig.include_pass`
+        - `{read}`: read passes, via `ReadConfig.read_pass`
+        - `{hierarchy}`: top module selection, via `ReadConfig.hierarchy_pass`
+        - `{memory}`: memory handling, via `ReadConfig.memory_pass`
+        - `{techmaps}`: techmap passes, via `ReadConfig.techmap_pass`
+        - `{share}`: resource sharing, via `ReadConfig.share_pass`
+        - `{insbuf}`: buffer insertion, via `ReadConfig.insbuf_pass`
+        - `{write}`: output passes, via `ReadConfig.write_pass`
+        """
         return """\
 {includes}{read}
 {hierarchy}
@@ -109,6 +121,11 @@ opt; clean
 
     @property
     def include_pass(self) -> str:
+        """The formatted Yosys include passes for each directory in `ReadConfig.includes`.
+
+        Each include directory is added via a `verilog_defaults -add -I` command.
+        Returns an empty string if no include directories are specified.
+        """
         if self.includes is None:
             return ''
         inc = ''
@@ -122,6 +139,13 @@ opt; clean
 
     @property
     def write_pass(self) -> str:
+        """The formatted Yosys write passes for the output and intermediate JSON netlist.
+
+        If `ReadConfig.json_path` is set, a `write_json` pass for the intermediate JSON netlist is included.
+        If `ReadConfig.output` is set, an additional write pass is added, where the format
+        (Verilog, SystemVerilog or JSON) is determined by the output path suffix.
+        Returns an empty string if neither `json_path` nor `output` is set.
+        """
         ext_dict = {'.v': 'write_verilog', '.sv': 'write_verilog -sv', '.json': 'write_json'}
         if self.json_path is not None:
             json_write_pass = f'write_json {self.json_path.expanduser().resolve().as_posix()}\n'
